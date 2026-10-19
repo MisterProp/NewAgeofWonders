@@ -1,0 +1,2 @@
+/* HSEPack.dpl sound-related functions (Ghidra) */
+{"0x55601dc4":"\r\nvoid Sound_TSFXManager_Create_23EDC2EF(void)\r\n\r\n{\r\n                    /* WARNING: Could not recover jumptable at 0x55601dc4. Too many branches */\r\n                    /* WARNING: Treating indirect jump as call */\r\n  Sound_TSFXManager_Create_23EDC2EF();\r\n  return;\r\n}\r\n\r\n"}

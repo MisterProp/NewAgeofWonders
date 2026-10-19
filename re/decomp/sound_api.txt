@@ -1,0 +1,56 @@
+==== AoWEPACK.dpl (31 matches) ====
+  AoWE.TArmyHS.PlayMoveSFX@23EDC2EF @ 557913e4
+  AoWE.TCombatEventLog.PlayLoggedSFX@23EDC2EF @ 55729078
+  AoWE.TCombatObject.PlaySFX@23EDC2EF @ 5572679c
+  AoWE.TCombatUnit.PlaySFX@23EDC2EF @ 55724f2c
+  AoWE.TDiplomaticActionEventLog.PlayLoggedSFX@23EDC2EF @ 5572ee44
+  AoWE.TStartupSongList.Create@23EDC2EF @ 5577478c
+  AoWE.TStartupSongList.OriginalSongsChanged@23EDC2EF @ 557747c8
+  AoWE.TStructure.PlaySelectSample@23EDC2EF @ 5575ea18
+  EventLog.TEventLog.PlayLoggedSFX@23EDC2EF @ 557fd6a4
+  EventLog.TNewDayEventLog.PlayLoggedSFX@23EDC2EF @ 557fe05c
+  MoveOnEvents.TChangeSongMoveOnEvent.ClassID@23EDC2EF @ 557d3824
+  MoveOnEvents.TChangeSongMoveOnEvent.MovedOnTrigger@23EDC2EF @ 557d3858
+  MoveOnEvents.TChangeSongMoveOnEvent.ReadWrite@23EDC2EF @ 557d382c
+  MoveOnEvents.TChangeSongMoveOnEventResource.ClassID@23EDC2EF @ 557d3928
+  MoveOnEvents.TChangeSongMoveOnEventResource.ResourceEditName@23EDC2EF @ 557d38d8
+  MoveOnEvents.TChangeSongMoveOnEventResource.ResourceUserClassID@23EDC2EF @ 557d3930
+  MoveOnEvents.TPlaySampleMoveOnEvent.ClassID@23EDC2EF @ 557d3938
+  MoveOnEvents.TPlaySampleMoveOnEvent.MovedOnTrigger@23EDC2EF @ 557d396c
+  MoveOnEvents.TPlaySampleMoveOnEvent.ReadWrite@23EDC2EF @ 557d3940
+  MoveOnEvents.TPlaySampleMoveOnEventResource.ClassID@23EDC2EF @ 557d39e8
+  MoveOnEvents.TPlaySampleMoveOnEventResource.ResourceEditName@23EDC2EF @ 557d3998
+  MoveOnEvents.TPlaySampleMoveOnEventResource.ResourceUserClassID@23EDC2EF @ 557d39f0
+  Sound.GetSongName@435799AA @ 55702d0c
+  Sound.PlaySample @ 55702d04
+  Sound.PlaySongEx@8B356FBD @ 55702d1c
+  Sound.PlayingSongFileName@6835DD73 @ 55702d14
+  Sound.RegisterSoundEngineClasses@A579DCDA @ 55702d24
+  Sound.TSFXLibrary.Play@23EDC2EF @ 55702cf4
+  Sound.TSFXLibrary.PlayEx@23EDC2EF @ 55702cfc
+  Sound.TSFXManager.ExecutePathSearch@23EDC2EF @ 55702ccc
+  Sound.TSonglist.Create@23EDC2EF @ 55702cd4
+
+---- decompiled 31 funcs -> re/decomp/AoWEPACK_dpl.sound.c ----
+
+==== HSEPack.dpl (1 matches) ====
+  Sound.TSFXManager.Create@23EDC2EF @ 55601dc4
+
+---- decompiled 1 funcs -> re/decomp/HSEPack_dpl.sound.c ----
+
+==== AoW.exe (13 matches) ====
+  AoWReg.TAoWRegistry.GetMusicVolume@23EDC2EF @ 00401f84
+  AoWReg.TAoWRegistry.SetMusicEnabled@23EDC2EF @ 00401fd4
+  AoWReg.TAoWRegistry.SetMusicVolume@23EDC2EF @ 00401f8c
+  Sound.FadeMusicVolume@2796EB69 @ 00401d94
+  Sound.InitializeSoundSystem@8AEF5D00 @ 00401d74
+  Sound.PlaySample @ 00401d64
+  Sound.PlaySongEx@8B356FBD @ 00401dd4
+  Sound.ProcessSound@51F89FF7 @ 00401de4
+  Sound.ReleaseSoundSystem@51F89FF7 @ 00401d7c
+  Sound.SetMusicVolume@A03DAC8A @ 00401d8c
+  Sound.SetSFXVolume@A03DAC8A @ 00401d9c
+  Sound.TSongPlayer.Play@23EDC2EF @ 00401d3c
+  Sound.TSongPlayer.Stop@23EDC2EF @ 00401d44
+
+---- decompiled 13 funcs -> re/decomp/AoW_exe.sound.c ----

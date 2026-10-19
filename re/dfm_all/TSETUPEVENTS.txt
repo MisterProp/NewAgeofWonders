@@ -1,0 +1,41 @@
+object TSetupEvents SetupEvents
+  OnCreate = SetupEventsCreate
+  Left = 684
+  Top = 335
+  Height = 113
+  Width = 275
+  object TGDPlay DPlay
+    SessionName = "No Name's Game"
+    MaxPlayers = 12
+    PlayerName = "No Name"
+    OnMessage = DPlayMessage
+    OnChatMessage = DPlayChatMessage
+    OnPingMessage = DPlayPingMessage
+    OnFileStartMessage = DPlayFileStartMessage
+    OnFileProgressMessage = DPlayFileProgressMessage
+    OnFileDoneMessage = DPlayFileDoneMessage
+    OnDestroyPlayer = DPlayDestroyPlayer
+    OnSessionLost = DPlaySessionLost
+    OnMessageError = DPlayMessageError
+    GauranteeMsgs = True
+    UseCodes = True
+    OnEjected = DPlayEjected
+    UseSetupDialogs = False
+    FilePacketSize = 1000
+    Left = 24
+    Top = 16
+  object TSetupControl SetupControl
+    OnSendMap = SetupControlSendMap
+    OnSendData = SetupControlSendData
+    OnPlayerSetupDone = SetupControlPlayerSetupDone
+    OnSettingChanged = SetupControlSettingChanged
+    OnCustomizeLeader = SetupControlCustomizeLeader
+    OnLoadMap = SetupControlLoadMap
+    OnStart = SetupControlStart
+    OnSynchronize = SetupControlSynchronize
+    OnEjectPlayer = SetupControlEjectPlayer
+    OnIncompatibleVersion = SetupControlIncompatibleVersion
+    OnSendingMaps = SetupControlSendingMaps
+    Left = 88
+    Top = 16
+consumed 1061 / 1061 bytes

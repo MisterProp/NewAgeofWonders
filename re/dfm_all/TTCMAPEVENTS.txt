@@ -1,0 +1,21 @@
+object TTCMapEvents TCMapEvents
+  Left = 796
+  Top = 657
+  Height = 111
+  Width = 167
+  object TAoWCombatMapControl TCMap
+    OnSelected = TCMapSelected
+    OnDeselected = TCMapDeselected
+    OnMouseOverTarget = TCMapMouseOverTarget
+    OnUnitChanged = TCMapUnitChanged
+    OnShowMessage = TCMapShowMessage
+    OnTurnChanged = TCMapTurnChanged
+    OnSeatedPlayerChanged = TCMapSeatedPlayerChanged
+    OnMapChanged = TCMapMapChanged
+    OnActivateMap = TCMapActivateMap
+    OnDeActivateMap = TCMapDeActivateMap
+    OnCastSpell = TCMapCastSpell
+    OnActivateAbility = TCMapActivateAbility
+    Left = 56
+    Top = 8
+consumed 512 / 512 bytes

@@ -1,0 +1,149 @@
+INFO  Using log config file: jar:file:/C:/Users/Utente/Desktop/Programmini/ghidra_12.1.2_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\application.log (LoggingInitialization)  
+INFO  Loading user preferences: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\preferences (Preferences)  
+INFO  Loading previous preferences: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.0.4_PUBLIC\preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (867 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: SHA1PRNG (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (2734 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 60 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\BSim\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\FileFormats\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\Base\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\8051\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Debug\Debugger\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\VersionTracking\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\DecompilerDependent\ghidra_scripts
+    C:\GOG Games\Age of Wonders\port\tools\ghidra
+    C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\Extensions\Jython\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\WildcardAssembler\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\GnuDemangler\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\BytePatterns\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\PDB\ghidra_scripts
+    C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\Extensions\MachineLearning\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\DATA\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\Decompiler\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\PIC\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\PyGhidra\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\FunctionID\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\SystemEmulation\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Debug\Debugger-rmi-trace\ghidra_scripts
+    C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\Extensions\Lisa\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\Atmel\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\JVM\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\MicrosoftCodeAnalyzer\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\SwiftDemangler\ghidra_scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Creating temporary project: C:\GOG Games\Age of Wonders\port\re\ghidra_proj_gal\aowg2 (HeadlessAnalyzer)  
+INFO  Creating project: C:\GOG Games\Age of Wonders\port\re\ghidra_proj_gal\aowg2 (DefaultProject)  
+INFO  REPORT: Processing input files:  (HeadlessAnalyzer)  
+INFO       project: C:\GOG Games\Age of Wonders\port\re\ghidra_proj_gal\aowg2 (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///C:/GOG Games/Age of Wonders/Galaxy.dll (HeadlessAnalyzer)  
+INFO  Using Loader: Portable Executable (PE) (ProgramLoader)  
+INFO  Using Language/Compiler: x86:LE:32:default:windows (ProgramLoader)  
+INFO  Using Library Search Path: [., C:\WINDOWS\SysWOW64, C:\Program Files\Java\jdk-25\bin, C:\WINDOWS\Sun\Java\bin, C:\WINDOWS\system32, C:\WINDOWS, C:\Program Files\Common Files\Oracle\Java\javapath, C:\Program Files (x86)\Common Files\Oracle\Java\java8path, C:\Program Files (x86)\Common Files\Oracle\Java\javapath, C:\WINDOWS\System32\Wbem, C:\WINDOWS\System32\WindowsPowerShell\v1.0\, C:\WINDOWS\System32\OpenSSH\, C:\Program Files\NVIDIA Corporation\NVIDIA App\NvDLISR, C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common, C:\Program Files\Git\cmd, C:\Program Files\dotnet\, C:\Program Files (x86)\Java\jdk-1.8, C:\Program Files (x86)\Java\jdk-1.8\bin, C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\, C:\Program Files (x86)\Windows Kits\8.1\Windows Performance Toolkit\, C:\Program Files\nodejs\, C:\Users\Utente\.local\bin, C:\Users\Utente\AppData\Local\Programs\Python\Python310\Scripts\, C:\Users\Utente\AppData\Local\Programs\Python\Python310\, C:\Users\Utente\AppData\Local\Microsoft\WindowsApps, C:\Users\Utente\AppData\Local\Programs\Ollama, C:\Users\Utente\.dotnet\tools, C:\Users\Utente\.lmstudio\bin, C:\msys64\ucrt64\bin, C:\Users\Utente\AppData\Local\Programs\Microsoft VS Code\bin, C:\Users\Utente\AppData\Roaming\npm, C:\Users\Utente\AppData\Local\PowerToys\DSCModules\] (ProgramLoader)  
+WARN  Invalid or missing function at 1004d760 (ExportDataDirectory)  
+INFO  TLS callbacks at 100057bc (TLSDirectory)  
+WARN  Invalid or missing function at 100d76bc (ExportDataDirectory)  
+INFO  Additional info:
+Loading file:///C:/GOG Games/Age of Wonders/Galaxy.dll?MD5=c2c5c56459dbf3e717e6ac6d68eeec80...
+------------------------------------------------
+
+Searching 25 paths for library KERNEL32.DLL...
+Loading file:///C:/Windows/SysWOW64/kernel32.dll?MD5=7180141a89985451fec9e096fc1e64a9...
+Using existing exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\kernel32.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 25 paths for library OLE32.DLL...
+Loading file:///C:/Windows/SysWOW64/ole32.dll?MD5=f7d0fee5e134a50a125c3e41a68bf646...
+[ole32.dll]: failed to create WEVTResource at 10139740: Failed to resolve data length for WEVTResource
+Using existing exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\ole32.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 25 paths for library USER32.DLL...
+Loading file:///C:/Windows/SysWOW64/user32.dll?MD5=f6c0cb8b1debf964a0ab5330cca718e6...
+[user32.dll]: failed to create WEVTResource at 100f5a70: Failed to resolve data length for WEVTResource
+Using existing exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\user32.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 25 paths for library WINMM.DLL...
+Loading file:///C:/Windows/SysWOW64/winmm.dll?MD5=3636fbb95690d0908d6970e978398b0c...
+[winmm.dll]: failed to create WEVTResource at 1002b310: Failed to resolve data length for WEVTResource
+Using existing exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\winmm.exports
+Library not saved to project.
+------------------------------------------------
+
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\kernel32.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\winmm.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\user32.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\ole32.exports
+Linking the External Programs of 'Galaxy.dll' to imported libraries...
+  [KERNEL32.DLL] -> not found in project
+  [WINMM.DLL] -> not found in project
+  [USER32.DLL] -> not found in project
+  [OLE32.DLL] -> not found in project
+------------------------------------------------
+
+ (ProgramLoader)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  ANALYZING all memory and code: file:///C:/GOG Games/Age of Wonders/Galaxy.dll (HeadlessAnalyzer)  
+WARN  Ignoring leading '_' chars on no-return name '___raise_securityfailure' specified in file: C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\Base\data\PEFunctionsThatDoNotReturn (NoReturnFunctionAnalyzer)  
+WARN  Ignoring leading '_' chars on no-return name '___report_rangecheckfailure' specified in file: C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\Base\data\PEFunctionsThatDoNotReturn (NoReturnFunctionAnalyzer)  
+INFO  Skipping PDB processing: missing PDB information in program metadata (PdbUniversalAnalyzer)  
+INFO  Packed database cache: C:\Users\Utente\AppData\Local\ghidra\packed-db-cache (PackedDatabaseCache)  
+INFO  Applied data type archive: windows_vs12_32 (ApplyDataArchiveAnalyzer)  
+INFO  Applied data type archive: windows_vs12_32 (ApplyDataArchiveAnalyzer)  
+INFO  -----------------------------------------------------
+    ASCII Strings                              0.446 secs
+    Apply Data Archives                        0.600 secs
+    Call Convention ID                         1.431 secs
+    Call-Fixup Installer                       0.018 secs
+    Create Address Tables                      0.049 secs
+    Create Address Tables - One Time           0.051 secs
+    Create Function                            0.108 secs
+    Data Reference                             0.059 secs
+    Decompiler Parameter ID                    4.833 secs
+    Decompiler Switch Analysis                 6.448 secs
+    Demangler Microsoft                        0.019 secs
+    Disassemble                                0.129 secs
+    Disassemble Entry Points                   0.889 secs
+    Embedded Media                             0.011 secs
+    External Entry References                  0.000 secs
+    Function ID                                0.409 secs
+    Function Start Pre Search                  0.012 secs
+    Function Start Search                      0.309 secs
+    Function Start Search After Code           0.009 secs
+    Function Start Search After Data           0.294 secs
+    Function Start Search delayed - One Time   0.001 secs
+    Non-Returning Functions - Discovered       0.062 secs
+    Non-Returning Functions - Known            0.005 secs
+    PDB Universal                              0.001 secs
+    Reference                                  0.081 secs
+    Scalar Operand References                  0.324 secs
+    Shared Return Calls                        0.058 secs
+    Stack                                      1.767 secs
+    Subroutine References                      0.084 secs
+    Subroutine References - One Time           0.021 secs
+    WindowsResourceReference                   0.426 secs
+    X86 Function Callee Purge                  0.029 secs
+    x86 Constant Reference Analyzer            1.394 secs
+-----------------------------------------------------
+     Total Time   20 secs
+-----------------------------------------------------
+ (AutoAnalysisManager)  
+INFO  REPORT: Analysis succeeded for file: file:///C:/GOG Games/Age of Wonders/Galaxy.dll (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DisasmAll.java  (HeadlessAnalyzer)  
+INFO  SCRIPT: C:\GOG Games\Age of Wonders\port\tools\ghidra\DisasmAll.java (HeadlessAnalyzer)  
+INFO  DisasmAll.java> DisasmAll: Galaxy 59141 instructions -> C:\GOG Games\Age of Wonders\port\re\exports\Galaxy (GhidraScript)  
+INFO  ANALYZING changes made by post scripts: file:///C:/GOG Games/Age of Wonders/Galaxy.dll (HeadlessAnalyzer)  
+INFO  REPORT: Post-analysis succeeded for file: file:///C:/GOG Games/Age of Wonders/Galaxy.dll (HeadlessAnalyzer)  
+INFO  /Galaxy.dll: file created (Utente) (LocalFileSystem)  
+INFO  REPORT: Save succeeded for: /Galaxy.dll (aowg2:/Galaxy.dll) (HeadlessAnalyzer)  
+INFO  REPORT: Import succeeded (HeadlessAnalyzer)  

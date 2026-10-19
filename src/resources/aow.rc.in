@@ -1,0 +1,12 @@
+// aow.rc.in - Win32 resources for the port's game executable (AoW.exe).
+//
+// CMake configures this to `aow.rc`, substituting the absolute path of the
+// game's own icon (Age of Wonders.ico - the icon embedded in the original
+// AoW.exe); see src/CMakeLists.txt.  port/build.ps1 generates an equivalent
+// file at build time.  The icon path is absolute because windres/rc resolve
+// resource file names relative to the working directory.
+//
+// The icon is resource id 1 (RT_GROUP_ICON): the shell uses it for the exe's
+// icon and menu.cpp loads it (LoadImage, id 1) for the window title bar and
+// taskbar, so the port's window matches the original game's.
+1 ICON "@AOW_ICON_PATH@"

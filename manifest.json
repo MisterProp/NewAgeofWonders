@@ -1,0 +1,44 @@
+{
+  "game": "Age of Wonders (1999, Triumph Studios / Epic MegaGames)",
+  "install_root": "..",
+  "engine": "Delphi / Borland Object Pascal",
+  "architecture": "PE32 / i386 / Windows GUI",
+  "notes": "AoW code is split across Delphi runtime packages (*.dpl). AoWEPACK.dpl holds the bulk of the game logic (10036 exports). All counts are measured on this original Age of Wonders 1 (GOG) install; earlier drafts were measured on the Age of Wonders X mod and are stale.",
+  "build_inputs": {
+    "comment": "Sources of truth, in priority order (core engine -> shell).",
+    "modules": [
+      { "file": "AoWEPACK.dpl", "role": "game logic (units, spells, combat, AI)", "size": 2785792 },
+      { "file": "Enginep.dpl", "role": "core engine / object model", "size": 273408 },
+      { "file": "HSEPack.dpl", "role": "HSE engine layer", "size": 295424 },
+      { "file": "ILPACK.dpl", "role": "image/sprite library (ILB)", "size": 279040 },
+      { "file": "Gfxepack.dpl", "role": "graphics backend (DirectDraw)", "size": 107008 },
+      { "file": "SoundP.dpl", "role": "audio backend", "size": 84480 },
+      { "file": "Localize.dpl", "role": "localized strings (MLD)", "size": 467456 },
+      { "file": "aowInt.dpl", "role": "score/state data", "size": 311808 },
+      { "file": "AoWInterface.dpl", "role": "UI screens", "size": 301056 },
+      { "file": "AoWTCPCK.dpl", "role": "TCP/IP networking", "size": 549376 },
+      { "file": "AOWTools.dpl", "role": "misc tools", "size": 79360 },
+      { "file": "DCPACK.dpl", "role": "data container (DC)", "size": 90624 },
+      { "file": "Network.dpl", "role": "network abstraction", "size": 46592 },
+      { "file": "aowFXpck.dpl", "role": "special effects", "size": 17920 },
+      { "file": "VideoP.dpl", "role": "video playback", "size": 29184 },
+      { "file": "ims.dpl", "role": "input manager / IMS", "size": 251904 },
+      { "file": "AoW.exe", "role": "shell / main executable", "size": 2127872 },
+      { "file": "AoWEd.exe", "role": "scenario editor", "size": 898048 }
+    ]
+  },
+  "data_formats": [
+    { "ext": ".ILB", "count": 538, "role": "image/sprite libraries (452 under Images/, 86 under Int/)" },
+    { "ext": ".PFS", "count": 12, "role": "rule data tables (units, spells, items, heroes)" },
+    { "ext": ".MLD", "count": 8, "role": "localized string dictionaries" },
+    { "ext": ".WAV", "count": 216, "role": "sound effects" },
+    { "ext": ".IT", "count": 24, "role": "Impulse Tracker music" },
+    { "ext": ".VAG", "count": 0, "role": "PSX-style audio (not used by the base game)" },
+    { "ext": ".HSM", "count": 90, "role": "scenario maps" },
+    { "ext": ".CSM", "count": 41, "role": "campaign maps" },
+    { "ext": ".AHL", "count": 2, "role": "hero/leader list (High Level, Special)" },
+    { "ext": ".AIL", "count": 0, "role": "item/leader rules (not used by the base game)" },
+    { "ext": ".dpl", "count": 36, "role": "Delphi code packages" }
+  ],
+  "windows_dependencies": ["kernel32", "user32", "gdi32", "ole32", "shell32", "winmm", "wsock32", "DirectX"]
+}

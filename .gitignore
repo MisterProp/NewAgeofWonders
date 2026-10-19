@@ -1,0 +1,23 @@
+# Build artifacts
+/bin/
+/build/
+*.obj
+*.o
+*.exe
+*.pdb
+
+# Reverse-engineering scratch (large, regeneratable)
+/re/re/exports/
+/re/exports/
+/re/ghidra_proj/
+/re/*.txt
+
+# Extracted assets are regeneratable from the original game files
+/assets/dfm/
+/assets/ilb/
+/assets/pfs/
+
+# Tool scratch
+/tools/_dbg.py
+/tools/*.txt
+/tools/__pycache__/

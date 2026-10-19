@@ -1,0 +1,204 @@
+{
+  "Release/Unitres.pfs": {
+    "path": "Release/Unitres.pfs",
+    "size": 106931,
+    "first_u32": [
+      558161692,
+      33554433,
+      16842754,
+      9273611,
+      0,
+      1,
+      437,
+      2,
+      1191,
+      3,
+      1707,
+      4,
+      2274,
+      5,
+      2759,
+      6
+    ],
+    "first_f32": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "strings": [
+      {
+        "off": 1234,
+        "text": "Human"
+      },
+      {
+        "off": 1240,
+        "text": "Archer"
+      },
+      {
+        "off": 1273,
+        "text": "Comparitively, human archers are relatively average. With practice and experience, they  may increase their proficiency with the bow, but, at best, the highest compliment given to a human archer is, \"He has elven blood.\""
+      },
+      {
+        "off": 1683,
+        "text": "Human"
+      },
+      {
+        "off": 1689,
+        "text": "Priest"
+      },
+      {
+        "off": 1713,
+        "text": "n$X.z"
+      },
+      {
+        "off": 1779,
+        "text": "Priests are key figures in human society. They serve a single diety from a diverse pantheon of spirits and gods who grant them special powers, in return for their faith and devotion. Among these powers are the abilities to heal the wounded, dispel magical effects, and turn undead creatures. Human priests are not trained for combat, but they are able to conjure magical energy to strike at their foes from a distance or by touch."
+      },
+      {
+        "off": 2437,
+        "text": "Human"
+      },
+      {
+        "off": 2443,
+        "text": "Medium Cavalry"
+      },
+      {
+        "off": 2495,
+        "text": "Human cavalry units wield a long awl pike tipped with deadly iron. In general, they are more skilled than human infantrymen.  "
+      },
+      {
+        "off": 2625,
+        "text": "Humans interact well with horses and have raised their own breeds since they arrive in the Valley of Wonders.  The origin of human horses is thought to come from the Azracs, which explains why their steeds are so hearty."
+      },
+      {
+        "off": 2953,
+        "text": "Human"
+      },
+      {
+        "off": 2959,
+        "text": "Swordsman"
+      },
+      {
+        "off": 2995,
+        "text": "The common Human warrior is proficient in the use of a long sword in melee combat. These foot soldiers are lightly armored and relatively cheap to train and pay, making them the foundation for most military exploits."
+      },
+      {
+        "off": 3215,
+        "text": "Because many humans aspire to knighthood, training in swordsmanship is widespread. The vast majority of human swordsmen are average in their abilities, but each is eager to prove himself in battle."
+      },
+      {
+        "off": 3520,
+        "text": "Human"
+      },
+      {
+        "off": 3526,
+        "text": "Pikeman"
+      },
+      {
+        "off": 3572,
+        "text": "Pikemen, in general, tend to be a tad more intelligent than the average human footsoldier.  Not as eager to die in battle, they adhere to the combat principle, \"Stab your opponent before he can stab you.\"  The long pikes they hold permit them the ability of retaliation before the enemy can draw a shorter weapon and strike. "
+      },
+      {
+        "off": 4005,
+        "text": "Human"
+      },
+      {
+        "off": 4011,
+        "text": "Charlatan"
+      },
+      {
+        "off": 4063,
+        "text": "Charlatans epitomize the well known Human phrase, \"Jack of all trades, master of none.\" Their legitimate talents are few and far between, but they strive to appear masterful at many arts. In truth, the only art in which Charlatans excel is that of deception. This mastery of deceit enables them to dupe others into believing that they possess more power and knowledge than they do.  As a result, Charlatans are frequently found leading human populations, though usually in the guise of being a \"servant of the people.\""
+      },
+      {
+        "off": 4585,
+        "text": "Charlatans are merely competent in both fighting and magic. Their ability to ruthlessly exploit an opponent's weaknesses makes them a genuine threat to all races. They often use stealth and deception to create and seize \"unfair\" advantages.  The most legendary Charlatans are often given the nickname of \"Slick,\" \"Slimy,\" or \"More slippery than a Lizardman.\""
+      },
+      {
+        "off": 5051,
+        "text": "Human"
+      },
+      {
+        "off": 5057,
+        "text": "Cavalier"
+      },
+      {
+        "off": 5104,
+        "text": "Heavily armored and extremely skilled with a long sword, the Human Cavalier charges fearlessly into battle. Cavaliers serve their lord with the utmost loyalty, and maintain an unwavering commitment to the principles of chivalry.  They are popular with the people, and are respected by their enemies."
+      },
+      {
+        "off": 5513,
+        "text": "Human"
+      },
+      {
+        "off": 5519,
+        "text": "Air Galley"
+      },
+      {
+        "off": 5548,
+        "text": "r(R4d@|"
+      },
+      {
+        "off": 5634,
+        "text": "It is commonly held that the humans stole the idea for their Air Galley from the Dwarves.  As usual, the humans took the benign transport and turned it into a powerful weapon.  The Air Galley deploys a ballista which fires deadly javelins at a great distance with accuracy.  Furthermore, the Air Galley can be used to carry up to seven regular troops, giving  it a deadly secondary advantage ---that of flight mobility--- to all human troops. "
+      },
+      {
+        "off": 6267,
+        "text": "Human"
+      },
+      {
+        "off": 6273,
+        "text": "Musketeer"
+      },
+      {
+        "off": 6321,
+        "text": "While Dwarves far excel humans in feats of sophisticated invention, they do not possess the raw brutality to create inventions of mass destruction.  Humans, by contrast, excel at it. "
+      },
+      {
+        "off": 6508,
+        "text": "Musketeers wield the devastating human invention, the musket. These handheld cannons, while not very accurate, are powerful enough to pierce even a Dragon's scaly hide with their heavy metal shots. Musketeers are not masters of hand-to-hand combat, instead trusting in their ability to reload quickly. "
+      },
+      {
+        "off": 6968,
+        "text": "Azrac"
+      },
+      {
+        "off": 6974,
+        "text": "Archer"
+      },
+      {
+        "off": 7014,
+        "text": "Azrac archers wield the bow with average proficiency.  Like all of their race, they benefit from a natural resistance to fire-based attacks."
+      },
+      {
+        "off": 7346,
+        "text": "Azrac"
+      },
+      {
+        "off": 7352,
+        "text": "Priest"
+      },
+      {
+        "off": 7377,
+        "text": "X$n0z"
+      },
+      {
+        "off": 7443,
+        "text": "Azrac priests are called the Yakamajal, meaning \"The Will of Yaka.\" They worship the ageless, all-seeing, Azrac king-god, Yaka. The priests are believed to be the embodiment of Yaka's will among his chosen people. In Azrac society, priests act as teachers, judges, and enforcers of Yaka's Code."
+      }
+    ]
+  }
+}
