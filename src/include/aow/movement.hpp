@@ -168,6 +168,46 @@ ArmyMove army_move(const std::array<MovePointTable, 256>& tables,
                    const PlayerMoveTraits& traits = {});
 
 // ---------------------------------------------------------------------------
+// Combining two armies (a move onto a friendly army).
+//
+// `AoWE.MoveArmyEx@0x5574a318` picks the move transition from the destination
+// field's `TAoWMapField.GetMoveAction` -> `TArmy.GetMoveAction@0x5578f98c`
+// (3 = our own army), and `CreateArmyMoveTE@0x5574a1a0` then builds a
+// `TArmyCombineMoveTE` for that code. Its `CanMoveNext@0x55748834` accepts the
+// last step only when `TArmy.CanCombine@0x55790814` accepts the merge; the
+// move transition's `CanMoveNext` then re-checks it through
+// `TArmy.CanAddUnitSelection@0x5578e55c` and reports a failure with
+// `TArmyCombineMoveTE.ShowCombineFailure@0x5574876c` - the resourcestrings
+// "Cannot combine armies" (65435) and "Cannot combine two transporters"
+// (65434). `TMoveArmyTE.FinishMove@0x55747fbc` is the merge itself:
+// `TArmy.AddUnitSelection(destination, moving, 0xff)` appends the moving units
+// in their original order and the destination `TArmyHS` becomes the selection.
+//
+// `TArmy.CanAddUnitSelection`'s return codes:
+//   0 = the units fit, 1 = a unit refuses (`TAbstractUnit.CanAddToList`),
+//   2 = the army is full, 3 = both armies carry a transporter.
+// A normal army's `TArmy.MaxSize@0x5578def4` is 8, and the recovered test is
+// `destination_count + incoming_count < 9` - so an eight-unit merge fits and a
+// ninth unit does not. (A transporter replaces the 8 with its capacity + 1; the
+// port does not model transporters yet - docs/15_MOVEMENT.md.)
+// ---------------------------------------------------------------------------
+constexpr std::size_t kArmyMaxUnits = 8;  // TArmy.MaxSize, no transporter
+
+enum class ArmyAddStatus : std::uint8_t {
+    ok = 0,
+    unit_refused = 1,          // TAbstractUnit.CanAddToList returned false
+    full = 2,                  // the merged army would hold more than 8
+    transporter_conflict = 3,  // two transporters cannot be combined
+};
+
+// `TArmy.CanAddUnitSelection@0x5578e55c` for two transporter-free armies: the
+// ports of the recovered 0/1/2/3 codes. `incoming_units` is the selection that
+// travels (`TControlWin+0x178`, i.e. the party window's mask), not the whole
+// origin army when some units are left behind.
+ArmyAddStatus army_can_add_units(std::size_t dest_units,
+                                 std::size_t incoming_units);
+
+// ---------------------------------------------------------------------------
 // Per-unit abilities.
 // ---------------------------------------------------------------------------
 

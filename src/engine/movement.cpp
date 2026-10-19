@@ -226,6 +226,21 @@ std::uint8_t clamp_move_points(int value) {
     return static_cast<std::uint8_t>(value);
 }
 
+ArmyAddStatus army_can_add_units(std::size_t dest_units,
+                                 std::size_t incoming_units) {
+    // TArmy.CanAddUnitSelection@0x5578e55c, transporter-free branch:
+    //   if (dest_count + incoming_count < 9) { per-unit CanAddUnit checks }
+    //   else return 2;
+    // The per-unit test is TArmy.CanAddUnit@0x5578e2f8 -> MaxSize (8 here) and
+    // TAbstractUnit.CanAddToList@0x55781208, which unconditionally returns true
+    // (the base implementation; TUnit does not override it). So with no
+    // transporter the only rule that can refuse is the eight-unit limit.
+    if (dest_units + incoming_units > kArmyMaxUnits) {
+        return ArmyAddStatus::full;
+    }
+    return ArmyAddStatus::ok;
+}
+
 // ---------------------------------------------------------------------------
 // Per-unit abilities
 // ---------------------------------------------------------------------------

@@ -257,6 +257,16 @@ open (`TODO(RE) TAbstractUnit vtable+0xfc`), and the id can be swept with the
   walks - the units whose bit is clear in `party_sel` are pushed back onto the
   origin hex as their own `TArmyHS`, which is the "another group" the game forms
   (`game_split=<x>,<y> stay=<n> go=<n>` on stdout).
+* **Merging two parties**: clicking another of your armies while a party is
+  selected moves it onto that hex and combines the two through the engine's
+  combine move (`TMoveArmyTE.FinishMove@0x55747fbc` /
+  `TArmy.AddUnitSelection@0x5578e6b4`). Only a merged force of **8 units or
+  fewer** is accepted (`TArmy.CanAddUnitSelection@0x5578e55c`,
+  `TArmy.MaxSize@0x5578def4`); a ninth unit is refused with the game's own
+  "Cannot combine armies" resourcestring. The merge is committed on **arrival**:
+  the destination army and the incoming party both stay visible during the
+  walk (the window follows the incoming party), and the destination becomes the
+  selection with every merged unit travelling only when the walk ends.
 
 
 ## 6. Fidelity - the pixel comparison

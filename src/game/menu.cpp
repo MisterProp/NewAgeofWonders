@@ -1448,6 +1448,15 @@ struct Scene {
     aow::MapHs mv_anim_army;              // the whole army (its size banner)
     int mv_hide_level = -1;               // the hex whose army is hidden meanwhile
     int mv_hide_x = -1, mv_hide_y = -1;
+    // A merge move in flight (`TMoveArmyTE.FinishMove@0x55747fbc` runs when the
+    // walk arrives): the incoming army is off the map while its sprite walks,
+    // the destination army stays on the map untouched and visible, and the
+    // Party window shows the incoming party until the two combine. This is what
+    // keeps the destination from vanishing at the start of the animation.
+    bool mv_merge_pending = false;
+    int mv_merge_x = -1, mv_merge_y = -1;
+    std::size_t mv_merge_stay = 0;        // units left behind at the origin
+    aow::MapHs mv_merge_moving;           // the party that is walking
     std::vector<std::uint8_t> game_draw;  // game_px + the overlay (RGBA)
     // The level's *contents* layer, kept alongside the flat `game_px` so the
     // move-selection marker can put the hex's contents back over its far wall
@@ -2463,6 +2472,10 @@ struct Scene {
         mv_anim = false;
         mv_walk = aow::WalkAnimation();
         mv_hide_level = mv_hide_x = mv_hide_y = -1;
+        mv_merge_pending = false;
+        mv_merge_x = mv_merge_y = -1;
+        mv_merge_stay = 0;
+        mv_merge_moving = aow::MapHs();
         game_status.clear();
         game_draw.clear();   // the next refresh recopies the whole canvas
         mv_dirty = false;
@@ -2676,6 +2689,38 @@ struct Scene {
         return nullptr;
     }
 
+    // Folds `a` into `mv_army` and opens its party window with every unit
+    // travelling - `TSelectedArmy.SetSelection` is seeded with the army's own
+    // unit mask, and `TControlWin.CheckEnd` then repaints it. `x,y` is the hex
+    // the party is reported on; for the incoming army of a merge in flight it is
+    // the origin hex (the army is not on the map while its sprite walks).
+    bool mv_use_army(const aow::MapHs& a, int x, int y) {
+        std::vector<std::uint8_t> mts, mps;
+        std::vector<std::array<bool, 256>> abs;
+        for (const aow::MapUnit& u : a.units) {
+            mts.push_back(aow::unit_move_types(u));
+            mps.push_back(aow::unit_move_points(mv_cat, u));
+            abs.push_back(aow::decode_ability_bitmap(u.ability_mask, u.ability_count));
+        }
+        mv_army = aow::army_move(mv_tables, mts, mps, abs);
+        mv_selected = mv_army.valid;
+        mv_sel_x = x;
+        mv_sel_y = y;
+        game_show_party = mv_selected;
+        if (mv_selected) {
+            party_sel = 0;
+            for (std::size_t i = 0; i < a.units.size() && i < kPartySlots; ++i) {
+                party_sel |= static_cast<std::uint8_t>(1u << i);
+            }
+            party_focus = a.units.empty() ? -1 : 0;
+        } else {
+            party_sel = 0;
+            party_focus = -1;
+        }
+        party_hover = party_pressed = -1;
+        return mv_selected;
+    }
+
     // Fills `mv_army` for the army standing on (x,y). False when it is not the
     // human player's (nothing is selected then).
     bool mv_select(int x, int y) {
@@ -2686,34 +2731,7 @@ struct Scene {
             mv_army = aow::ArmyMove();
             return false;
         }
-        std::vector<std::uint8_t> mts, mps;
-        std::vector<std::array<bool, 256>> abs;
-        for (const aow::MapUnit& u : a->units) {
-            mts.push_back(aow::unit_move_types(u));
-            mps.push_back(aow::unit_move_points(mv_cat, u));
-            abs.push_back(aow::decode_ability_bitmap(u.ability_mask, u.ability_count));
-        }
-        mv_army = aow::army_move(mv_tables, mts, mps, abs);
-        mv_selected = mv_army.valid;
-        mv_sel_x = x;
-        mv_sel_y = y;
-        // Selecting a party opens its window (the engine creates/updates the
-        // TControlWin floater on `TSelectedArmy.Select`) with every unit
-        // travelling - `TSelectedArmy.SetSelection` is seeded with the army's
-        // own unit mask, and `TControlWin.CheckEnd` then repaints it.
-        game_show_party = mv_selected;
-        if (mv_selected) {
-            party_sel = 0;
-            for (std::size_t i = 0; i < a->units.size() && i < kPartySlots; ++i) {
-                party_sel |= static_cast<std::uint8_t>(1u << i);
-            }
-            party_focus = a->units.empty() ? -1 : 0;
-        } else {
-            party_sel = 0;
-            party_focus = -1;
-        }
-        party_hover = party_pressed = -1;
-        return mv_selected;
+        return mv_use_army(*a, x, y);
     }
 
     // Recomputes the path from the selected army to (hx,hy) and records whether
@@ -4433,7 +4451,10 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
             for (int i = 0; i < aow::kAnimFramesPerTick && !finished; ++i) {
                 ++mv_anim_clock;
                 if (!mv_walk.tick()) {
-                    // The path is done: the army is drawn on its hex again.
+                    // The path is done. `TMoveArmyTE.FinishMove` runs now: for
+                    // a merge the incoming units join the destination army only
+                    // at this moment, and the destination becomes the selection.
+                    if (mv_merge_pending) mv_finish_merge();
                     mv_anim = false;
                     mv_hide_level = mv_hide_x = mv_hide_y = -1;
                     mv_render_level();
@@ -4673,6 +4694,58 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
         return cursor;
     }
 
+    // `TMoveArmyTE.FinishMove@0x55747fbc`: the walk has reached the destination,
+    // so the incoming units now join the army standing there
+    // (`TArmy.AddUnitSelection@0x5578e6b4`, original order). Until this moment
+    // the destination army stayed untouched on the map and the incoming party
+    // was the selection; now the destination becomes the selection, exactly the
+    // engine's `TSelectedArmy.Select(destination)`. The units are appended, so
+    // the destination keeps its lead unit.
+    void mv_finish_merge() {
+        if (!mv_merge_pending) return;
+        const int src_x = mv_sel_x, src_y = mv_sel_y;
+        const int dest_x = mv_merge_x, dest_y = mv_merge_y;
+        const std::size_t added = mv_merge_moving.units.size();
+        aow::MapHs* target = army_on_hex(dest_x, dest_y);
+        if (target != nullptr && target->owner == mv_human) {
+            target->units.insert(target->units.end(),
+                                 mv_merge_moving.units.begin(),
+                                 mv_merge_moving.units.end());
+            std::printf("game_merge=%d,%d->%d,%d stay=%d added=%d total=%d\n",
+                        src_x, src_y, dest_x, dest_y,
+                        static_cast<int>(mv_merge_stay),
+                        static_cast<int>(added),
+                        static_cast<int>(target->units.size()));
+            std::fflush(stdout);
+        } else if (game_level >= 0 &&
+                   static_cast<std::size_t>(game_level) <
+                       game_state_map.levels.size()) {
+            // The destination vanished while the army walked (not expected on
+            // the world map): put the arriving army on the hex instead of
+            // losing it.
+            const aow::MapLevel& lv =
+                game_state_map.levels[static_cast<std::size_t>(game_level)];
+            if (dest_x >= 0 && dest_y >= 0 &&
+                static_cast<std::uint32_t>(dest_x) < lv.width &&
+                static_cast<std::uint32_t>(dest_y) < lv.height) {
+                game_state_map.levels[static_cast<std::size_t>(game_level)]
+                    .tiles[static_cast<std::size_t>(dest_y) * lv.width +
+                           static_cast<std::size_t>(dest_x)]
+                    .objects.push_back(mv_merge_moving);
+            }
+            std::printf("game_merge=%d,%d->%d,%d stay=%d added=%d total=%d\n",
+                        src_x, src_y, dest_x, dest_y,
+                        static_cast<int>(mv_merge_stay),
+                        static_cast<int>(added), static_cast<int>(added));
+            std::fflush(stdout);
+        }
+        mv_merge_pending = false;
+        mv_merge_moving = aow::MapHs();
+        mv_merge_x = mv_merge_y = -1;
+        mv_merge_stay = 0;
+        mv_select(dest_x, dest_y);
+    }
+
     // Relocates the selected army to the path's destination and re-renders the
     // level. Only a hex the army can reach THIS turn moves (the engine otherwise
     // reports "Not enough move points" and leaves the army where it is); the
@@ -4694,39 +4767,68 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
             game_state_map.levels[static_cast<std::size_t>(game_level)]
                 .tiles[static_cast<std::size_t>(src_y) * lv.width +
                        static_cast<std::size_t>(src_x)];
-        aow::MapHs moved;
-        bool got = false;
+        // Find the selected army without removing it yet: a merge onto another
+        // of our armies has to be validated before anything moves.
+        std::size_t src_index = from.objects.size();
         for (std::size_t i = 0; i < from.objects.size(); ++i) {
-            aow::MapHs& hs = from.objects[i];
+            const aow::MapHs& hs = from.objects[i];
             if (hs.class_id != aow::kMapArmyHsClassId || hs.units.empty()) {
                 continue;
             }
             if (mv_human == 0xff || hs.owner != mv_human) continue;
-            moved = std::move(hs);
-            from.objects.erase(from.objects.begin() +
-                               static_cast<std::ptrdiff_t>(i));
-            got = true;
+            src_index = i;
             break;
         }
-        if (!got) return false;
+        if (src_index == from.objects.size()) return false;
+        aow::MapHs& src_army = from.objects[src_index];
         // Units left behind (`TControlWin+0x178`): the engine moves only the
         // selected subset (`TArmy.MoveOnMovePoints`), and the stragglers stay on
         // the origin hex as their own army - a new "group". Mirror that: split
         // the moving army here and drop the remainder back on the source hex
         // before it leaves.
-        {
-            std::vector<aow::MapUnit> go, stay;
-            for (std::size_t k = 0; k < moved.units.size(); ++k) {
-                const bool travels =
-                    k < static_cast<std::size_t>(kPartySlots) &&
-                    (party_sel & (1u << k)) != 0;
-                if (travels) {
-                    go.push_back(moved.units[k]);
-                } else {
-                    stay.push_back(moved.units[k]);
-                }
+        std::vector<aow::MapUnit> go, stay;
+        for (std::size_t k = 0; k < src_army.units.size(); ++k) {
+            const bool travels =
+                k < static_cast<std::size_t>(kPartySlots) &&
+                (party_sel & (1u << k)) != 0;
+            if (travels) {
+                go.push_back(src_army.units[k]);
+            } else {
+                stay.push_back(src_army.units[k]);
             }
-            if (!go.empty() && !stay.empty()) {
+        }
+        if (go.empty()) {
+            // `TArmy.MoveOnMovePoints` would move nothing; the engine's Move
+            // button is disabled with an empty selection, so never create an
+            // empty army on the destination.
+            game_say("no units to move");
+            return false;
+        }
+        const std::size_t stay_count = stay.size();
+        // `TMoveArmyTE.CanMoveNext@0x5574830c`: the last step of a move onto a
+        // hex that holds another army of the same player is accepted only when
+        // the merge fits. `TArmy.CanAddUnitSelection@0x5578e55c` allows at most
+        // eight units (a normal army's `TArmy.MaxSize@0x5578def4`); the failure
+        // text is `TArmyCombineMoveTE.ShowCombineFailure@0x5574876c`'s
+        // "Cannot combine armies" (resourcestring 65435).
+        aow::MapHs* merge_into = nullptr;
+        if (aow::MapHs* target = army_on_hex(dest_x, dest_y);
+            target != nullptr && target->owner == mv_human) {
+            const aow::ArmyAddStatus st =
+                aow::army_can_add_units(target->units.size(), go.size());
+            if (st != aow::ArmyAddStatus::ok) {
+                game_say(st == aow::ArmyAddStatus::transporter_conflict
+                             ? "Cannot combine two transporters"
+                             : "Cannot combine armies");
+                return false;
+            }
+            merge_into = target;
+        }
+        aow::MapHs moved = std::move(src_army);
+        from.objects.erase(from.objects.begin() +
+                           static_cast<std::ptrdiff_t>(src_index));
+        {
+            if (!stay.empty()) {
                 moved.units = std::move(go);
                 aow::MapHs left;
                 left.tag = moved.tag;
@@ -4767,12 +4869,28 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
             game_state_map.levels[static_cast<std::size_t>(game_level)]
                 .tiles[static_cast<std::size_t>(dest_y) * lv.width +
                        static_cast<std::size_t>(dest_x)];
-        to.objects.push_back(std::move(moved));
-        // The moved army now sits on the destination hex; walk its *sprite*
-        // across the path (aow/unit_anim.hpp) while the resting copy is hidden.
-        if (!to.objects.empty() && !to.objects.back().units.empty()) {
-            mv_anim_unit = to.objects.back().units.front();
-            mv_anim_army = to.objects.back();
+        if (merge_into != nullptr) {
+            // `TMoveArmyTE.FinishMove@0x55747fbc` runs when the walk *arrives*,
+            // so nothing is combined yet: the destination army (`merge_into`)
+            // stays untouched on the map and the incoming party is the
+            // selection while its sprite walks (`mv_finish_merge` on arrival).
+            mv_merge_pending = true;
+            mv_merge_x = dest_x;
+            mv_merge_y = dest_y;
+            mv_merge_stay = stay_count;
+            mv_merge_moving = moved;
+            mv_anim_unit = moved.units.front();
+            mv_anim_army = moved;
+            mv_use_army(mv_merge_moving, src_x, src_y);
+        } else {
+            to.objects.push_back(std::move(moved));
+            // The moved army now sits on the destination hex; walk its *sprite*
+            // across the path (aow/unit_anim.hpp) while the resting copy is
+            // hidden.
+            if (!to.objects.empty() && !to.objects.back().units.empty()) {
+                mv_anim_unit = to.objects.back().units.front();
+                mv_anim_army = to.objects.back();
+            }
         }
         int steps_per_hex = 8;
         if (const aow::UnitGraphics* ug =
@@ -4784,15 +4902,24 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
         for (const aow::MoveStep& s : mv_path.steps) {
             hexes.emplace_back(s.x, s.y);
         }
-        mv_hide_level = game_level;
-        mv_hide_x = dest_x;
-        mv_hide_y = dest_y;
-        mv_render_level();
-        mv_selected = false;
-        mv_sel_x = mv_sel_y = -1;
-        mv_army = aow::ArmyMove();
-        mv_path = aow::MovePath();
-        mv_have_path = false;
+        if (mv_merge_pending) {
+            // The army being merged into must keep standing on its hex for the
+            // whole walk - only the incoming sprite is drawn by the animation.
+            mv_hide_level = mv_hide_x = mv_hide_y = -1;
+            mv_render_level();
+            mv_path = aow::MovePath();
+            mv_have_path = false;
+        } else {
+            mv_hide_level = game_level;
+            mv_hide_x = dest_x;
+            mv_hide_y = dest_y;
+            mv_render_level();
+            mv_selected = false;
+            mv_sel_x = mv_sel_y = -1;
+            mv_army = aow::ArmyMove();
+            mv_path = aow::MovePath();
+            mv_have_path = false;
+        }
         mv_anim_clock = 0;
         // The engine's per-unit phase is `(ptr >> 2) & 0xffff`. It is arbitrary,
         // which is why a walk is normally cut off mid-stride and the standing
@@ -4820,19 +4947,32 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
         mv_anim = mv_walk.start(hexes, steps_per_hex);
         if (!mv_anim) {
             // A degenerate path: just stand the army on its hex.
-            mv_hide_level = mv_hide_x = mv_hide_y = -1;
-            mv_render_level();
+            if (mv_merge_pending) {
+                mv_finish_merge();   // no walk: combine right away
+                mv_hide_level = mv_hide_x = mv_hide_y = -1;
+                mv_render_level();
+            } else {
+                mv_hide_level = mv_hide_x = mv_hide_y = -1;
+                mv_render_level();
+                // TSelectedArmy follows the army it just moved.
+                mv_select(dest_x, dest_y);
+            }
+        } else if (!mv_merge_pending) {
+            // TSelectedArmy follows the army it just moved, so it stays
+            // selected. A merge instead keeps the *incoming* party selected
+            // until the walk arrives (`mv_finish_merge`).
+            mv_select(dest_x, dest_y);
         }
-        // TSelectedArmy follows the army it just moved, so it stays selected.
-        mv_select(dest_x, dest_y);
         // The moving army's vision reveals the ground it arrives on: the engine
         // refreshes a player's explored mask as its armies move and each turn
         // (`TArmy.UpdateExploration@0x5578e1a8`, the same radius-4 pass as at map
         // start). Explored bits are permanent, so this only ever adds.
         mv_explore_for_human();
-        game_say("moved (" + std::to_string(src_x) + "," + std::to_string(src_y) +
-                 ") -> (" + std::to_string(dest_x) + "," + std::to_string(dest_y) +
-                 ")");
+        if (merge_into == nullptr) {
+            game_say("moved (" + std::to_string(src_x) + "," +
+                     std::to_string(src_y) + ") -> (" +
+                     std::to_string(dest_x) + "," + std::to_string(dest_y) + ")");
+        }
         game_update_path();
         std::printf("game_move=%d,%d->%d,%d dir=%d\n", src_x, src_y, dest_x, dest_y,
                     move_facing);
@@ -4863,6 +5003,18 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
         if (mine) {
             if (mv_selected && mv_sel_x == game_sel_hx && mv_sel_y == game_sel_hy) {
                 mv_reset();  // clicking the selected army again clears it
+                return;
+            }
+            if (mv_selected) {
+                // Clicking *another* one of our armies while one is selected is
+                // a move onto its hex: `TMoveArmyTE.CanMoveNext@0x5574830c` lets
+                // the last step combine the two when the merge fits, and
+                // `TMoveArmyTE.FinishMove@0x55747fbc` performs it. A refused
+                // combine keeps the selected army selected (the engine's move
+                // transition only reports the failure).
+                game_update_path();
+                if (game_move_selected()) return;
+                if (!mv_path.reached) game_say("destination unreachable");
                 return;
             }
             mv_select(game_sel_hx, game_sel_hy);
@@ -5267,6 +5419,10 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
     // The selected army (the const walk `army_on_hex` cannot do from within a
     // const renderer). The window is only up while one is selected.
     const aow::MapHs* party_army() const {
+        // The incoming army of a merge is off the map while its sprite walks;
+        // the Party window follows it (`TSelectedArmy.Select` on the temporary
+        // moving `TArmyHS`) until `FinishMove` combines it on arrival.
+        if (mv_merge_pending) return &mv_merge_moving;
         if (game_level < 0 ||
             static_cast<std::size_t>(game_level) >= game_state_map.levels.size() ||
             mv_sel_x < 0) {
@@ -5443,6 +5599,9 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
     // the new selection; a fresh party starts with every unit travelling
     // (`TSelectedArmy.SetSelection` after `TArmy.Select`).
     void game_select_army(int delta) {
+        // The move animation owns the selection until it arrives (a merge's
+        // incoming party is not on the map meanwhile).
+        if (mv_anim) return;
         if (game_level < 0 ||
             static_cast<std::size_t>(game_level) >= game_state_map.levels.size() ||
             mv_human == 0xff || delta == 0) {
@@ -5496,6 +5655,9 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
     //   PGuardChange         FUN_00406848  TArmy+0x28 bit 0
     //   PMoveClick           FUN_00406834  arm the party's move
     void party_action(int hit) {
+        // The walk is playing: the party is already committed to the move, so
+        // its buttons (and closing it) wait for the arrival.
+        if (mv_anim) return;
         if (hit >= kPartyPill0 && hit < kPartyPill0 + kPartySlots) {
             // `FUN_004060d8`: a pill click toggles that unit's "travels with the
             // party" state, then the mask is filed back through
@@ -6945,6 +7107,16 @@ bool split_captions(const std::string& s) {
 // the map window and clears the selection (WM_RBUTTONDOWN).
 void apply_game_click(int cx, int cy, bool right = false) {
     Scene& s = g.scene;
+    // A scripted click happens after the previous move's walk has played; the
+    // head-less driver has no timer between clicks, so run the walk to
+    // completion first - exactly what the window procedure's 30 fps ticks would
+    // have done before the user's next click. Without this, a click that lands
+    // on the army just moved is swallowed by `game_map_click`'s `mv_anim` gate.
+    // Park the pointer off the map while ticking so the edge scroll does not
+    // move the camera under the coordinates the script is about to use.
+    s.mouse_x = -1;
+    s.mouse_y = -1;
+    while (s.mv_anim) s.game_update();
     s.mouse_x = cx;
     s.mouse_y = cy;
     s.game_update();

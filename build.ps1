@@ -880,6 +880,56 @@ if ($Test) {
     }
     Remove-Item $gppng, $gplog -Force
     Write-Host 'game party-window smoke test: ok'
+    # Moving an army onto another army of ours combines the two
+    # (`TMoveArmyTE.CanMoveNext@0x5574830c` -> `TArmy.CanCombine@0x55790814`,
+    # `TMoveArmyTE.FinishMove@0x55747fbc` -> `TArmy.AddUnitSelection@0x5578e6b4`).
+    # The party test's flow gives us two armies: leave unit 3 behind on (15,34),
+    # walk the other three to (17,32), then click the left-behind army. The
+    # merged army (4 units, exactly the Tutorial hero party) ends up selected on
+    # (15,34) - the destination army, as `TSelectedArmy.Select` does.
+    $gamergpng = Join-Path $BinDir 'game_merge.png'
+    $gamerglog = Join-Path $BinDir 'game_merge.txt'
+    Remove-Item $gamergpng, $gamerglog -Force -ErrorAction SilentlyContinue
+    # The merge is committed on arrival. First prove it is *not* committed while
+    # the incoming army is still walking (the destination army must not vanish /
+    # the party must still be the incoming one), then let the walk play out.
+    $gamergstartpng = Join-Path $BinDir 'game_merge_walk.png'
+    $gamergstartlog = Join-Path $BinDir 'game_merge_walk.txt'
+    Remove-Item $gamergstartpng, $gamergstartlog -Force -ErrorAction SilentlyContinue
+    $gamergstartargs = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+                        '--game-click 513 141 --game-click 220 216 --game-click 560 296 ' +
+                        '--game-click 284 152 --game-click 220 216 --game-anim 5') -f $mroot, $gamergstartpng
+    $gamergstartproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $gamergstartargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gamergstartlog
+    if ($gamergstartproc.ExitCode -ne 0) { throw 'game army-combine walk test failed' }
+    $gamergstartline = Get-Content $gamergstartlog -Raw
+    foreach ($need in @('game_move=17,32->15,34', 'game_army=17,32')) {
+        if ($gamergstartline -notmatch [regex]::Escape($need)) {
+            throw "game army-combine walk test: missing `"$need`""
+        }
+    }
+    if ($gamergstartline -match 'game_merge=') {
+        throw 'game army-combine walk test: merged before the army arrived'
+    }
+    Remove-Item $gamergstartpng, $gamergstartlog -Force
+    $gamergargs = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+                   '--game-click 513 141 --game-click 220 216 --game-click 560 296 ' +
+                   '--game-click 284 152 --game-click 220 216 --game-anim 200') -f $mroot, $gamergpng
+    $gamergproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $gamergargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gamerglog
+    if ($gamergproc.ExitCode -ne 0) { throw 'game army-combine test failed' }
+    $gamergline = Get-Content $gamerglog -Raw
+    foreach ($need in @('game_split=15,34 stay=1 go=3',
+                        'game_merge=17,32->15,34 stay=0 added=3 total=4',
+                        'game_army=15,34 mp=28')) {
+        if ($gamergline -notmatch [regex]::Escape($need)) {
+            throw "game army-combine test: missing `"$need`""
+        }
+    }
+    Remove-Item $gamergpng, $gamerglog -Force
+    Write-Host 'game army-combine smoke test: ok'
     # The world-map pointer (docs/09_GAME_SCREEN.md 6.8). With no army selected,
     # hovering a hex that carries one swaps the arrow for the game's animated
     # hover sparkle: `AoWE.TAoWHSMap.MouseMoved` (0x55777a58) asks for cursor

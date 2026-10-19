@@ -488,7 +488,8 @@ head-less proofs over `Tutorial.hsm` (§7).
 
 * `build_move_point_tables()`, `move_types_from_abilities`,
   `unit_move_point_table`, `maximize_move_point_table`, `army_move_point_table`,
-  `army_move_points`, `army_move`, `move_point_cost`, `clamp_move_points`;
+  `army_move_points`, `army_move`, `army_can_add_units`, `move_point_cost`,
+  `clamp_move_points`;
 * `decode_ability_bitmap`, `decode_ability_list`, `unit_move_types`,
   `unit_move_points`;
 * `hex_direction`, `hex_distance`, `hex_neighbour`, `hn_walk_hex`;
@@ -543,6 +544,23 @@ walk animation hides the army on the hex it is moving onto).
   also clears the selection (`Scene::game_right_click`, the window procedure's
   `WM_RBUTTONDOWN`), matching the engine removing the party floater on a
   right-click of the main map window (which deselects the party);
+* a **click on another army of yours** while one is selected performs the
+  engine's combine move: `TMoveArmyTE.CanMoveNext@0x5574830c` accepts the last
+  step only when `TArmy.CanCombine@0x55790814` /
+  `TArmy.CanAddUnitSelection@0x5578e55c` accept it, then
+  `TMoveArmyTE.FinishMove@0x55747fbc` appends the moving units to the
+  destination army (`TArmy.AddUnitSelection@0x5578e6b4`, original order) and
+  selects it (`TSelectedArmy.Select`). The combine itself is deferred to the
+  **arrival**: while the incoming sprite walks, the destination army keeps
+  standing on its hex and the Party window keeps showing the incoming party
+  (`TMoveArmyTE.FinishMove` is the transition's finish step); only when the walk
+  ends are the units appended and the destination re-selected. A normal army
+  holds **at most eight units** (`TArmy.MaxSize@0x5578def4`; the recovered test
+  is `destination + incoming < 9`), so a merge that lands on eight fits and a
+  ninth is refused with the game's own `Cannot combine armies` resourcestring
+  (65435, `TArmyCombineMoveTE.ShowCombineFailure@0x5574876c`); the selected
+  army then stays selected. `game_merge=<from>-><to> stay=<n> added=<n>
+  total=<n>` goes to stdout when the merge commits, for the smoke test;
 * the scanner's **Surface / Caverns** tabs now re-render the other level *from the
   in-memory map* (`Scene::game_set_level`), so an army moved this session stays
   moved (the old path reloaded the `.HSM` from disk);
@@ -659,7 +677,12 @@ aow move Scenario/Custom/Tutorial.hsm --root . --level 0 --to 20,28
   (`TArmy.Transporter`, `TSubMove`) and the turn loop's refill are out of scope:
   the port always models a fresh turn's allowance. `TArmy.MovePoints`/
   `MoveTypes`/`CreateMovePointTable` all take a **transporter** branch when the
-  army is aboard one (`TArmy.Transporter@0x5578e00c`); the port has no such model.
+  army is aboard one (`TArmy.Transporter@0x5578e00c`); the port has no such model,
+  so `aow::army_can_add_units` uses the normal eight-unit cap of
+  `TArmy.MaxSize@0x5578def4`. The other `CanAddUnitSelection` outcomes are
+  preserved as codes: `unit_refused` (a unit's `CanAddToList` returns false;
+  the base implementation always returns true) and `transporter_conflict`
+  (both armies carry one - unreachable until transporters are modelled).
   Likewise `TMoveControl.FindSubMoveOrigin`/`SetupSubMove` enrich the flood with
   multi-hex sub-moves, which the port's Dijkstra reproduces as plain hex steps.
 * `TUnitHS` rw tag 9 (`army_direction`) is written with the step's hex direction

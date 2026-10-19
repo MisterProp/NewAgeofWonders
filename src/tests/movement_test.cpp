@@ -250,6 +250,22 @@ int main(int argc, char** argv) {
     check(aow::clamp_move_points(-5) == 0, "clamp: negative -> 0");
     check(aow::clamp_move_points(300) == 0xFF, "clamp: >0xFF -> 0xFF");
 
+    // -- Combining armies (TArmy.CanAddUnitSelection) ------------------------
+    // A normal army holds at most 8 units (TArmy.MaxSize@0x5578def4; the
+    // recovered test is destination + incoming < 9). A merge that lands exactly
+    // on eight fits; a ninth unit does not.
+    check(aow::kArmyMaxUnits == 8, "combine: a normal army holds 8 units");
+    check(aow::army_can_add_units(4, 4) == aow::ArmyAddStatus::ok,
+          "combine: 4 + 4 units fit");
+    check(aow::army_can_add_units(8, 0) == aow::ArmyAddStatus::ok,
+          "combine: an existing eight-unit army is full but valid");
+    check(aow::army_can_add_units(0, 8) == aow::ArmyAddStatus::ok,
+          "combine: eight incoming units fit an empty army");
+    check(aow::army_can_add_units(4, 5) == aow::ArmyAddStatus::full,
+          "combine: 4 + 5 = 9 units do not fit");
+    check(aow::army_can_add_units(8, 1) == aow::ArmyAddStatus::full,
+          "combine: a ninth unit is refused");
+
     // -- Hex geometry (HXtoHP / HNtoHX / dHXtoHNfast / dHXtoRad) -------------
     // Round trip: for every column parity and direction the neighbour is one
     // step away and points back at the source.

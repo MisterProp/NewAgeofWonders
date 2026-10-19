@@ -867,6 +867,17 @@ Head-less (`--game-click 513 141 --game-click 220 216` selects the hero army at
     move points cover the path (`Scene::game_move_selected` relocates the
     `AoWE.TArmyHS`, writes its `army_direction` and re-renders the level), else
     reports `destination unreachable` / `not enough move points this turn`;
+  * a click on *another army of yours* while one is selected is a **move onto
+    its hex**, exactly the engine's `TMoveArmyTE.CanMoveNext@0x5574830c`
+    combine step: when the merged force is eight units or fewer
+    (`TArmy.MaxSize@0x5578def4`,
+    `TArmy.CanAddUnitSelection@0x5578e55c`) the incoming army walks to it and
+    only on arrival does `TMoveArmyTE.FinishMove@0x55747fbc` /
+    `TArmy.AddUnitSelection@0x5578e6b4` append its units. The destination army
+    therefore stays visible throughout the walk and the Party window follows
+    the incoming party until the merge commits; otherwise the destination is
+    refused with the game's own "Cannot combine armies" resource string and the
+    selected army stays selected;
   * hovering with a selection composites the game's own `Cursors.ilb` arrows / X
     over the level render (`Scene::game_update_path` + `mv_refresh_draw`), so the
     trail previews exactly as the engine's `TMoveSelector.ShowMovePaths` draws it;
@@ -876,12 +887,11 @@ Head-less (`--game-click 513 141 --game-click 220 216` selects the hero army at
     right-click and closing it deselects the party; the camera still does not
     follow a click - the view is moved by the World Map scanner (which always
     centres) and the `C` key.
-* **Walk animation.** The in-game screen relocates the `TArmyHS` and re-renders
-  the level in one step; it does not yet animate the walk hex by hex. The viewer
-  (`src/game/viewer.cpp`) already does that (the per-hex sprite animation), so
-  the same routine can be lifted there. The port's feedback for a refused move is
-  `game_status` + a `game_msg=` line on stdout (the engine shows a message box,
-  whose art is not recovered).
+* **Walk animation.** The in-game screen walks the moved `TArmyHS`'s sprite hex
+  by hex with the unit's own walking sequence and hands over to its standing
+  pose (`aow::WalkAnimation`, docs/16_UNIT_ANIM.md), exactly like the viewer.
+  The port's feedback for a refused move is `game_status` + a `game_msg=` line
+  on stdout (the engine shows a message box, whose art is not recovered).
 * **Interactive cost.** The level render and the trail overlay are cheap because
   `src/engine/mapviz.cpp` caches the ILB index/resolver and the decoded libraries
   for the life of the process and the trail is composited with a dirty rectangle;
