@@ -416,8 +416,9 @@ The last two differ because the benchmark's crop carries the port's **pre-existi
 `HSEngine.TMapObject.Show@0x55609a00` draw at `HXtoHP.x - 8`, while `TUnitHS.Show`
 and the port's units use `HXtoHP` itself), so the terrain *under* the shadow is
 sampled from a different column; the 7.2 row samples the terrain at the port's own
-offset, isolating the blend. The crop also lacks the army's size banner (see
-`docs/13_UNITS_ON_MAP.md`), which is a separate unimplemented feature.
+offset, isolating the blend. The reference crop itself predates the size-banner
+work, but the banner is now implemented (`docs/21_ARMY_COUNTER.md`) and sits
+above the shadow rectangle, so the shadow measurement is unaffected.
 
 `unit_anim_test` locks the mapping (`unit_shadow_sequence_index`), the shipped
 shadow slots (every record's library, the mode-4 flyers, the null and missing

@@ -1445,6 +1445,7 @@ struct Scene {
     int mv_anim_clock = 0;                // AoWHSMap+0x40
     int mv_anim_phase = 0;                // the per-unit (ptr>>2)&0xffff offset
     aow::MapUnit mv_anim_unit;            // the moving army's lead unit (poses)
+    aow::MapHs mv_anim_army;              // the whole army (its size banner)
     int mv_hide_level = -1;               // the hex whose army is hidden meanwhile
     int mv_hide_x = -1, mv_hide_y = -1;
     std::vector<std::uint8_t> game_draw;  // game_px + the overlay (RGBA)
@@ -2785,6 +2786,19 @@ struct Scene {
         aow::blit_sprite_rgba(game_draw, static_cast<int>(game_pw),
                               static_cast<int>(game_ph), pose, w, h, ox, oy);
         mv_mark_dirty(ox - w, oy - h, ox + 2 * w, oy + 2 * h);
+        // `TArmyHS.Show` draws the army's size banner after the body, so the
+        // walking sprite carries it too (the resting copy is hidden meanwhile).
+        std::vector<std::uint8_t> banner;
+        int bw = 0, bh = 0, bvx = 0, bvy = 0;
+        if (aow::army_banner_rgba(game_state_map, mv_anim_army, root_dir, ix,
+                                  iy, banner, bw, bh, bvx, bvy, err)) {
+            const int bx = ix + bvx;
+            const int by = iy + bvy;
+            aow::blit_sprite_rgba(game_draw, static_cast<int>(game_pw),
+                                  static_cast<int>(game_ph), banner, bw, bh,
+                                  bx, by);
+            mv_mark_dirty(bx - bw, by - bh, bx + 2 * bw, by + 2 * bh);
+        }
     }
 
     // The hexagon selector: the blue 3D hex `TAoWE.TAbstractAoWHSMap` paints over
@@ -4758,6 +4772,7 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
         // across the path (aow/unit_anim.hpp) while the resting copy is hidden.
         if (!to.objects.empty() && !to.objects.back().units.empty()) {
             mv_anim_unit = to.objects.back().units.front();
+            mv_anim_army = to.objects.back();
         }
         int steps_per_hex = 8;
         if (const aow::UnitGraphics* ug =

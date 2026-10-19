@@ -2395,7 +2395,9 @@ int main(int argc, char** argv) {
                 // The same level WITH its armies - what a one-shot render bakes.
                 aow::MapVizOptions fopt = lopt;
                 fopt.no_units = false;
-                fopt.debug_csv.clear();
+                const std::string fcsv =
+                    (fs::temp_directory_path() / "aow_unit_banner.csv").string();
+                fopt.debug_csv = fcsv;
                 std::vector<std::uint8_t> full;
                 std::uint32_t fw = 0, fh = 0;
                 std::string ferr;
@@ -2403,6 +2405,28 @@ int main(int argc, char** argv) {
                     tmap, res, root, fopt, full, fw, fh, ferr);
                 check(frendered,
                       "the same level renders with its armies (" + ferr + ")");
+                // TArmyHS.Show's size banner: every army draws one (the Tutorial
+                // has four), and the two TLeader-led parties (Trodsen's
+                // Halflings, Borok's Goblins) draw the crown. Frame numbers lock
+                // the decompiled formulas: race shield count+0x1d, ownerless
+                // Flags shield count+0x27, crown race+0x50.
+                std::size_t banner_rows = 0, crown_rows = 0;
+                {
+                    std::ifstream in(fcsv);
+                    std::string line;
+                    while (std::getline(in, line)) {
+                        if (line.rfind("banner,", 0) == 0) ++banner_rows;
+                        if (line.rfind("crown,", 0) == 0) ++crown_rows;
+                    }
+                }
+                std::error_code ecB;
+                fs::remove(fcsv, ecB);
+                check(banner_rows == 4,
+                      "every Tutorial army draws its size shield (" +
+                          std::to_string(banner_rows) + " rows)");
+                check(crown_rows == 2,
+                      "a TLeader-led army draws the crown (" +
+                          std::to_string(crown_rows) + " rows)");
                 // The per-frame composite: `base` + the unit overlay must be
                 // pixel-identical (RGB) to that level - the same sprites, the same
                 // anchors, the same shadow-before-body order and the same blends.
@@ -2482,9 +2506,13 @@ int main(int argc, char** argv) {
                             if (over[di] == 255 && over[di + 1] == 0 &&
                                 over[di + 2] == 255) {
                                 ++still;
-                            } else if (over[di] != spr[si] ||
-                                       over[di + 1] != spr[si + 1] ||
-                                       over[di + 2] != spr[si + 2]) {
+                            } else if (over[di] != full[di] ||
+                                       over[di + 1] != full[di + 1] ||
+                                       over[di + 2] != full[di + 2]) {
+                                // The army's size shield is drawn *after* the body
+                                // by `TArmyHS.Show`, so a few body pixels inside
+                                // the shield's box legitimately show the banner -
+                                // the one-shot level (`full`) has them too.
                                 ++wrong;
                             }
                         }
@@ -2501,7 +2529,8 @@ int main(int argc, char** argv) {
                           "the unit covers every building pixel it overlaps (" +
                               std::to_string(still) + " left)");
                     check(wrong == 0,
-                          "the unit's opaque pixels are its own art (" +
+                          "the unit's opaque pixels match the level's own art "
+                          "+ size banner (" +
                               std::to_string(wrong) + " blended)");
                     std::printf("unit overlay: Giant %dx%d at (%d,%d), %zu opaque "
                                 "px, dirty %d,%d..%d,%d\n",

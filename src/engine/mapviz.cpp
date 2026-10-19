@@ -1057,6 +1057,160 @@ UnitPose resolve_unit_shadow(const UnitCatalog* cat, LibResolver& resolver,
     return out;
 }
 
+// --- The army's size banner ------------------------------------------------
+// `AoWE.TArmyHS.Show@0x557914d8` draws, after its lead unit's sprite, the
+// owner race's PartyShield carrying the army's unit count, and a crown above it
+// when the army carries a (visible) leader:
+//
+//   race  = (army.owner > 0) ? TPlayer.GetRace : 0x20   (TArmyHS.UpdateFlagID)
+//   count = TArmy.GetUnitCount() - TArmy.ConcealedUnitsCount()
+//   if race == 0x20:  Flags.ILB       frame count + 0x27   (ownerless shield)
+//   else:             RACES\R*.ILB    frame count + 0x1d   (race shield)
+//   crown (army+0x10 & 0x20): Flags.ILB frame race + 0x50
+//   shield at HXtoHP + (-5, -12) + sprite base+shift
+//   crown  at HXtoHP + (-5, -14) + sprite base+shift
+//
+// The army's stored race byte (+0x16) is `0x20` for the independents (owner 0)
+// and else the owner player's race (`TPlayer+0xa5`), exactly what
+// `aow::map_player_races` returns and what the owner flags already use. The
+// crown bit is set by `TArmy.UpdateConcealment` when `TArmy.Leader` finds a
+// `TLeader` (class 0x20232) that is not concealed from the seated player - the
+// map renderer has no fog, so a leader in the army means the crown is drawn.
+//
+// The banner art is a PartyShield: class 0x16 in the race libraries, class 0x11
+// in Flags.ILB. The reference screenshot `bin/counterRef.png` pins both the
+// frames and the placement: RHUMAN frame 30 (count 1) at (15,13) and frame 34
+// (count 5) at (47,29) over hex origins (15,22)/(47,38), and Flags crown frame
+// 80 at (45,24) - all three match the decoded sprites pixel-for-pixel with an
+// OPAQUE (colour-keyed) blit, not the class-0x16 brighten the map object path
+// uses. `TArmyHS.Show` calls the image's `+0x84` Show slot, which for this art
+// writes the sprite's own palette values.
+constexpr int kArmyBannerDx = -5;         // TArmyHS.Show: `local_8 + -5`
+constexpr int kArmyBannerDy = -0xc;       // TArmyHS.Show: `local_c + -0xc`
+constexpr int kArmyCrownDy = -0xe;        // TArmyHS.Show: `local_c + -0xe`
+constexpr int kArmyBannerFrameBase = 0x1d;   // race library shield frame
+constexpr int kNeutralBannerFrameBase = 0x27;  // Flags.ILB ownerless shield
+constexpr int kArmyCrownFrameBase = 0x50;      // Flags.ILB crown frame
+constexpr std::uint8_t kNeutralRace = 0x20;
+
+// The race image libraries in faction order (docs/11_UNIT_CATALOG.md). Used
+// when a caller has no `Release.hss` race list at hand - the live unit overlay
+// path only receives the map, not the resource table.
+const char* race_library_fallback(int race) {
+    static const char* const kLibraries[] = {
+        "RACES\\RHUMAN.ILB",   "RACES\\RAZRAC.ILB", "RACES\\RLIZARDS.ILB",
+        "RACES\\RFROSTL.ILB",  "RACES\\RELF.ILB",   "RACES\\RHALFLNG.ILB",
+        "RACES\\RDWARF.ILB",   "RACES\\RHIGHMAN.ILB", "RACES\\RDARKELF.ILB",
+        "RACES\\RORC.ILB",     "RACES\\RGOBLIN.ILB", "RACES\\RUNDEAD.ILB",
+    };
+    constexpr int kCount =
+        static_cast<int>(sizeof(kLibraries) / sizeof(kLibraries[0]));
+    if (race < 0 || race >= kCount) return nullptr;
+    return kLibraries[race];
+}
+
+// One army's resolved banner parts. `lib`/`slot` are kept for the diagnostic
+// CSV (and so a test can name the frame that was drawn).
+struct ArmyBanner {
+    const Sprite* shield = nullptr;
+    const Library* shield_lib = nullptr;
+    bool neutral = false;  // the ownerless Flags.ILB shield (owner 0)
+    std::size_t shield_slot = 0;
+    int shield_x = 0;
+    int shield_y = 0;
+    const Sprite* crown = nullptr;
+    const Library* crown_lib = nullptr;
+    std::size_t crown_slot = 0;
+    int crown_x = 0;
+    int crown_y = 0;
+};
+
+bool army_has_leader(const MapHs& army) {
+    for (const MapUnit& u : army.units) {
+        if (u.class_id == kMapLeaderClassId) return true;
+    }
+    return false;
+}
+
+// Resolves the banner `AoWE.TArmyHS.Show` draws for `army` at hex origin
+// (sx, sy). `race_libraries` may be empty; the shipped faction table then
+// supplies the same names. Returns true when the shield resolved (the crown is
+// optional: it needs a leader and an owned race).
+bool resolve_army_banner(const MapHs& army,
+                         const std::vector<std::uint8_t>& player_races,
+                         const std::vector<std::string>& race_libraries,
+                         LibResolver& resolver,
+                         std::map<std::string, Library>& cache, int sx, int sy,
+                         ArmyBanner& out) {
+    out = ArmyBanner{};
+    std::uint8_t race = kNeutralRace;
+    if (army.owner > 0 && army.owner < player_races.size()) {
+        race = player_races[army.owner];
+    }
+    const int race_index = static_cast<int>(race);
+    std::string race_lib;
+    if (race != kNeutralRace && race_index >= 0) {
+        if (race_index < static_cast<int>(race_libraries.size()) &&
+            !race_libraries[static_cast<std::size_t>(race_index)].empty()) {
+            race_lib = race_libraries[static_cast<std::size_t>(race_index)];
+        } else {
+            const char* fallback = race_library_fallback(race_index);
+            if (fallback != nullptr) race_lib = fallback;
+        }
+    }
+    // A missing / unset race behaves like the engine's ownerless byte.
+    const bool neutral = race_lib.empty();
+    out.neutral = neutral;
+    // `TArmy.GetUnitCount` counts children; a shipped party is at most 8
+    // (`TArmy.MaxSize`), the shields carry 0..9 (slot 0x1d/0x27 is the blank
+    // zero-count shield). Clamp so a malformed army cannot index past the art.
+    const std::size_t count =
+        std::min<std::size_t>(army.units.size(), static_cast<std::size_t>(9));
+    const int frame = static_cast<int>(
+        count + (neutral ? kNeutralBannerFrameBase : kArmyBannerFrameBase));
+    auto load = [&](const std::string& name) -> const Library* {
+        if (name.empty()) return nullptr;
+        const std::string file = resolver.resolve(name);
+        if (file.empty()) return nullptr;
+        return &get_library(cache, file);
+    };
+    const std::string shield_name = neutral ? "Flags.ILB" : race_lib;
+    const Library* shield_lib = load(shield_name);
+    if (shield_lib != nullptr && frame >= 0 &&
+        static_cast<std::size_t>(frame) < shield_lib->frames.size() &&
+        shield_lib->frames[static_cast<std::size_t>(frame)].ok) {
+        const Sprite& s = shield_lib->frames[static_cast<std::size_t>(frame)];
+        out.shield = &s;
+        out.shield_lib = shield_lib;
+        out.shield_slot = static_cast<std::size_t>(frame);
+        out.shield_x = sx + kArmyBannerDx + s.vx;
+        out.shield_y = sy + kArmyBannerDy + s.vy;
+    }
+    // `TArmy.UpdateConcealment` sets army+0x10 bit 0x20 when the army holds a
+    // TLeader visible to the seated player; the map renderer draws every army.
+    if (!neutral && army_has_leader(army)) {
+        const int crown_frame = race_index + kArmyCrownFrameBase;
+        const Library* crown_lib = load("Flags.ILB");
+        if (crown_lib != nullptr && crown_frame >= 0 &&
+            static_cast<std::size_t>(crown_frame) < crown_lib->frames.size() &&
+            crown_lib->frames[static_cast<std::size_t>(crown_frame)].ok) {
+            const Sprite& s =
+                crown_lib->frames[static_cast<std::size_t>(crown_frame)];
+            out.crown = &s;
+            out.crown_lib = crown_lib;
+            out.crown_slot = static_cast<std::size_t>(crown_frame);
+            out.crown_x = sx + kArmyBannerDx + s.vx;
+            out.crown_y = sy + kArmyCrownDy + s.vy;
+        }
+    }
+    return out.shield != nullptr || out.crown != nullptr;
+}
+
+// The banner is drawn in the same pass as its army, after the body and before
+// the next army (`TArmyHS.Show`: body, enchantments, banner, crown). The shield
+// and crown are colour-keyed art, so they use the opaque/alpha blit - see the
+// reference-crop note above.
+
 // The engine's shadow composite (aow/mapviz.hpp, blit_shadow_rgba).
 //
 // `TUnitHS.ShowShadow` blits the shadow image through the image's vtable+0x84
@@ -1281,6 +1435,12 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
     };
     auto blit_obj = [&](const Sprite& s, int ox, int oy) {
         blit_blended(contents == nullptr ? canvas : contents_canvas, s, ox, oy);
+    };
+    // The army banner is colour-keyed art: `TArmyHS.Show`'s +0x84 blit writes
+    // the sprite's own palette values (the reference crop matches exactly), so
+    // it must NOT go through the class-0x16 brighten path above.
+    auto blit_banner = [&](const Sprite& s, int ox, int oy) {
+        blit(contents == nullptr ? canvas : contents_canvas, dw, dh, s, ox, oy);
     };
     // The ground shadow of a unit: the engine's 50 % average (blit_shadow_buffer)
     // over whatever the sweep painted so far, in the same layer as the body.
@@ -2118,6 +2278,8 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
             int shadow_oy = 0;
             const Library* shadow_lib = nullptr;
             std::size_t shadow_slot = 0;
+            // The army's size banner (`TArmyHS.Show` draws it after the body).
+            ArmyBanner banner{};
         };
         std::vector<PendingUnit> pending_units;
         for (std::uint32_t y = 0; y < lv.height; ++y) {
@@ -2182,6 +2344,11 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
                                 pu.shadow_lib = shlib;
                                 pu.shadow_slot = shslot;
                             }
+                            // The army size shield + leader crown, at HXtoHP (not
+                            // the body's -16/-24 sequence cell): TArmyHS.Show.
+                            resolve_army_banner(hs, player_races, race_ilbs,
+                                                resolver, cache, sx, sy,
+                                                pu.banner);
                             pending_units.push_back(pu);
                         }
                         continue;
@@ -2299,6 +2466,28 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
             lg.frame = u.slot;
             lg.sprite = u.sprite;
             log_hex("unit", u.x, u.y, u.resource, std::string("UNITS"), lg);
+            // TArmyHS.Show: the size shield, then the leader crown, before the
+            // next army's body (so banners stack with their own army).
+            if (u.banner.shield != nullptr) {
+                blit_banner(*u.banner.shield, u.banner.shield_x,
+                            u.banner.shield_y);
+                Picked lb;
+                lb.lib = u.banner.shield_lib;
+                lb.frame = u.banner.shield_slot;
+                lb.sprite = u.banner.shield;
+                log_hex("banner", u.x, u.y, u.resource,
+                        std::string(u.banner.neutral ? "FLAGS" : "RACES"), lb);
+            }
+            if (u.banner.crown != nullptr) {
+                blit_banner(*u.banner.crown, u.banner.crown_x,
+                            u.banner.crown_y);
+                Picked lc;
+                lc.lib = u.banner.crown_lib;
+                lc.frame = u.banner.crown_slot;
+                lc.sprite = u.banner.crown;
+                log_hex("crown", u.x, u.y, u.resource, std::string("FLAGS"),
+                        lc);
+            }
         }
     }
 
@@ -2703,6 +2892,98 @@ bool army_sprite_rgba(const Map& m, const std::vector<MapResource>& res,
     vx = pose.xoff + s.vx;
     vy = pose.yoff + s.vy;
     (void)res;
+    return true;
+}
+
+bool army_banner_rgba(const Map& m, const MapHs& army,
+                      const std::string& ilb_root, int sx, int sy,
+                      std::vector<std::uint8_t>& rgba, int& out_w, int& out_h,
+                      int& vx, int& vy, std::string& error) {
+    rgba.clear();
+    out_w = out_h = 0;
+    vx = vy = 0;
+    LibResolver& resolver = shared_resolver(ilb_root);
+    std::map<std::string, Library>& cache = shared_libraries();
+    const std::vector<std::uint8_t> player_races = map_player_races(m);
+    const std::vector<std::string> race_libraries;
+    ArmyBanner banner;
+    if (!resolve_army_banner(army, player_races, race_libraries, resolver,
+                             cache, sx, sy, banner)) {
+        error = "army banner did not resolve";
+        return false;
+    }
+    // The union of the two parts, relative to the hex anchor. The shield's own
+    // base+shift is already folded into `shield_x/y`; undo `sx/sy` to get the
+    // relative placement inside the composite.
+    int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+    bool have = false;
+    auto add_box = [&](const Sprite* s, int ox, int oy) {
+        const int rx = ox - sx;
+        const int ry = oy - sy;
+        if (!have) {
+            x0 = rx;
+            y0 = ry;
+            x1 = rx + static_cast<int>(s->w);
+            y1 = ry + static_cast<int>(s->h);
+            have = true;
+        } else {
+            x0 = std::min(x0, rx);
+            y0 = std::min(y0, ry);
+            x1 = std::max(x1, rx + static_cast<int>(s->w));
+            y1 = std::max(y1, ry + static_cast<int>(s->h));
+        }
+    };
+    if (banner.shield != nullptr) {
+        add_box(banner.shield, banner.shield_x, banner.shield_y);
+    }
+    if (banner.crown != nullptr) {
+        add_box(banner.crown, banner.crown_x, banner.crown_y);
+    }
+    out_w = x1 - x0;
+    out_h = y1 - y0;
+    vx = x0;
+    vy = y0;
+    if (out_w <= 0 || out_h <= 0) {
+        error = "empty army banner";
+        return false;
+    }
+    rgba.assign(static_cast<std::size_t>(out_w) *
+                    static_cast<std::size_t>(out_h) * 4,
+                0);
+    // Straight source-over: the art is colour-keyed (alpha 0 or 255), and the
+    // order is TArmyHS.Show's - shield first, then the crown above it.
+    auto composite = [&](const Sprite* s, int ox, int oy) {
+        if (s == nullptr) return;
+        const int rx = ox - sx - x0;
+        const int ry = oy - sy - y0;
+        for (std::uint32_t y = 0; y < s->h; ++y) {
+            for (std::uint32_t x = 0; x < s->w; ++x) {
+                const std::size_t si =
+                    (static_cast<std::size_t>(y) * s->w + x) * 4;
+                const std::uint8_t a = s->rgba[si + 3];
+                if (a == 0) continue;
+                const std::size_t di =
+                    (static_cast<std::size_t>(ry + y) *
+                         static_cast<std::size_t>(out_w) +
+                     static_cast<std::size_t>(rx + x)) *
+                    4;
+                if (a == 255) {
+                    rgba[di] = s->rgba[si];
+                    rgba[di + 1] = s->rgba[si + 1];
+                    rgba[di + 2] = s->rgba[si + 2];
+                } else {
+                    const int inv = 255 - a;
+                    for (int c = 0; c < 3; ++c) {
+                        rgba[di + c] = static_cast<std::uint8_t>(
+                            (s->rgba[si + c] * a + rgba[di + c] * inv) / 255);
+                    }
+                }
+                rgba[di + 3] = 255;
+            }
+        }
+    };
+    composite(banner.shield, banner.shield_x, banner.shield_y);
+    composite(banner.crown, banner.crown_x, banner.crown_y);
     return true;
 }
 
@@ -3437,6 +3718,11 @@ bool draw_unit_overlays(const Map& m, const std::string& ilb_root, int level,
     // per-frame call does not re-parse the .PFS files). A map without one - or a
     // missing Release/ - simply draws no armies, exactly like the level pass.
     const UnitCatalog* cat = shared_unit_catalog(ilb_root);
+    // The army banner needs the owner's race. The live path has no Release.hss
+    // table, so `resolve_army_banner` falls back to the shipped faction order
+    // (the same RACES\R*.ILB names the resource table yields).
+    const std::vector<std::uint8_t> player_races = map_player_races(m);
+    const std::vector<std::string> race_libraries;
     const bool clip = clip_x1 > clip_x0 && clip_y1 > clip_y0;
     // One army's resolved body + ground shadow. `sprite`/`shadow` point into the
     // shared library cache, whose node-based std::map storage keeps them valid
@@ -3448,6 +3734,7 @@ bool draw_unit_overlays(const Map& m, const std::string& ilb_root, int level,
         const Sprite* shadow = nullptr;
         int shadow_ox = 0;
         int shadow_oy = 0;
+        ArmyBanner banner{};
     };
     std::vector<PendingUnit> units;
     for (std::uint32_t y = 0; y < lv.height; ++y) {
@@ -3503,6 +3790,8 @@ bool draw_unit_overlays(const Map& m, const std::string& ilb_root, int level,
                         pu.shadow_oy = sy + sh.yoff + ss.vy;
                     }
                 }
+                resolve_army_banner(hs, player_races, race_libraries, resolver,
+                                    cache, sx, sy, pu.banner);
                 units.push_back(pu);
             }
         }
@@ -3548,14 +3837,40 @@ bool draw_unit_overlays(const Map& m, const std::string& ilb_root, int level,
         const Sprite& s = *u.sprite;
         const int sw = static_cast<int>(s.w);
         const int sh = static_cast<int>(s.h);
-        if (!visible(u.ox, u.oy, sw, sh)) continue;
-        if (s.class_id == 0x16) {
-            blit_sprite_brighten_buffer(rgba, cw, ch, s.rgba, sw, sh, u.ox,
-                                        u.oy, bgra);
-        } else {
-            blit_sprite_buffer(rgba, cw, ch, s.rgba, sw, sh, u.ox, u.oy, bgra);
+        if (visible(u.ox, u.oy, sw, sh)) {
+            if (s.class_id == 0x16) {
+                blit_sprite_brighten_buffer(rgba, cw, ch, s.rgba, sw, sh, u.ox,
+                                            u.oy, bgra);
+            } else {
+                blit_sprite_buffer(rgba, cw, ch, s.rgba, sw, sh, u.ox, u.oy,
+                                   bgra);
+            }
+            cover(u.ox, u.oy, u.ox + sw, u.oy + sh);
         }
-        cover(u.ox, u.oy, u.ox + sw, u.oy + sh);
+        // The army's size shield + leader crown, after its body and before the
+        // next army - `TArmyHS.Show` order. Colour-keyed art: opaque alpha blit.
+        if (u.banner.shield != nullptr) {
+            const Sprite& b = *u.banner.shield;
+            const int bw = static_cast<int>(b.w);
+            const int bh = static_cast<int>(b.h);
+            if (visible(u.banner.shield_x, u.banner.shield_y, bw, bh)) {
+                blit_sprite_buffer(rgba, cw, ch, b.rgba, bw, bh,
+                                   u.banner.shield_x, u.banner.shield_y, bgra);
+                cover(u.banner.shield_x, u.banner.shield_y,
+                      u.banner.shield_x + bw, u.banner.shield_y + bh);
+            }
+        }
+        if (u.banner.crown != nullptr) {
+            const Sprite& c = *u.banner.crown;
+            const int cw2 = static_cast<int>(c.w);
+            const int ch2 = static_cast<int>(c.h);
+            if (visible(u.banner.crown_x, u.banner.crown_y, cw2, ch2)) {
+                blit_sprite_buffer(rgba, cw, ch, c.rgba, cw2, ch2,
+                                   u.banner.crown_x, u.banner.crown_y, bgra);
+                cover(u.banner.crown_x, u.banner.crown_y,
+                      u.banner.crown_x + cw2, u.banner.crown_y + ch2);
+            }
+        }
     }
     if (!any) dirty_x0 = dirty_y0 = dirty_x1 = dirty_y1 = 0;
     return true;

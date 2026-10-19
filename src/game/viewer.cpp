@@ -129,6 +129,7 @@ struct MoveState {
     int anim_clock = 0;                // AoWHSMap+0x40
     int anim_phase = 0;                // the per-unit (ptr>>2)&0xffff offset
     aow::MapUnit anim_unit;            // the moving army's lead unit (its poses)
+    aow::MapHs anim_army;              // the whole army (its size banner)
     std::vector<std::uint8_t> sprite;  // the current pose (RGBA)
     int sprite_w = 0, sprite_h = 0, sprite_vx = 0, sprite_vy = 0;
     int dest_x = -1, dest_y = -1;      // the animation's destination
@@ -722,6 +723,17 @@ void draw_anim_sprite() {
     aow::blit_sprite_bgra(g.bgra, g.cw, g.ch, g.mv.sprite, g.mv.sprite_w,
                           g.mv.sprite_h, ox, oy);
     mark_dirty(ox, oy, ox + g.mv.sprite_w, oy + g.mv.sprite_h);
+    // `TArmyHS.Show` draws the army's size banner after the body, so it travels
+    // with the walking sprite (the destination army stays hidden meanwhile).
+    std::vector<std::uint8_t> banner;
+    int bw = 0, bh = 0, bvx = 0, bvy = 0;
+    if (aow::army_banner_rgba(g.map, g.mv.anim_army, g.root, ix, iy, banner,
+                              bw, bh, bvx, bvy, err)) {
+        const int bx = ix + bvx;
+        const int by = iy + bvy;
+        aow::blit_sprite_bgra(g.bgra, g.cw, g.ch, banner, bw, bh, bx, by);
+        mark_dirty(bx, by, bx + bw, by + bh);
+    }
 }
 
 // Restores the previous overlay and repaints the current one (the hover path or
@@ -893,6 +905,7 @@ void start_move() {
     // the walk animates (docs/13_UNITS_ON_MAP.md).
     if (!to.objects.empty() && !to.objects.back().units.empty()) {
         g.mv.anim_unit = to.objects.back().units.front();
+        g.mv.anim_army = to.objects.back();
     }
     // TUnitHS.GetMoveSteps@0x55784988 keys the per-hex frame count off the
     // unit-gfx resource's rw tag 10.

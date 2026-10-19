@@ -428,6 +428,29 @@ bool army_sprite_rgba(const Map& m, const std::vector<MapResource>& res,
                       std::vector<std::uint8_t>& rgba, int& out_w, int& out_h,
                       int& vx, int& vy, std::string& error);
 
+// The **size banner** of an army - `AoWE.TArmyHS.Show@0x557914d8` draws it
+// after its lead unit's sprite: the owner race's PartyShield with the army's
+// (non-concealed) unit count, and a crown above it when the army carries a
+// `TLeader` (`TArmy.UpdateConcealment` sets army+0x10 bit 0x20):
+//   race == 0x20 (owner 0, the independents):
+//       Flags.ILB      frame count + 0x27
+//   else:
+//       RACES\R*.ILB   frame count + 0x1d
+//   crown (owned race): Flags.ILB frame race + 0x50
+// The shield is blitted at `HXtoHP(hex) + (-5,-12) + sprite base+shift`, the
+// crown at `HXtoHP(hex) + (-5,-14) + sprite base+shift`, both colour-keyed
+// (the reference `bin/counterRef.png` matches the decoded art pixel-for-pixel).
+//
+// `sx`/`sy` are the caller's hex origin (mapviz's `hex_origin`, or the walk's
+// interpolated anchor). The result is the shield + crown composited in that
+// order into one RGBA image; `vx`/`vy` are its placement offsets relative to
+// `sx`/`sy` (negative: it sits above-left of the hex). Returns false (with
+// `error`) when the army has no resolvable banner.
+bool army_banner_rgba(const Map& m, const MapHs& army,
+                      const std::string& ilb_root, int sx, int sy,
+                      std::vector<std::uint8_t>& rgba, int& out_w, int& out_h,
+                      int& vx, int& vy, std::string& error);
+
 // The Unitgfx record a placed unit draws with (a plain TUnit looks its Unitres
 // record up by its rw tag 10; a hero/leader uses the Herores table). nullptr when
 // unresolved. Used by the walk animation to read the unit's move class / poses.

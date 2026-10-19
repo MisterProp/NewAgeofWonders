@@ -138,15 +138,21 @@ into that standing pose, so the swap on arrival is not a pose snap).
   (`AoWE.TUnitShadowHS` -> `TUnitHS.ShowShadow@0x55784504`), which is a separate
   scene object one show-priority layer below the body - so all shadows are
   composited before all bodies (docs/16_UNIT_ANIM.md section 10).
-* **Not drawn yet: the army's size banner.** `TArmyHS.Show@0x557914d8` draws,
-  after the lead unit's sprite, the owner race's shield carrying the army's unit
-  count (`TRaceResourceList.GetRaceResource(army+0x16 /* the owner's race */)`
+* **The army's size banner is drawn** (`docs/21_ARMY_COUNTER.md`).
+  `TArmyHS.Show@0x557914d8` draws, after the lead unit's sprite, the owner race's
+  `PartyShield` carrying the army's unit count
+  (`TRaceResourceList.GetRaceResource(army+0x16 /* the owner's race */)`
   library, frame `(GetUnitCount() - ConcealedUnitsCount()) + 0x1d`) at the hex
-  anchor `+ (-5,-0xc)`, with a crown overlay from `AoWHSSet+0x78 -> +0x10` at
-  frame `race + 0x50` when the army carries the player's leader
-  (`TArmy+0x10 & 0x20`, set by `UpdateConcealment`), and the `0x20` (ownerless)
-  variant from the same library at frame `count + 0x27`. `bin/ShadowRef.png` -
-  the shadow benchmark - shows it, so a crop comparison still carries it.
+  anchor `+ (-5,-0xc)`, with a crown overlay from `AoWHSSet+0x78+0x10` (the
+  `TFlagControl`'s `Flags.ILB`) at frame `race + 0x50` when the army carries a
+  `TLeader` (`TArmy+0x10 & 0x20`, set by `UpdateConcealment`), and the `0x20`
+  (ownerless) variant from `Flags.ILB` at frame `count + 0x27`. The owner race is
+  `TPlayer.GetRace` (`+0xa5`, i.e. `aow::map_player_races`) for owner > 0 and
+  `0x20` for the independents (owner 0) - exactly `TArmyHS.UpdateFlagID`.
+  `aow::army_banner_rgba` / the `PendingUnit::banner` pass reproduce this for the
+  one-shot render, the live `draw_unit_overlays` and the walking sprite; the
+  art/placement match `bin/counterRef.png` pixel-for-pixel
+  (`bin/CounterBench.png`, `bin/CounterDiff.png`).
 * **Units are composited last, on top of the terrain, objects, roads and bridges.**
   The engine shows them as ordinary hexagon sprites, so a unit could be covered
   by an object on a hex drawn later in `mapviz`'s row-major sweep; instead
@@ -186,9 +192,15 @@ into that standing pose, so the swap on arrival is not a pose snap).
 
   ```
   unit,33,16,113,UNITS,609,giant609.bmp,32,39,1     # Giant (dir 5 -> seq 4)
+  banner,33,16,113,FLAGS,43,partyshield.bmp,11,14,1 # ownerless 4 (+0x27)
   unit,32,21,  9,UNITS,309,orchx309.bmp,31,48,1     # Orc hero (Herores tag 9, dir 2)
+  banner,32,21,  9,RACES,33,partyshield.bmp,13,13,1 # Orc 4 (+0x1d)
   unit,15,34, 41,UNITS,309,hlfhe309.bmp,24,42,1     # Halfling hero (dir 2)
+  banner,15,34, 41,RACES,33,partyshield.bmp,11,12,1 # Halfling 4
+  crown,15,34, 41,FLAGS,85,partyshield.bmp,15,6,1   # TLeader race 5 + 0x50
   unit,36,38, 46,UNITS,209,gbnhe209.bmp,27,37,1     # Goblin hero (dir 3)
+  banner,36,38, 46,RACES,32,partyshield.bmp,13,13,1 # Goblin 3
+  crown,36,38, 46,FLAGS,90,partyshield.bmp,15,7,1   # TLeader race 10 + 0x50
   ```
 
   The frame id is the *standing* pose of each army's `army_direction`: facing 1
