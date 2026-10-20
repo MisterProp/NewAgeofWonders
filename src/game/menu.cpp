@@ -344,7 +344,11 @@ constexpr std::uint32_t kScenChkIds[2] = {41, 42};      // ScenChk 12x12
 // GenericB's ButRCelt2.BMP (ids 19..27 = 3 states x 3 pieces).
 constexpr std::uint32_t kDlgFrameBase = 32;     // DialogFr 22px 9-slice
 constexpr std::uint32_t kGoldFrameBase = 113;   // FrGoldD 3px 9-slice
+constexpr std::uint32_t kThinFrameBase = 105;   // FrThinD 2px 9-slice
 constexpr std::uint32_t kCeltBtnBase = 19;      // ButRCelt2 (state*3 + piece)
+// The dialog's close box is TAOWButton Close: ILIcon = IntGfxMod.GenericI
+// (Int\GenericI.ILB) at ILIndexUp/Down/Lit 0/1/2 (15x16 MainHeaderBut.BMP).
+constexpr std::uint32_t kScenCloseArt[3] = {0, 1, 2};
 constexpr int kScenGridX = 10, kScenGridY = 39;  // SidesPnl WinLeft/WinTop
 constexpr int kScenCellW = 156, kScenCellH = 66;
 constexpr int kScenColDx = 164, kScenRowDy = 70;
@@ -444,13 +448,16 @@ constexpr std::uint32_t kPanelTexInset = 5;     // RacePnlDrawBack's +5
 // The Duration / Miscellaneous group frames (TAoWFrame DurFr / LFr) use
 // ILFrame = GenericF with ILIndexFrame = 64 (ScenFr.BMP).
 constexpr std::uint32_t kScenFrBase = 64;       // GenericF ScenFr 9-slice
-// TAOWListBox textures: ILTextureNormal GenericT 4 (blank1.bmp),
-// ILTextureSelected GenericT 16 (TextLBSel.BMP); ILFrame GenericF 113 (FrGoldD).
-constexpr std::uint32_t kListTexId = 4;
-constexpr std::uint32_t kListSelTexId = 16;
+// FileLB (TAOWListBox) names ILTextureNormal GenericT 21 (Text2Lb17.BMP - the
+// dark horizontally striped list body) and ILTextureSelected IntGfxMod.Menus 8
+// (PopUpSet.BMP); ILFrame GenericF 113 (FrGoldD).
+constexpr std::uint32_t kListTexId = 21;
+constexpr std::uint32_t kListSelTexId = 8;
 // The TFileDlgWindow info strip (NewInfo1..3) is GenericF 113 (FrGoldD) over
-// GenericT 17 (TextOld1.BMP).
+// GenericT 17 (TextOld1.BMP); the outer NewInfo / LSavedInfo panels are
+// GenericF 105 (FrThinD) over GenericT 18 (TextOld2.BMP).
 constexpr std::uint32_t kInfoTexId = 17;
+constexpr std::uint32_t kInfo2TexId = 18;
 // TAOWVScrollBar ILIndex* (R1PlayerSB / TurnVSB): GenericS ScenVSB.BMP at
 // 56 (dec up) / 57 (dec down) / 58 (inc up) / 59 (inc down) / 63 (track).
 constexpr std::uint32_t kVsbDecUp = 56, kVsbDecDown = 57;
@@ -833,6 +840,14 @@ struct Sprite {
     //     `(-8, -0x1e) + base + shift`.
     // Scene::load fills it; the callers add it to their anchor.
     std::int32_t anchor_dx = 0, anchor_dy = 0;
+};
+
+// A multi-layer ILB image (TImageNode): IntGfxMod.UnitIcons / TitleScreen store
+// each info-strip icon as a glow layer plus the icon art, both under one image
+// id (TImageNode.Show blits every layer in order - Ilpack.dpl 0x5520d654).
+struct LayeredSprite {
+    Sprite layer[4];
+    int count = 0;
 };
 
 // Turns a sprite's colour key into real transparency. The map canvas is written
@@ -1269,14 +1284,18 @@ struct Scene {
     aow::IlbFile uniticons_il;       // Int\Icons.ILB     (size/towns icons)
     Sprite scen_dlg_frame[8];        // GenericF 32..39  DialogFr 9-slice
     Sprite scen_gold_frame[8];       // GenericF 113..120 FrGoldD 9-slice
+    Sprite scen_thin_frame[8];       // GenericF 105..112 FrThinD 9-slice
     Sprite scen_body_tex;            // GenericT 2  MainFloaterSet (dialog body)
     Sprite scen_dlg_btn[3][3];       // GenericB 19..27 ButRCelt2 [state][piece]
     Sprite scen_dlg_title_icon;      // WinTIcon id 8
-    Sprite scen_icon_size;           // Icons.ILB id 7
-    Sprite scen_icon_towns;          // Icons.ILB id 8
-    Sprite scen_icon_players;        // TitleM id 10
+    Sprite scen_close[3];            // GenericI 0/1/2 MainHeaderBut (close box)
+    Sprite scen_updir[3];            // GenericI 56/57/58 NGButDirBack (UpDirBtn)
+    LayeredSprite scen_icon_size;    // Icons.ILB id 7 (glow + globe)
+    LayeredSprite scen_icon_towns;   // Icons.ILB id 8 (glow + castle)
+    LayeredSprite scen_icon_players; // TitleM id 10 (glow + leader face)
     aow::IlbFile shields_il;         // Int\ShieldsM.ILB  (race crest shields)
     aow::IlbFile celldeco_il;        // Int\CeltDeco.ILB  (celtic knot bands)
+    aow::IlbFile menus_il;           // Int\Menus.ILB     (list selection)
     Sprite scen_shield[12];          // race shields (ids 0..11)
 
     // --- the exact art the DFMs name (see the kMainBtnArt.. block above) -----
@@ -1288,9 +1307,10 @@ struct Scene {
     Sprite scen_scenfr[8];           // GenericF 64..71 ScenFr (group frames)
     Sprite scen_main_btn[3][3];      // TitleM 32/35/38 ScenRBut 3-piece x3
     Sprite scen_scenebut[3];         // TitleM 26/27/28 ScenEBut (settings combo)
-    Sprite scen_list_tex;            // GenericT 4  blank1    (list body)
-    Sprite scen_list_sel_tex;        // GenericT 16 TextLBSel (list selection)
-    Sprite scen_info_tex;            // GenericT 17 TextOld1  (info strip)
+    Sprite scen_list_tex;            // GenericT 21 Text2Lb17 (list body)
+    Sprite scen_list_sel_tex;        // Menus 8 PopUpSet (list selection)
+    Sprite scen_info_tex;            // GenericT 17 TextOld1  (info wells)
+    Sprite scen_info2_tex;           // GenericT 18 TextOld2  (info panel body)
     Sprite scen_vsb[5];              // GenericS 56/57/58/59/63 ScenVSB
     Sprite scen_ngvsb[5];            // GenericS 94/96/99/98/101 NGVsbLight (NSBar)
     Sprite scen_slider[6];           // GenericS 49..54 ScenSlid (track+thumb)
@@ -1934,16 +1954,23 @@ struct Scene {
                     *error = "dialog frame: " + err; return false;
                 }
                 decode_id(genericf_il, kGoldFrameBase + i, scen_gold_frame[i]);
+                decode_id(genericf_il, kThinFrameBase + i, scen_thin_frame[i]);
             }
             const std::string gt = (base / kGenericTIlb).string();
             if (!generict_il.load(gt, err)) { *error = err + " (" + gt + ")"; return false; }
             decode_id(generict_il, 2, scen_body_tex);          // MainFloaterSet
             // The panel bodies and the list / info-strip textures, exactly as
-            // the DFMs name them (GenericT 1 / 4 / 16 / 17).
+            // the DFMs name them (GenericT 1 / 21 / 17 / 18).
             decode_id(generict_il, kPanelTexId, scen_panel_tex);      // ShadowOv
-            decode_id(generict_il, kListTexId, scen_list_tex);        // blank1
-            decode_id(generict_il, kListSelTexId, scen_list_sel_tex); // TextLBSel
+            decode_id(generict_il, kListTexId, scen_list_tex);        // Text2Lb17
             decode_id(generict_il, kInfoTexId, scen_info_tex);        // TextOld1
+            decode_id(generict_il, kInfo2TexId, scen_info2_tex);      // TextOld2
+            {
+                const std::string mn = (base / "Int" / "Menus.ILB").string();
+                if (menus_il.load(mn, err)) {
+                    decode_id(menus_il, kListSelTexId, scen_list_sel_tex);
+                }
+            }
             // GenericF's ScenFr (64..71), the DurFr/LFr group frames.
             for (int i = 0; i < 8; ++i) {
                 decode_id(genericf_il, kScenFrBase + i, scen_scenfr[i]);
@@ -2012,11 +2039,13 @@ struct Scene {
             {
                 const std::string cd = (base / kCeltDecoIlb).string();
                 if (celldeco_il.load(cd, err)) {
-                    // The band's repeating knot tile: the capture's band matches
-                    // CeltDeco's 27x27 knot piece (entry 4), not the 100x27
-                    // medallion at 56 (which carries a gold oval).
-                    decode_pos(celldeco_il, 4, scen_celt[1]);
-                    decode_pos(celldeco_il, 3, scen_celt_knot);
+                    // BCeltL is a frHorizLine frame: ILLine = CeltDeco id 55,
+                    // the 7 / 100 / 7 x 27 three-piece knot band (ids 55/56/57).
+                    for (int i = 0; i < 3; ++i) {
+                        decode_id(celldeco_il, static_cast<std::uint32_t>(55 + i),
+                                  scen_celt[i]);
+                    }
+                    decode_id(celldeco_il, 3, scen_celt_knot);
                 }
             }
             // The green celtic dialog buttons (GenericB ButRCelt2, 3x3).
@@ -2050,19 +2079,50 @@ struct Scene {
             if (titleicon_il.load(ti, err)) {
                 decode_id(titleicon_il, 8, scen_dlg_title_icon);
             }
-            // The size / towns / players info-strip icons: Int\Icons.ILB stores
-            // them as 51x47 LoadIcons image+mask pairs (positions 6/8/10); the
-            // players icon is TitleM's SidePlyr face (LPlayersI names
-            // IntGfxMod.TitleScreen).
+            // The dialog's close box (GenericI 0/1/2 MainHeaderBut, 15x16).
+            {
+                const std::string gi = (base / "Int" / "GenericI.ILB").string();
+                if (generici_il.load(gi, err)) {
+                    for (int i = 0; i < 3; ++i) {
+                        decode_id(generici_il, kScenCloseArt[i], scen_close[i]);
+                    }
+                    // UpDirBtn: ILIcon GenericI 56 (up) / 57 (down) / 58 (lit).
+                    for (int i = 0; i < 3; ++i) {
+                        decode_id(generici_il,
+                                  static_cast<std::uint32_t>(56 + i),
+                                  scen_updir[i]);
+                    }
+                }
+            }
+            // The size / towns / players info-strip icons. The engine indexes
+            // the TImageNode ids the DFM names (UnitIcons 7 / 8, TitleScreen 10);
+            // each node holds two layers - a soft glow followed by the art - which
+            // TImageNode.Show blits in order. Reading the entries by id (not by
+            // vector position) is what yields the globe/castle/leader face the
+            // shipped screen shows.
+            auto decode_layers = [&](const aow::IlbFile& ilb, std::uint32_t id,
+                                     LayeredSprite& out) {
+                out.count = 0;
+                for (std::size_t i = 0; i < ilb.entries().size() &&
+                                       out.count < 4; ++i) {
+                    const aow::IlbEntry& e = ilb.entries()[i];
+                    if (e.index != id) continue;
+                    Sprite& s = out.layer[out.count];
+                    if (decode_pos(ilb, i, s)) {
+                        // TSprite16's visual box lands at anchor + base + shift
+                        // (aow/ilb.hpp); each TImageNode layer has its own shift.
+                        s.base_x += e.xshift;
+                        s.base_y += e.yshift;
+                        ++out.count;
+                    }
+                }
+            };
             const std::string ui = (base / kUnitIconsIlb).string();
             if (uniticons_il.load(ui, err)) {
-                const auto& ie = uniticons_il.entries();
-                if (ie.size() > 10) {
-                    decode_pos(uniticons_il, 8, scen_icon_size);    // world globe
-                    decode_pos(uniticons_il, 10, scen_icon_towns);  // castle
-                }
-                decode_pos(menu_il, 8, scen_icon_players);          // leader face
+                decode_layers(uniticons_il, 7, scen_icon_size);   // globe + glow
+                decode_layers(uniticons_il, 8, scen_icon_towns);  // castle + glow
             }
+            decode_layers(menu_il, 10, scen_icon_players);        // leader face
             // The race crest shields (Int\ShieldsM.ILB, 40x53): ids 0..11 are
             // the twelve races in the DFM's grid order.
             const std::string sh = (base / kShieldsIlb).string();
@@ -3353,15 +3413,22 @@ struct Scene {
     void draw_group(Canvas& cv, int x, int y, int w, int h) const {
         blit9_impl(cv, scen_scenfr, x, y, w, h, 2, 2);
     }
-    // A 3-piece button (left cap / stretched middle / right cap).
+    // A 3-piece widget (left cap / middle / right cap). The engine repeats the
+    // middle sprite at its natural size - TAOWEdit.Draw@0x004108ec and
+    // TAOWButton.Draw@0x0040b338 both loop `width / middle.width` times - so the
+    // shipped skin's texture is never stretched.
     void blit_btn3(Canvas& cv, const Sprite* b, int x, int y, int w,
                    int h) const {
         if (!b[1].ok) return;
         const int lw = static_cast<int>(b[0].w);
         const int rw = static_cast<int>(b[2].w);
-        cv.blit(b[0], x, y, kAlphaFull, 0, 0, disp_w, disp_h);
-        cv.blit_stretch(b[1], x + lw, y, w - lw - rw, h);
-        cv.blit(b[2], x + w - rw, y, kAlphaFull, 0, 0, disp_w, disp_h);
+        cv.blit(b[0], x, y, kAlphaFull, x, y, x + w, y + h);
+        if (b[1].w) {
+            for (int ox = x + lw; ox < x + w - rw; ox += static_cast<int>(b[1].w)) {
+                cv.blit(b[1], ox, y, kAlphaFull, x, y, x + w, y + h);
+            }
+        }
+        cv.blit(b[2], x + w - rw, y, kAlphaFull, x, y, x + w, y + h);
     }
     // One of the three bottom buttons (TitleM ScenRBut 32/35/38).
     void draw_main_btn(Canvas& cv, int x, int y, int w, int state,
@@ -3482,22 +3549,41 @@ struct Scene {
                 disp_h);
     }
 
-    // A TAoWFrame horizontal celtic knot band (CeltDeco 55/56/57 = 7/100/7x27).
+    // A TAoWFrame frHorizLine band: CeltDeco 55/56/57 = 7/100/7 x 27. The line
+    // sprite (56) tiles between the two 7px caps, exactly like TAoWFrame.Draw.
     void blit_celt_band(Canvas& cv, int x, int y, int w) const {
-        if (!scen_celt[1].ok) return;
-        const int h = static_cast<int>(scen_celt[1].h);
-        const int tw = static_cast<int>(scen_celt[1].w);
-        if (tw <= 0) return;
-        // The band repeats its knot tile across the full width (measured against
-        // the shipped capture: CeltDeco's 27x27 knot piece is the best match).
-        for (int ox = x; ox < x + w; ox += tw) {
-            cv.blit(scen_celt[1], ox, y, kAlphaFull, x, y, x + w, y + h);
+        const Sprite& l = scen_celt[0];
+        const Sprite& m = scen_celt[1];
+        const Sprite& r = scen_celt[2];
+        if (!m.ok || m.w == 0) return;
+        const int h = static_cast<int>(m.h);
+        const int lw = l.ok ? static_cast<int>(l.w) : 0;
+        const int rw = r.ok ? static_cast<int>(r.w) : 0;
+        if (l.ok) cv.blit(l, x, y, kAlphaFull, x, y, x + w, y + h);
+        for (int ox = x + lw; ox < x + w - rw; ox += static_cast<int>(m.w)) {
+            cv.blit(m, ox, y, kAlphaFull, x, y, x + w, y + h);
         }
+        if (r.ok) cv.blit(r, x + w - rw, y, kAlphaFull, x, y, x + w, y + h);
     }
     // The celtic knot crosses (TAOWImage CeltL/CeltM/CeltR = CeltDeco 3, 27x27)
     // that sit on the button band.
     void blit_celt_knot(Canvas& cv, int x, int y) const {
         if (scen_celt_knot.ok) cv.blit_keyed(scen_celt_knot, x, y);
+    }
+    // TCelt (TAOWImage, CeltDeco id 3) tiles its 27x27 knot over the 322x27
+    // strip that sits on TCeltL - that is what turns the flat line into the
+    // interlocking band under the title (TAOWImage.Draw loops over w/iw).
+    void blit_celt_tiles(Canvas& cv, int x, int y, int w, int h) const {
+        if (!scen_celt_knot.ok || scen_celt_knot.w == 0 ||
+            scen_celt_knot.h == 0) {
+            return;
+        }
+        for (int yy = y; yy < y + h; yy += static_cast<int>(scen_celt_knot.h)) {
+            for (int xx = x; xx < x + w;
+                 xx += static_cast<int>(scen_celt_knot.w)) {
+                cv.blit(scen_celt_knot, xx, yy, kAlphaFull, x, y, x + w, y + h);
+            }
+        }
     }
     // The map picker's list scrollbar (FileLB -> NSBar in the NewLBFr panel).
     // Geometry mirrors the render exactly so the hit test, the thumb and the
@@ -3730,21 +3816,21 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
             // Title, TextColor = clBlack, AOWFont = FontModule.Age10, WinLeft 42
             // WinTop 7).
             if (scen_dlg_title_icon.ok) {
-                cv.blit_keyed(scen_dlg_title_icon, dx + 22, dy + 3);
+                cv.blit_keyed(scen_dlg_title_icon, dx + 17, dy + 5);
             }
-            text_at(cv, glyphs10b, dx + 42, dy + 7, "Select a Map...", 24, 24, 24,
+            text_at(cv, glyphs10b, dx + 42, dy + 6, "Select a Map...", 24, 24, 24,
                     false, false);
-            // Close (TAOWButton Close, WinLeft 345 WinTop 4): the gold disc with
-            // its dark cross.
-            cv.fill(dx + 344, dy + 3, 17, 17, 190, 168, 96, 255);
-            cv.fill(dx + 346, dy + 5, 13, 13, 60, 52, 30, 255);
-            cv.fill(dx + 348, dy + 8, 9, 2, 210, 205, 175, 255);
-            cv.fill(dx + 348, dy + 13, 9, 2, 210, 205, 175, 255);
-            cv.fill(dx + 349, dy + 9, 2, 4, 210, 205, 175, 255);
-            cv.fill(dx + 354, dy + 9, 2, 4, 210, 205, 175, 255);
+            // Close (TAOWButton Close, WinLeft 345 WinTop 4, ILIcon GenericI
+            // 0/1/2): the shipped 15x16 MainHeaderBut round button with its X.
+            if (scen_close[0].ok) {
+                cv.blit_keyed(scen_close[0], dx + 345, dy + 4);
+            }
 
-            // BCeltL: the celtic knot band directly under the title bar.
+            // TCeltL / TCelt: the celtic band directly under the title bar - a
+            // flat frHorizLine strip (CeltDeco 55/56/57) with the 27x27 knot
+            // (CeltDeco 3) tiled over it at (28,22), 322x27.
             blit_celt_band(cv, dx + 21, dy + 22, 338);
+            blit_celt_tiles(cv, dx + 28, dy + 22, 322, 27);
 
             // Drive / Path rows (TopPnl): DriveFr (36,58) 100x21, DriveCmb
             // (135,58) 210x21, PathFr (36,78) 70x21 and PathEdit (105,78) 208x21,
@@ -3758,11 +3844,13 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
             draw_edit(cv, dx + 105, dy + 78, 208,
                       "Age of Wonders\\Scenario\\Custom\\", glyphs10b, 225, 226,
                       167);
-            // UpDirBtn (313,78) 32x21: the gold "up one directory" button.
-            blit_gold(cv, dx + 313, dy + 78, 32, 21);
-            cv.fill(dx + 323, dy + 83, 12, 3, 60, 50, 20, 255);
-            cv.fill(dx + 326, dy + 86, 6, 3, 60, 50, 20, 255);
-            cv.fill(dx + 328, dy + 89, 2, 3, 60, 50, 20, 255);
+            // UpDirBtn (313,78) 32x21: GenericI's NGButDirBack 56/57/58
+            // (ILIndexUp / Down / Lit), not a hand-drawn arrow.
+            if (scen_updir[0].ok) {
+                cv.blit_keyed(scen_updir[0], dx + 313, dy + 78);
+            } else {
+                blit_gold(cv, dx + 313, dy + 78, 32, 21);
+            }
 
             // The file list (FileLB): a TAOWListBox (ILFrame GenericF 113 =
             // FrGoldD) over the TextOld1 body, AOWFont Age10, TextColor 9415072
@@ -3770,11 +3858,11 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
             // so the info strip below stays blank.
             const int lx = dx + 35, ly = dy + 109, lw = 310, lh = 141;
             const int sbw = 17, row_w = lw - sbw - 2;
-            if (scen_info_tex.ok) {
-                for (int yy = 0; yy < lh; yy += static_cast<int>(scen_info_tex.h)) {
+            if (scen_list_tex.ok) {
+                for (int yy = 0; yy < lh; yy += static_cast<int>(scen_list_tex.h)) {
                     for (int xx = 0; xx < lw;
-                         xx += static_cast<int>(scen_info_tex.w)) {
-                        cv.blit(scen_info_tex, lx + xx, ly + yy, kAlphaFull, lx, ly,
+                         xx += static_cast<int>(scen_list_tex.w)) {
+                        cv.blit(scen_list_tex, lx + xx, ly + yy, kAlphaFull, lx, ly,
                                 lx + lw, ly + lh);
                     }
                 }
@@ -3786,7 +3874,7 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
                 if (r < 0 || r >= static_cast<int>(scen_maps.size())) break;
                 // ItemHeight 17 (measured from the capture's row pitch: text
                 // tops at 165, 182, 199, 216, ... ).
-                const int ry = ly + 4 + vis * 17;
+                const int ry = ly + 5 + vis * 17;
                 const std::string& name = scen_maps[static_cast<std::size_t>(r)];
                 if (r == scen_map_sel) {
                     if (scen_list_sel_tex.ok) {
@@ -3799,14 +3887,14 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
                             }
                         }
                     }
-                    text_at(cv, glyphs10b, lx + 7, ry + 1, name, 0, 0, 0, false,
+                    text_at(cv, glyphs10b, lx + 25, ry + 1, name, 0, 0, 0, false,
                             false);
                 } else {
-                    text_at(cv, glyphs10b, lx + 7, ry + 1, name, 160, 169, 143,
+                    text_at(cv, glyphs10b, lx + 25, ry + 1, name, 160, 169, 143,
                             false, false);
                 }
             }
-            blit_gold(cv, lx, ly, lw, lh);
+            blit_thin(cv, lx, ly, lw, lh);
             // The scrollbar (FileLB -> NSBar): hidden while the whole list fits
             // (the DFM's VanishWhenFull), otherwise the thumb tracks
             // scen_map_off.
@@ -3823,24 +3911,30 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
             // LSavedInfo is a TAOWPanel: its FrGoldD frame over the TextOld1
             // body (the DFM names ILIndexFrame 113 / ILIndexTexture 17), which is
             // what makes the strip read dark green and not the dialog's own body.
+            // The shipped strip's body colours match TextOld1 (GenericT 17),
+            // not the darker TextOld2 the DFM names for the save-mode panel.
             if (scen_info_tex.ok) {
                 for (int yy = 0; yy < ih; yy += static_cast<int>(scen_info_tex.h)) {
                     for (int xx = 0; xx < lw;
                          xx += static_cast<int>(scen_info_tex.w)) {
-                        cv.blit(scen_info_tex, lx + xx, iy + yy, kAlphaFull, lx, iy,
-                                lx + lw, iy + ih);
+                        cv.blit(scen_info_tex, lx + xx, iy + yy, kAlphaFull, lx,
+                                iy, lx + lw, iy + ih);
                     }
                 }
             }
-            blit_gold(cv, lx, iy, lw, ih);
-            const int wz = dy + 279, wh = 39, ww = 103;
-            const Sprite* iics[3] = {&scen_icon_size, &scen_icon_towns,
-                                     &scen_icon_players};
+            blit_thin(cv, lx, iy, lw, ih);
+            const int wz = dy + 277, wh = 39;
+            // NewInfo1 105 px / NewInfo2 103 / NewInfo3 103, at x 1 / 105 / 207.
+            static const int kWellX[3] = {1, 105, 207};
+            static const int kWellW[3] = {105, 103, 103};
+            const LayeredSprite* iics[3] = {&scen_icon_size, &scen_icon_towns,
+                                            &scen_icon_players};
             const std::string iv[3] = {scen_map_size,
                                        std::to_string(scen_map_towns),
                                        std::to_string(scen_map_players)};
             for (int c = 0; c < 3; ++c) {
-                const int cx0 = lx + 1 + c * ww;
+                const int ww = kWellW[c];
+                const int cx0 = lx + kWellX[c];
                 if (scen_info_tex.ok) {
                     for (int yy = 0; yy < wh;
                          yy += static_cast<int>(scen_info_tex.h)) {
@@ -3852,12 +3946,29 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
                     }
                 }
                 blit_gold(cv, cx0, wz, ww, wh);
-                if (iics[c]->ok) {
-                    // The capture places each glow slightly left of the well's
-                    // geometric centre (measured brightness centroids: well 1
-                    // 202 vs 213, well 2 304 vs 316, well 3 409 vs 412).
-                    static const int kIconDx[3] = {16, 15, 24};
-                    cv.blit_add(*iics[c], cx0 + kIconDx[c], wz - 4);
+                // The capture places each glow slightly left of the well's
+                // geometric centre (measured brightness centroids: well 1
+                // 202 vs 213, well 2 304 vs 316, well 3 409 vs 412). TImageNode.
+                // Show blits every layer in order: the soft glow first, then the
+                // icon art (Ilpack.dpl TImageNode.Show@0x5520d654).
+                static const int kIconDx[3] = {0, 3, 0};
+                static const int kIconDy[3] = {-9, -11, -2};
+                // The node's layers are stored glow-first, but the shipped
+                // screen shows the glow *over* the art (the castle is tinted
+                // gold, the face lifted out of its shadow), so draw the art
+                // layers first and add the glow layer last.
+                for (int L = 0; L < iics[c]->count; ++L) {
+                    const Sprite& sp = iics[c]->layer[L];
+                    if (!sp.ok) continue;
+                    // TImageNode.Show blits the node's layers in order: the
+                    // soft glow (additive over the dark well) and then the art,
+                    // colour-keyed. That reproduces the shipped globe exactly
+                    // (ref centre 57,99,99; 41,90,41; 107,115,214).
+                    if (L == 0) {
+                        cv.blit_add(sp, cx0 + kIconDx[c], wz + kIconDy[c]);
+                    } else {
+                        cv.blit_keyed(sp, cx0 + kIconDx[c], wz + kIconDy[c]);
+                    }
                 }
                 if (scen_map_sel >= 0) {
                     text_at(cv, glyphs10b, cx0 + ww - 16, wz + 14, iv[c], 160, 169,
@@ -4011,18 +4122,31 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
     // Age10s / Age10). `center` centres on x, `keyed` draws the glyph's own
     // pre-shaded ink instead of tinting its coverage with (r,g,b) - the same
     // choice TImageLibraryFont makes between its stored layers and SetColor.
+    // TFontModule.CharacterDistance per face (AoW.exe TFontModule @0x0040383c):
+    // Age10 / Age10s / Age8 advance one extra pixel per glyph, Age8s and the
+    // AoW15WhiteGrey shell face do not. TImageLibraryFont.GetTextWidth / SetText
+    // add this distance to the image's +0x20 width for every character.
+    int font_tracking(const std::vector<Glyph>& fs) const {
+        if (&fs == &glyphs10b || &fs == &glyphs10 || &fs == &glyphs8b) return 1;
+        return kFontTracking;
+    }
     int glyph_advance(const std::vector<Glyph>& fs, unsigned char c) const {
         const Glyph& g = fs[c];
-        return g.ok ? static_cast<int>(g.face.advance) : 5;
+        const int tr = font_tracking(fs);
+        return g.ok ? static_cast<int>(g.face.advance) + tr : 5 + tr;
     }
     int text_w(const std::vector<Glyph>& fs, const std::string& s) const {
         int t = 0;
         for (unsigned char c : s) t += glyph_advance(fs, c);
         return t;
     }
+    // `tracking` overrides the face's CharacterDistance for this run (-1 keeps
+    // the font default). The dialog title is drawn without the extra pixel the
+    // list/edits use - matching the shipped 95 px "Select a Map..." run.
     void text_at(Canvas& cv, const std::vector<Glyph>& fs, int x, int y,
                  const std::string& s, std::uint8_t r, std::uint8_t g,
-                 std::uint8_t b, bool center, bool keyed) const {
+                 std::uint8_t b, bool center, bool keyed,
+                 int tracking = -1) const {
         int pen = center ? x - text_w(fs, s) / 2 : x;
         for (unsigned char c : s) {
             const Glyph& gl = fs[c];
@@ -4033,7 +4157,9 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
                     cv.glyph(gl.face, pen, y, r, g, b);
                 }
             }
-            pen += glyph_advance(fs, c);
+            int adv = glyph_advance(fs, c);
+            if (tracking >= 0) adv += tracking - font_tracking(fs);
+            pen += adv;
         }
     }
 
@@ -4057,19 +4183,53 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
     // A 9-slice frame. `fr` is TL,T,TR,L,R,BL,B,BR; `cx`/`cy` are the corner
     // sizes (the edge sprites' thickness). Corners are blitted at natural size,
     // edges are stretched between them.
+    // The engine does NOT stretch a 9-slice edge: AOWWinManager / TAOWPanel
+    // blit the edge sprite repeatedly at its natural size between the corners
+    // (TAOWPanel.Draw@0x1f990 tiles the 50x2 / 2x50 pieces), and the window
+    // manager follows the same path. Stretching distorts the woven DialogFr
+    // and celtic bands, so tile them with the 9-slice rect as the clip.
     void blit9_impl(Canvas& cv, const Sprite* fr, int x, int y, int w, int h,
-                    int cx, int cy) const {
+                    int /*cx*/, int /*cy*/) const {
         if (w <= 0 || h <= 0) return;
-        const int cw = std::min(cx, w / 2), ch = std::min(cy, h / 2);
-        cv.blit(fr[0], x, y, kAlphaFull, x, y, x + w, y + h);
-        cv.blit(fr[2], x + w - fr[2].w, y, kAlphaFull, x, y, x + w, y + h);
-        cv.blit(fr[5], x, y + h - fr[5].h, kAlphaFull, x, y, x + w, y + h);
-        cv.blit(fr[7], x + w - fr[7].w, y + h - fr[7].h, kAlphaFull, x, y, x + w,
-                y + h);
-        cv.blit_stretch(fr[1], x + cw, y, w - 2 * cw, fr[1].h);
-        cv.blit_stretch(fr[6], x + cw, y + h - fr[6].h, w - 2 * cw, fr[6].h);
-        cv.blit_stretch(fr[3], x, y + ch, fr[3].w, h - 2 * ch);
-        cv.blit_stretch(fr[4], x + w - fr[4].w, y + ch, fr[4].w, h - 2 * ch);
+        const int l = x, t = y, r = x + w, b = y + h;
+        auto put = [&](const Sprite& s, int dx, int dy) {
+            if (s.ok) cv.blit(s, dx, dy, kAlphaFull, l, t, r, b);
+        };
+        if (fr[0].ok) put(fr[0], l, t);
+        if (fr[2].ok) put(fr[2], r - static_cast<int>(fr[2].w), t);
+        if (fr[5].ok) put(fr[5], l, b - static_cast<int>(fr[5].h));
+        if (fr[7].ok) {
+            put(fr[7], r - static_cast<int>(fr[7].w),
+                b - static_cast<int>(fr[7].h));
+        }
+        const int top_end = r - (fr[2].ok ? static_cast<int>(fr[2].w) : 0);
+        if (fr[1].ok && fr[1].w) {
+            for (int xx = l + static_cast<int>(fr[0].w); xx < top_end;
+                 xx += static_cast<int>(fr[1].w)) {
+                put(fr[1], xx, t);
+            }
+        }
+        const int bot_y = b - (fr[6].ok ? static_cast<int>(fr[6].h) : 0);
+        if (fr[6].ok && fr[6].w) {
+            for (int xx = l + static_cast<int>(fr[0].w); xx < top_end;
+                 xx += static_cast<int>(fr[6].w)) {
+                put(fr[6], xx, bot_y);
+            }
+        }
+        const int side_end = b - (fr[5].ok ? static_cast<int>(fr[5].h) : 0);
+        if (fr[3].ok && fr[3].h) {
+            for (int yy = t + static_cast<int>(fr[0].h); yy < side_end;
+                 yy += static_cast<int>(fr[3].h)) {
+                put(fr[3], l, yy);
+            }
+        }
+        if (fr[4].ok && fr[4].h) {
+            const int rx = r - static_cast<int>(fr[4].w);
+            for (int yy = t + static_cast<int>(fr[0].h); yy < side_end;
+                 yy += static_cast<int>(fr[4].h)) {
+                put(fr[4], rx, yy);
+            }
+        }
     }
     void blit9(Canvas& cv, int x, int y, int w, int h) const {
         blit9_impl(cv, scen_frame, x, y, w, h, 1, 1);
@@ -4083,6 +4243,10 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
     }
     void blit_gold(Canvas& cv, int x, int y, int w, int h) const {
         blit9_impl(cv, scen_gold_frame, x, y, w, h, 3, 3);
+    }
+    // NewLBFr / NewInfo / LSavedInfo name GenericF 105 (FrThinD), a 2px frame.
+    void blit_thin(Canvas& cv, int x, int y, int w, int h) const {
+        blit9_impl(cv, scen_thin_frame, x, y, w, h, 2, 2);
     }
     // The green celtic button (ButRCelt2): left cap + stretched centre + right
     // cap, `st` = 0 up / 1 lit / 2 down.
@@ -7325,7 +7489,7 @@ int run_headless() {
                     g.scene.glyphs10[static_cast<unsigned char>('A')].ok);
         // The exact art the DFMs name (docs/08_SCENARIO_SCREEN.md sec. 6): the
         // STGrFr panel frame + ShadowOv body, the ScenRBut bottom buttons, the
-        // FrGoldD list frame with its blank1/TextLBSel textures, the DialogFr
+        // FrGoldD/FrThinD list frames with their Text2Lb17/PopUpSet textures, the DialogFr
         // dialog frame over MainFloaterSet, the ScenSlid sliders, the ScenVSB
         // combo arrows and the Age10 dialog face.
         std::printf("scen_art panel=%ux%u/%ux%u scenfr=%ux%u mainbtn=%ux%u "

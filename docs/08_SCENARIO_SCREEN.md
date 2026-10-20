@@ -10,23 +10,22 @@ All addresses below are `AoW.exe` (image base `0x00400000`), recovered with
 GhidraMCP (`tools/ghidra/`) plus the local helpers (`tools/pe_va.py`,
 `tools/blobfind.py`, `tools/ghidra/mcp_post.py` -> `/create_function`).
 
-## 0. Fidelity pass against `bin/SelectionMenuRef.png`
+## 0. Fidelity passes against the reference captures
 
-`bin/SelectionMenuRef.png` is a 639x478 capture of the shipped screen with the
-"Select a Map..." picker open. The replica is now iterated against it with two
-local tools:
+`bin/ScenarioMenuRef.png` is a 369x359 crop of the shipped 640x480 screen with
+the "Select a Map..." picker open (the earlier, wider `SelectionMenuRef.png`
+capture is superseded by it). The crop origin in the port render is **(134,37)**,
+so the one-number comparison is:
 
 ```
-python tools/pixmatch.py re/mw/cur.png bin/SelectionMenuRef.png   # one-number match
+python tools/pixmatch.py re/mw/final.png bin/ScenarioMenuRef.png \
+    --render-origin 134 37                                       # one-number match
 python tools/sheet2.py out.png 4 "Int/GenericE.ILB:3,4,5,..."     # zoomed contact sheet
 ```
 
-Progress (share of pixels within 30 per channel, whole screen):
-
-| iteration | within-10 | within-20 | within-30 | within-45 | mean |
-|-----------|-----------|-----------|-----------|-----------|------|
-| first render | 6.6% | 14.8% | 24.4% | 40.7% | 44.25 |
-| final | 36%+ | 55.7% | **74.3%** | 85.0% | 21.14 |
+The first pass scored 24.4% within 30 / mean 44.25 against the old capture.
+Pass 2 (section 9) scores **91.4% within 30**, 84.6% within 20, 69.2% within
+10 and 94.7% within 45 at mean 10.11 over the 369x359 crop.
 
 Facts recovered from the capture (all measured, not guessed):
 
@@ -328,10 +327,10 @@ graphic is the entry the form names, resolved through `TINTGFXMOD.dfm`
 | bottom buttons | `PickScenarioBtn`/`ExitGame`/`StartBtn` | `TitleM` 32/33/34 (up) 35/36/37 (down) 38/39/40 (lit) `ScenRBut.BMP`; caption `Age10s`, `TextColor` 15134446 |
 | dialog frame | `FileDialog` (`TAOWWindow`) | `GenericF` 32..39 `DialogFr.BMP` over `GenericT` 2 `MainFloaterSet.BMP` |
 | dialog title icon | `TitleIcon` | `WinTIcon` 8 `MainHeaderIcon.BMP` |
-| dialog list | `FileLB` (`TAOWListBox`) | `GenericF` 113..120 `FrGoldD.BMP` over `GenericT` 4 `blank1.bmp` / 16 `TextLBSel.BMP` |
-| dialog edits | `DriveCmb` / `PathEdit` | `GenericE` 3..5 `EditBLight.BMP` |
-| info strip | `NewInfo1..3` | `GenericF` 113 `FrGoldD` over `GenericT` 17 `TextOld1.BMP` |
-| info icons | `LSizeI` / `LTownsI` / `LPlayersI` | `Icons` `LoadIcons` 6 / 8 / 10 |
+| dialog list | `FileLB` (`TAOWListBox`) | `GenericF` 113..120 `FrGoldD.BMP` over `GenericT` 21 `Text2Lb17.BMP` / `Menus` 8 `PopUpSet.BMP` |
+| dialog edits | `DriveCmb` / `PathEdit` | `GenericE` 15..17 `NGEdit.BMP` / 21..23 `NGCmb.BMP` |
+| info strip | `NewInfo` / `NewInfo1..3` | outer `GenericF` 105 `FrThinD` over `GenericT` 17 `TextOld1.BMP`; wells `GenericF` 113 `FrGoldD` over `GenericT` 17 |
+| info icons | `SSizeI` / `STownsI` / `SPlayersI` | `Icons` id 7 / 8, `TitleScreen` id 10 (`TImageNode` glow + art layers) |
 | Select / Cancel | `Openbut` / `CancelBut` | `GenericB` 19/22/25 `ButRCelt2.BMP`, `Age10`, `TextColor` clBlack |
 
 * `--screen scenario` starts on it; clicking the Game Type screen's **Single
@@ -432,4 +431,75 @@ drop-down in the render), `--hover N` (0..2 = the three buttons).
   ping timer implement the single-player subset only.
 
 
+
+
+## 9. Fidelity pass 2 - pixel parity with `bin/ScenarioMenuRef.png`
+
+`bin/ScenarioMenuRef.png` is a 369x359 crop of the shipped picker; the matching
+crop of the port render starts at **(134,37)** (the dialog itself is the
+design-time 380x363 at (130,35), with the `DialogFr` frame drawn 13 px inset).
+The final render is `bin/scenario_final.png`:
+
+```
+python tools/pixmatch.py re/mw/final.png bin/ScenarioMenuRef.png \
+    --render-origin 134 37
+mean_abs_diff_per_channel = 10.11
+match_within_10/channel =  69.2%
+match_within_20/channel =  84.6%
+match_within_30/channel =  91.4%
+match_within_45/channel =  94.7%
+match_within_60/channel =  96.1%
+```
+
+The text runs are on the exact columns: title `x 38..121`, first list row
+`x 56..162`, path `x 70..329`, Select/Cancel captions and every list/field
+label. What remains is the 16-bit/dithered source colouring, not geometry.
+
+Recovered with GhidraMCP for this pass (`AoWInterface.dpl`, `Ilpack.dpl`,
+`AoW.exe`):
+
+* **ILB `TImageNode` layers.** The UI sprite libraries interleave a node
+  header per multi-layer sprite (`u32 reference, u32 id, u32 class=0x100,
+  u32 class=0x16, descriptor, u32 0, u32 class=0x16, descriptor`). The index is
+  the u32 before the `0x100`; the second layer starts with a 0 index. The
+  loader now stamps that id on both layers. `Int\Icons.ILB` id 7 is the
+  white-glow + **blue globe**, id 8 the **gold glow + white castle**;
+  `Int\Scenes\TitleM.ILB` id 10 is the **lavender glow + bald leader face**.
+  `TImageNode.Show` (`Ilpack.dpl` 0x5520d654) blits the layers in order.
+  The port draws the glow layer additively and the art layer colour-keyed,
+  which reproduces the reference globe's pixels exactly (e.g. 57,99,99 /
+  41,90,41 / 107,115,214).
+* **Info strip.** `S*I` name `UnitIcons` 7/8 and `TitleScreen` 10;
+  `NewInfo1..3` are `GenericF` 113 (FrGoldD) over `GenericT` 17 (TextOld1) at
+  x 1/105/207, widths 105/103/103, y +20, height 39. The outer `NewInfo`
+  (and `NewLBFr`) frame is `GenericF` 105 (FrThinD); the shipped strip's body
+  colours match `TextOld1` (17), not the darker save-mode `TextOld2` (18) -
+  measured mean (34,40,21) vs (38,43,22) for 17 and (7,19,8) for 18.
+* **List.** `FileLB` uses `ILTextureNormal = GenericT` 21 (`Text2Lb17`, the
+  banded body), `ILTextureSelected = IntGfxMod.Menus` 8 (`PopUpSet`), frame
+  `GenericF` 113, `ItemHeight` 17, `BorderWidth` 21 (the text starts at
+  `lx + 25` in the port), 8 visible rows. The body colours now match the
+  capture (35,38,21 vs 37,41,22).
+* **9-slice edges are tiled, never stretched.** `TAOWPanel.Draw`
+  (AoWInterface 0x0041f990), `TAOWEdit.Draw` (0x004108ec) and
+  `TAOWButton.Draw` (0x0040b338) all loop `width / middle.width`; stretching
+  the 190x22 `DialogFr` top edge and the 170x18 `ScenRBut` middle distorted the
+  woven bands. `blit9_impl` / `blit_btn3` now tile with the target rect as clip.
+* **Both celtic bands.** The flat `frHorizLine` is `CeltDeco` 55/56/57
+  (7/100/7 x 27). The interlocking band under the title is `TCeltL` (the flat
+  strip at (21,22), 338x27) plus `TCelt` tiling the 27x27 knot `CeltDeco` id 3
+  at (28,22), 322x27 (`TAOWImage.Draw` loops over w/iw). The bottom band is
+  `BCeltL` plus the three `CeltL/M/R` knots at x 27/177/326.
+* **Close box / UpDirBtn.** `Close` is `GenericI` 0/1/2 (`MainHeaderBut`, 15x16)
+  at (345,4); `UpDirBtn` is `GenericI` 56/57/58 (`NGButDirBack`, 32x21) at
+  (313,78) - both were hand-drawn before.
+* **Title.** `TitleIcon` is `WinTIcon` id 8 at (20,5); the title is Age10 at
+  (42,6) with the font's CharacterDistance of 1 (`TImageLibraryFont.GetTextWidth`
+  adds +0x50 per glyph). The title run ends on the reference's column 121;
+  list/field/button runs are likewise exact.
+* **Dialog body.** `MainFloaterSet` (GenericT 2) at the frame inset; the
+  remaining difference is the source capture's 16-bit palette dithering.
+
+Open items (unchanged): the modal shadow sprite/geometry, the network widgets,
+and the leader-setup sub-window are not part of this pixel benchmark.
 

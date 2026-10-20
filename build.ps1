@@ -645,8 +645,8 @@ if ($Test) {
     }
     # The recovered art must all resolve (docs/08_SCENARIO_SCREEN.md sec. 6):
     # the STGrFr panel frame + ShadowOv body, the ScenRBut bottom buttons, the
-    # DialogFr dialog over MainFloaterSet, the FrGoldD list with its
-    # blank1/TextLBSel textures, the TextOld1 info strip, the ScenSlid sliders,
+    # DialogFr dialog over MainFloaterSet, the FrGoldD/FrThinD list with its
+    # Text2Lb17/PopUpSet textures, the TextOld1 info strip, the ScenSlid sliders,
     # the ScenVSB combo arrows and the Age10 dialog face.
     foreach ($need in @('scen_art panel=2x2/256x256', 'mainbtn=170x18',
                         'dlg=18x22', 'body=190x192', 'list=50x50/32x32',

@@ -2,10 +2,17 @@
 """pixmatch.py - one-number visual match between a render and a reference.
 
     python tools/pixmatch.py render.png reference.png [--rect x y w h]
+                             [--render-origin X Y]
 
 Prints the share of pixels that agree within a per-channel tolerance (a
 "match %%"), plus the mean absolute difference.  PIL only, so it runs with the
 same stdlib-plus-Pillow setup as the rest of port/tools.
+
+`--render-origin X Y` compares a crop of the render (the same size as the
+reference) instead of resizing.  The Scenario menu benchmark is:
+
+    python tools/pixmatch.py re/mw/final.png bin/ScenarioMenuRef.png \
+        --render-origin 134 37
 """
 import sys
 
@@ -18,15 +25,24 @@ def main():
     if "--rect" in sys.argv:
         i = sys.argv.index("--rect")
         rect = tuple(int(v) for v in sys.argv[i + 1:i + 5])
+    origin = None
+    if "--render-origin" in sys.argv:
+        i = sys.argv.index("--render-origin")
+        origin = tuple(int(v) for v in sys.argv[i + 1:i + 3])
     A = Image.open(a_path).convert("RGB")
     B = Image.open(b_path).convert("RGB")
-    if A.size != B.size:
+    if origin is not None:
+        ox, oy = origin
+        A = A.crop((ox, oy, ox + B.width, oy + B.height))
+    elif A.size != B.size:
         B = B.resize(A.size, Image.LANCZOS)
     if rect:
         A = A.crop(rect)
         B = B.crop(rect)
     d = ImageChops.difference(A, B)
-    px = list(d.getdata())
+    # Pillow 12 deprecates getdata(); both spellings yield the same RGB tuples.
+    px = list(d.get_flattened_data() if hasattr(d, "get_flattened_data")
+              else d.getdata())
     n = len(px)
     tot = 0
     hits = {10: 0, 20: 0, 30: 0, 45: 0, 60: 0}

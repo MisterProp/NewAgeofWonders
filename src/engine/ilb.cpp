@@ -155,6 +155,21 @@ bool IlbFile::load_memory(const std::uint8_t* data, std::size_t size,
         }
     }
 
+    // Mixed libraries (the UI sprite libraries, e.g. Int\Icons.ILB and
+    // Int\Scenes\TitleM.ILB) interleave a TImageNode header before each
+    // multi-layer sprite:
+    //     u32 reference, u32 node_index, u32 class_id = 0x100,
+    //     u32 layer0_class_id, <descriptor>,
+    //     u32 0, u32 layer1_class_id, <descriptor>, u32 reference
+    // The signature walk below lands on the node header (sig.index reads the
+    // 0x100 class id), and the second layer is a plain record whose index field
+    // is 0. Both layers belong to the node, so stamp the node's index (the u32
+    // just before the class id) onto them. This is exactly what
+    // TCustomImageLibrary.SetImage receives: LoadFromStream reads the node index
+    // and one TImageNode per entry, whose Draw blits both layers.
+    bool mixed_nodes = false;
+    std::uint32_t mixed_index = 0;
+
     // Walk the record chain, terminated by an index of 0xFFFFFFFF. The
     // class-specific descriptor tail is variable, so the next record is found
     // by its signature rather than by computing a size.
@@ -164,9 +179,18 @@ bool IlbFile::load_memory(const std::uint8_t* data, std::size_t size,
         if (node_lib && sig.index == kNodeClass && p >= 4) {
             node_index = read_u32(dir + p - 4);  // next wrapped entry
         }
+        if (!node_lib) {
+            if (sig.index == kNodeClass && p >= 4) {
+                mixed_nodes = true;
+                mixed_index = read_u32(dir + p - 4);
+            } else if (!(mixed_nodes && sig.index == 0)) {
+                mixed_nodes = false;
+            }
+        }
 
         IlbEntry e;
-        e.index = node_lib ? node_index : sig.index;
+        e.index = (node_lib || mixed_nodes) ? (node_lib ? node_index : mixed_index)
+                                            : sig.index;
         e.class_id = sig.class_id;
         e.fmt = sig.fmt;
         e.dir_offset = p;

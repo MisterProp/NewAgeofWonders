@@ -65,6 +65,26 @@ sprite id. `src/engine/ilb.cpp` detects such a library from its first record and
 stamps the node's index onto the wrapped entries; ordinary libraries are
 unaffected.
 
+Several **mixed** libraries (the UI art, e.g. `Int\Icons.ILB`,
+`Int\Scenes\TitleM.ILB`) place a node header in front of every multi-layer
+sprite instead of wrapping the whole library:
+
+```
+... u32 reference = 0xFFFFFFFF, u32 node_index, u32 class_id = 0x100,
+    u32 layer0_class_id = 0x16, <descriptor>,
+    u32 0, u32 layer1_class_id = 0x16, <descriptor>, ...
+```
+
+The signature walk lands on the node header (`sig.index` reads 0x100), and the
+following layer starts with a zero index. The loader now takes the node's index
+from the u32 **immediately before** the 0x100 (`p - 4`) and stamps it on the
+node header and on the following zero-indexed layer. That is what makes
+`UnitIcons` ids 7/8 and `TitleScreen` id 10 address the two-layer
+globe/castle/leader-face images (verified against the shipped picker). This is
+`ImageLib.TImageNode.Show` (`Ilpack.dpl` 0x5520d654), which blits every layer in
+order; `TSprite16.ShowTransparent` (0x55211ea0) uses the engine's alpha-50
+lookup table.
+
 Because the class-specific tail length is variable, records are located by
 their signature (`index, class_id, fmt, name_len, printable name`).
 
