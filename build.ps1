@@ -649,7 +649,7 @@ if ($Test) {
     # Text2Lb17/PopUpSet textures, the TextOld1 info strip, the ScenSlid sliders,
     # the ScenVSB combo arrows and the Age10 dialog face.
     foreach ($need in @('scen_art panel=2x2/256x256', 'mainbtn=170x18',
-                        'dlg=18x22', 'body=190x192', 'list=50x50/32x32',
+                        'dlg=18x22', 'body=190x192', 'list=213x136/190x192',
                         'info=213x143', 'slider=29x11', 'vsb=17x15',
                         'edit=158x21', 'combo=158x21', 'font10b_ok=1')) {
         if ($sline -notmatch [regex]::Escape($need)) {

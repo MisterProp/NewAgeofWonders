@@ -365,13 +365,12 @@ drop-down in the render), `--hover N` (0..2 = the three buttons).
 
 ## 8. Known deviations / open items
 
-* **Race crest icons.** The DFM's `R*PlayerIcon` names `IntGfxMod.PlyrIcns`
-  (`CurrentImage` = the race index), but `Int\Scenes\PlyrIcns.ILB` holds only six
-  *player-colour* `SidePlyr.BMP` silhouettes (ids 0..5), not twelve race crests -
-  and the reviewed screen clearly shows heraldic crests. The replica therefore
-  keeps `Int\ShieldsM.ILB` ids 0..11 (40x53), which is what the reviewed cells
-  show, and keeps the `PlyrIcns` icons as a fallback. TODO(RE): find where the
-  engine swaps `R*PlayerIcon`'s library.
+* ~~**Race crest icons.**~~ **Solved (see section 10).** `R*PlayerIcon` really is
+  `IntGfxMod.PlyrIcns` (six `TImageNode`s, one per `TPlayerType`); the heraldic
+  race crest comes from the *panel*: `R*Pnl.OnDrawBack = RacePnlDrawBack`
+  (0x00412c3c) blits `IntGfxMod.Shields` (= `Int\ShieldsM.ILB`) at the panel's
+  `(WinLeft + 5, WinTop + 5)` with the index the DFM stores in the panel's `Tag`
+  (R1Pnl 0, R5Pnl 4, ... the 0/4/8/1/5/9/2/6/10/3/7/11 grid order).
 * **Race-name colour.** `TAOWLabel.TextColor` is a `TColor` handed to
   `TImageLibraryFont.SetColor`, which maps it into the font's own colour palette
   (see `TFontModule`: Age10s defaults to `Color` 9236989 /
@@ -383,10 +382,10 @@ drop-down in the render), `--hover N` (0..2 = the three buttons).
   the DFM (11002593 for `FileName`/`DriveCmb`) are pale, which cannot be what the
   shipped screen shows on a pale field - another `SetColor`-palette effect. The
   replica draws the edit captions dark, matching the reviewed screen.
-* **Combo skin.** `PlayModeCB` / `R*PlayerCB` name `ILEdit = IntGfxMod.TitleScreen`
-  with no `ILIndex`, so the class default is unknown; the replica uses
-  `IntGfxMod.GenericE`'s `ComboBLight.BMP` (6..8), the shipped combo skin with
-  the drop-down arrow baked into its right cap, which matches the reviewed field.
+* ~~**Combo skin.**~~ **Solved (see section 10).** Every combo on the form names
+  `ILEdit = IntGfxMod.TitleScreen` with `ILEIndex = 26` - i.e. `TitleM`'s
+  `ScenEBut.BMP` 3-piece (10/162/18 x 18), whose right cap carries the dark-green
+  drop-down funnel. The replica used `GenericE`'s `ComboBLight` before.
 * **Map stats / race availability.** The size band (S/M/L) comes from the hex
   dimensions; towns = the `City.TCity` sprite count (Barondir Bay: 23, matching
   the reviewed screen); players = the exact roster size from the map's
@@ -502,4 +501,111 @@ Recovered with GhidraMCP for this pass (`AoWInterface.dpl`, `Ilpack.dpl`,
 
 Open items (unchanged): the modal shadow sprite/geometry, the network widgets,
 and the leader-setup sub-window are not part of this pixel benchmark.
+
+## 10. The Race Selector state - a 1:1 pass against `bin/RaceSelectorRef.png`
+   and `bin/RaceSelectorRef2.png`
+
+Both captures are 640x480 screenshots of the same screen: `RaceSelectorRef.png`
+(635x479, origin **(1,1)** in the port's frame) is the state *before* a map is
+chosen - every cell "Unavailable", the `Start!` button absent - and
+`RaceSelectorRef2.png` (635x472, origin **(6,4)**) is the state after the
+`Select a Map...` dialog confirmed **Blood Isles.hsm** (title "Scenario: Blood
+Isles", four races lit, `Start!` present).
+
+```
+bin/AoW.exe --root .. --screen scenario --scen-pick "Blood Isles.hsm" \
+    --scen-frame 90 --render re/rs_cur.png --no-music --no-cursor
+python tools/pixmatch.py re/rs_cur.png bin/RaceSelectorRef2.png \
+    --render-origin 6 4
+mean_abs_diff_per_channel = 4.41
+match_within_10/channel =  92.5%
+match_within_20/channel =  96.4%
+match_within_30/channel =  96.9%
+match_within_45/channel =  97.6%
+match_within_60/channel =  98.6%
+
+bin/AoW.exe --root .. --screen scenario --scen-frame 90 \
+    --render re/rs_none.png --no-music --no-cursor
+python tools/pixmatch.py re/rs_none.png bin/RaceSelectorRef.png \
+    --render-origin 1 1
+mean_abs_diff_per_channel = 2.71
+match_within_10/channel =  95.1%
+match_within_30/channel =  98.6%
+```
+
+(Before this pass the same screen scored 30.6 / 24.6 % within 30.)
+
+Facts recovered for this pass - `AoW.exe` through GhidraMCP
+(`FUN_00410f2c` = the per-race refresh, `FUN_00411460` = the screen refresh,
+`FUN_00412c3c` = `RacePnlDrawBack`, `FUN_00412a24` = `RacePlayerCBChange`), the
+method table at `0x00410911` (25 published TScenSetup handlers, each
+`<u16 idx><u32 addr><u8 len><name>`), `assets/dfm/AoW/TSCENSETUP.dfm`
+and the shipped ILBs:
+
+* **The race crest is the panel's background.** `RacePnlDrawBack` is
+  `ImageLib.Get(<IntGfxMod.Shields>, panel-><race>, ...)->Show(WinLeft+5,
+  WinTop+5)`; the race index is the DFM's per-panel `Tag`. A `TSprite16`
+  anchors its visual box at `base + class shift`, so the crest lands 7 px right
+  / 9 px down of the cell's corner (measured against the capture, template match
+  mean 10.9). `R*PlayerIcon` is *not* the crest.
+* **`R*PlayerIcon` = the player-type icon** (`IntGfxMod.PlyrIcns`,
+  `Int\Scenes\PlyrIcns.ILB`): six `TImageNode`s, each an aura layer plus the
+  emblem (skull / goblin face / crown ...). `FUN_00410f2c` picks the node with
+  `TAOWImage.SetCurrent`: type 0 (Human) -> 0, 1/2/3 (CPU Squire/Knight/Lord) ->
+  1/2/3, 6/7 (King/Emperor) -> 4/5; it is hidden for 4/5 (Independent/None).
+  Draw order matches the capture: the **aura under** the crest, the **emblem
+  over** it (the crest's lower tip stays clean, the emblem overlaps it). The
+  glyph's pixels are reproduced exactly (template match mean 0.0).
+* **Combos** (`R*PlayerCB` 50,25 and `R*BehaviorCB` 50,45, 98x18) are
+  `TitleM`'s `ScenEBut` 3-piece (`ILEdit = TitleScreen`, `ILEIndex = 26`,
+  `BorderWidth 6`, `ItemHeight 15/13`, `TextColor` = the race's own colour).
+  `FUN_00410f2c` shows `R*BehaviorCB` only for the CPU types 1..3/6/7 - which is
+  why the *Human* cell (Goblins on Blood Isles) has a single combo in the
+  capture.
+* **`R*InfoLbl`** ("Unavailable") is `awCenter / ahBottom` with `BottomOffset 7`
+  inside `R*CenterPnl` (48,0 99x66), in the race's own `TextColor`: its ink sits
+  at cell + (72..120, 48..55) in both captures.
+* **The grid's fog.** An unavailable cell is black at alpha **208** over its
+  contents (least-squares fit of the crest against `ShieldsM` id 4/0, RMS 4.0).
+* **Lit races appear immediately.** `scen_glow` is what gates a *lit* cell's
+  `R*FogPnl` (`FUN_00410f2c`: fog = `kScenGlowFrames - t`), but the interactive
+  `WM_TIMER` handler used to leave it at 0 - only the head-less `--scen-frame`
+  path set it - so in the game a confirmed map's available races stayed as dark
+  as the unavailable ones. A second attempt stepped the counter once per 33 ms
+  tick (a 3 s fade), which the original does not do: `FUN_00411460` drops every
+  lit cell's fog the moment the map is loaded. The port now does the same -
+  `Scene::select_map(confirm = true)` sets `scen_glow = kScenGlowFrames`, so the
+  cells are bright on the frame right after `Select`, and there is no animation
+  state left in `WM_TIMER`. Measured on the very first render:
+  Humans crest (123,129,49) = the capture's value, Elves (15,22,15) = fogged.
+* **The masked panel body.** The race cells and `ChatPnl` show *16 % of
+  `Backg03`* (e.g. (460,230): backdrop (148,76,90) -> (24,8,16)) plus the
+  `ShadowOv` tile at ~9 % - i.e. a black veil at 215 with the tile over it, not
+  an opaque fill. The same veil reproduces `SettingsPnl`, whose body is the
+  backdrop's brown ((560,300) = 16 % of (238,206,164) = (38,33,26), capture
+  (49,41,33)); its `DurFr`/`LFr` groups are `frHollowBox` (no interior texture).
+* **`ChatPnl`** (SidesPnl 0,286 -> abs (10,325) 484x145) is the bottom strip:
+  `ChatMemo` (10,12) 299x93 (`ScenFr` frame + `blank1` body), `ChatEdit`
+  (10,114) 299x21 (`TitleM` `ScenEd` 23/24/25), and `ConnectionPnl` (318,12)
+  with the three column headers `Players` / `Ping` / `Pref. Race`
+  (`TAOWButton` with `ILIndexUp = ILIndexDown = 52`, `ILIndexLit = 49` =
+  `TitleM`'s `ScenCol` 2/52/2 x 15) over 70/25/61 x 78 `ScenFr`-framed lists.
+  Everything inside the strip is veiled by `ChatFogPnl` (GenericT 1) at black
+  alpha **194** - the "Players" caption's (238,238,230) reads (57,57,49) in the
+  capture.
+* **Checkboxes** are `IntGfxMod.GenericI`'s `NGCBox.BMP`: id 47 (empty, the
+  gold-bevelled box) and id 48 (checked, the blue glow) - the DFM's
+  `ILIndexUp/Down/Lit = 47/48/49`. `TitleScreen` 41/42 (`ScenChk.BMP`) is a
+  *round* 12x12 ring and is not what ships. The setup defaults "Leaders on map"
+  and "Exploration" to *on*.
+* **Title.** `ScenarioLbl` is `awCenter` on the full-screen `ScenSetupPnl`
+  (`TopOffset 8`), so the caption is centred on x = 320: "Scenario: Blood Isles"
+  inks x 240..399, and the empty selection still carries the colon + space
+  ("Scenario: " = 80 px), which is why its "Scenario:" ink starts on 281.
+* **`Start!`** only exists once a map is confirmed; the pre-pick capture shows
+  `Scenario` / `Exit` alone.
+
+Remaining difference: the 16-bit palette dithering of the source captures and
+the engine's font antialiasing (the port draws flat-ink glyphs, so a caption has
+more full-bright pixels than the capture).
 

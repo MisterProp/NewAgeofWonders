@@ -357,7 +357,7 @@ constexpr int kScenBtnX = 510, kScenBtnY0 = 385;   // PickScenario/Exit/Start
 constexpr int kScenBtnW = 114, kScenBtnH = 24, kScenBtnPitch = 27;
 // The map picker's FileLB list: lh / ItemHeight (141 / 17) rows are visible.
 constexpr int kScenListRows = 8;
-constexpr int kScenGlowFrames = 90;            // fog fades fully over this many frames (the "glow up" counter)
+constexpr int kScenGlowFrames = 90;            // fog scale: 0 = fully fogged, 90 = fully lit
 constexpr int kScenRaceCount = 12;
 // Grid fill order (row-major) -> race index. R1..R12 read
 // Humans/Azracs/Lizard Men/Frostlings/Elves/Halflings/Dwarves/High Men/
@@ -445,6 +445,10 @@ constexpr int kMainBtnTextR = 238, kMainBtnTextG = 238, kMainBtnTextB = 230;
 constexpr std::uint32_t kPanelFrameBase = 72;   // GenericF STGrFr 9-slice
 constexpr std::uint32_t kPanelTexId = 1;        // GenericT ShadowOv.BMP
 constexpr std::uint32_t kPanelTexInset = 5;     // RacePnlDrawBack's +5
+// A masked panel's body is a black veil over the backdrop (the shipped capture
+// keeps 16 % of Backg03) with the ShadowOv tile on top at ~9 %.
+constexpr int kPanelBodyVeil = 215;
+constexpr int kPanelBodyAlpha = 9;
 // The Duration / Miscellaneous group frames (TAoWFrame DurFr / LFr) use
 // ILFrame = GenericF with ILIndexFrame = 64 (ScenFr.BMP).
 constexpr std::uint32_t kScenFrBase = 64;       // GenericF ScenFr 9-slice
@@ -467,7 +471,44 @@ constexpr std::uint32_t kVsbIncUp = 58, kVsbIncDown = 59, kVsbTrack = 63;
 constexpr std::uint32_t kSliderBack = 49, kSliderTab = 52;
 // TAOWCheckBox ILIndexUp/Down/Lit = TitleScreen 47/48/49 ... but the shipped
 // 12x12 Scenario checkbox is ScenChk.BMP at TitleScreen 41 (off) / 42 (on).
+// NB: ScenChk.BMP decodes to a *round* 12x12 ring; the square, gold-bevelled
+// box the Scenario screen actually shows is IntGfxMod.GenericI's NGCBox.BMP -
+// id 47 (empty) and id 48 (checked, the blue glow). Verified against
+// bin/RaceSelectorRef2.png (template match mean 0.95 / 1.18).
 constexpr std::uint32_t kChkOffId = 41, kChkOnId = 42;
+constexpr std::uint32_t kNgcBoxOff = 47, kNgcBoxOn = 48;  // GenericI NGCBox
+// The player-list column headers (PlayerListSort "Players" / AOWButton1 "Ping"
+// / PreferredRaceSort "Pref. Race") are TAOWButtons whose
+// ILIndexUp = ILIndexDown = 52 and ILIndexLit = 49, i.e. TitleM's ScenCol.BMP
+// 3-piece (2 / 52 / 2 x 15). See TSCENSETUP.dfm.
+constexpr std::uint32_t kScenColArt[3] = {52, 53, 54};
+// ChatEdit names ILEdit = IntGfxMod.TitleScreen with ILIndex = 23: ScenEd.BMP
+// (2 / 48 / 2 x 21), the chat panel's input line.
+constexpr std::uint32_t kScenEdArt[3] = {23, 24, 25};
+// ChatPnl - SidesPnl's bottom strip (docs/08 sec. 10): a TAOWPanel at
+// (0,286) 484x145 over the STGrFr frame + ShadowOv body, holding the (single
+// player: empty) chat memo / edit and the player list. Its children are all
+// relative to ChatPnl, whose absolute origin is SidesPnl + (0,286) = (10,325).
+constexpr int kChatX = 10, kChatY = 325, kChatW = 484, kChatH = 145;
+constexpr int kChatMemoX = 10, kChatMemoY = 12, kChatMemoW = 299,
+              kChatMemoH = 93;
+constexpr int kChatEditX = 10, kChatEditY = 114, kChatEditW = 299,
+              kChatEditH = 21;
+// ConnectionPnl (318,12) 166x133 has no frame/texture of its own; its three
+// list widgets are 15 px headers over 78 px ScenFr-framed lists.
+constexpr int kConnX = 318, kConnY = 12, kConnHdrH = 15, kConnListY = 15;
+constexpr int kConnListH = 78;
+// ChatFogPnl (GenericT 1) veils the chat strip with black at this alpha
+// (measured on bin/RaceSelectorRef2.png: every child reads ~24 % of its own
+// colour).
+constexpr int kChatFogAlpha = 194;
+constexpr int kConnColX[3] = {0, 70, 95};   // Players / Ping / Pref. Race
+constexpr int kConnColW[3] = {71, 26, 61};
+const char* const kConnColText[3] = {"Players", "Ping", "Pref. Race"};
+// Players / Ping / Pref. Race list boxes: ILFrame GenericF 64 (ScenFr),
+// ILTextureNormal GenericT 4 (blank1.bmp - the 50x50 black body).
+constexpr std::uint32_t kBlankTexId = 4;
+
 // The dialog edits / combos use ILEdit = IntGfxMod.GenericE (= Int\GenericE.ILB).
 constexpr const char* kGenericEIlb = "Int\\GenericE.ILB";
 // IntGfxMod.GenericS (= Int\GenericS.ilb) holds every scrollbar / slider skin.
@@ -1275,7 +1316,6 @@ struct Scene {
     aow::IlbFile font10_il;     // Int\Fonts\Age10s.ILB (race names)
     std::vector<Glyph> glyphs10;
     Sprite scen_bg;                  // TitleM id 4  Backg03  640x480
-    Sprite scen_icon[6];             // PlyrIcns image entries
     Sprite scen_frame[8];            // GenericF 72..79  (9-slice, no centre)
     Sprite scen_btn[3][kOrbStride];  // SceneBtn triples (55/58/61)
     Sprite scen_chk[2];              // ScenChk ids 41 (off) / 42 (on)
@@ -1316,11 +1356,21 @@ struct Scene {
     Sprite scen_slider[6];           // GenericS 49..54 ScenSlid (track+thumb)
     Sprite scen_edit[3];             // GenericE 15..17 NGEdit   (dark edit field)
     Sprite scen_combo[3];            // GenericE 21..23 NGCmb    (dark combo+arrow)
+    Sprite scen_col[3];              // TitleM 52..54 ScenCol (list headers)
+    Sprite scen_chated[3];           // TitleM 23..25 ScenEd  (chat input)
+    Sprite scen_ngcbox[2];           // GenericI 47/48 NGCBox (checkbox off/on)
+    Sprite scen_blank_tex;           // GenericT 4 blank1 (list / chat bodies)
+    // The race cells' R*PlayerIcon: IntGfxMod.PlyrIcns keeps six TImageNodes
+    // (one per TPlayerType), each with the aura layer + the glyph layer that
+    // TImageNode.Show blits in order (Ilpack.dpl 0x5520d654). FUN_00410f2c
+    // selects the node with TAOWImage.SetCurrent: type 0 (Human) -> 0,
+    // 1 .. 3 (CPU Squire/Knight/Lord) -> 1..3 and 6/7 (King/Emperor) -> 4/5.
+    LayeredSprite scen_plyr[6];
     Sprite scen_celt[3];             // CeltDeco 55/56/57 (horizontal knot band)
     Sprite scen_celt_knot;           // CeltDeco 3 (27x27 knot cross)
 
-    // Interaction / animation state.
-    int scen_glow = kScenGlowFrames;   // 0 = fully fogged -> the "glow up"
+    // Interaction state.
+    int scen_glow = kScenGlowFrames;   // per-race fog: 0 = fogged, 90 = lit
     int scen_hover = -1;               // hovered button 0..2, or -1
     int scen_pressed = -1;
     // A race lights up only once the chosen map's player list contains it
@@ -1341,11 +1391,19 @@ struct Scene {
     int scen_ptype_default[kScenRaceCount] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     int scen_dd_gi = -1;      // the cell whose PlayerCB drop-down is open, or -1
     int scen_dd_hover = -1;   // the hovered drop-down item (0..6), or -1
-    bool scen_check[4] = {false, false, false, false};  // the Misc checkboxes
+    bool scen_check[4] = {true, false, false, true};  // the Misc checkboxes
+    // The DFM ships all four unchecked; the engine's setup settings default
+    // "Leaders on map" and "Exploration" to on, which is what the shipped
+    // capture shows (checked = GenericI 48, the blue box).
     bool scen_maps_open = false;       // the "Select a Map..." dialog
     std::vector<std::string> scen_maps;  // Scenario\Custom\*.HSM file names
     int scen_map_sel = -1;             // the picker opens with nothing selected
     std::string scen_map_name;         // the chosen file (leaf name)
+    // The ScenarioLbl caption once a map is confirmed: the file's stem
+    // ("Blood Isles.hsm" -> "Blood Isles"), exactly as the shipped title reads
+    // "Scenario: Blood Isles".
+    bool scen_map_confirmed = false;
+    std::string scen_map_title;
     std::string scen_map_size = "M";   // the info strip (size/towns/players)
     int scen_map_towns = 0;
     int scen_map_players = 0;
@@ -1962,6 +2020,7 @@ struct Scene {
             // The panel bodies and the list / info-strip textures, exactly as
             // the DFMs name them (GenericT 1 / 21 / 17 / 18).
             decode_id(generict_il, kPanelTexId, scen_panel_tex);      // ShadowOv
+            decode_id(generict_il, kBlankTexId, scen_blank_tex);      // blank1
             decode_id(generict_il, kListTexId, scen_list_tex);        // Text2Lb17
             decode_id(generict_il, kInfoTexId, scen_info_tex);        // TextOld1
             decode_id(generict_il, kInfo2TexId, scen_info2_tex);      // TextOld2
@@ -2014,6 +2073,10 @@ struct Scene {
             for (int i = 0; i < 3; ++i) {
                 decode_id(menu_il, static_cast<std::uint32_t>(26 + i),
                           scen_scenebut[i]);
+                // ScenCol.BMP 49..54 (header buttons) and ScenEd.BMP 23..25
+                // (ChatEdit). Both are the same 3-piece skins the DFM names.
+                decode_id(menu_il, kScenColArt[i], scen_col[i]);
+                decode_id(menu_il, kScenEdArt[i], scen_chated[i]);
             }
             // GenericE: the edit / combo field skins. EditBLight (3..5) is the
             // pale field, ComboBLight (6..8) is the same field with the
@@ -2124,24 +2187,48 @@ struct Scene {
             }
             decode_layers(menu_il, 10, scen_icon_players);        // leader face
             // The race crest shields (Int\ShieldsM.ILB, 40x53): ids 0..11 are
-            // the twelve races in the DFM's grid order.
+            // the twelve races the race panels tag (R1Pnl Tag 0, R5Pnl Tag 4, ...).
+            // RacePnlDrawBack blits the tagged crest at the panel's
+            // (WinLeft + 5, WinTop + 5); a class-0x16 sprite anchors its visual
+            // box at `base + class shift`, so fold that shift in.
             const std::string sh = (base / kShieldsIlb).string();
             if (shields_il.load(sh, err)) {
                 for (int i = 0; i < 12; ++i) {
                     decode_id(shields_il, static_cast<std::uint32_t>(i),
                               scen_shield[i]);
+                    const int p =
+                        pos_of(shields_il, static_cast<std::uint32_t>(i));
+                    if (p >= 0 && scen_shield[i].ok) {
+                        const aow::IlbEntry& e =
+                            shields_il.entries()[static_cast<std::size_t>(p)];
+                        scen_shield[i].base_x += e.xshift;
+                        scen_shield[i].base_y += e.yshift;
+                    }
                 }
             }
         }
-        // Race/player icons: PlyrIcns stores image+mask pairs; take the even
-        // positions as the visible icons (docs/08_SCENARIO_SCREEN.md sec. 8).
+        // Race/player icons: IntGfxMod.PlyrIcns keeps one TImageNode per
+        // TPlayerType (ids 0..5), each stored as two entries - the aura/glow
+        // layer and the glyph (the skull / goblin / crown face). TImageNode.Show
+        // blits them in file order, so keep both layers per id.
         {
             const std::string pi = (base / kPlyrIcnsIlb).string();
             if (!plyr_il.load(pi, err)) { *error = err + " (" + pi + ")"; return false; }
-            const auto& pe = plyr_il.entries();
-            for (int i = 0; i < 6; ++i) {
-                const std::size_t p = static_cast<std::size_t>(i) * 2;
-                if (p < pe.size()) decode_pos(plyr_il, p, scen_icon[i]);
+            for (std::uint32_t id = 0; id < 6; ++id) {
+                LayeredSprite& out = scen_plyr[id];
+                out.count = 0;
+                for (std::size_t i = 0; i < plyr_il.entries().size() &&
+                                       out.count < 4; ++i) {
+                    const aow::IlbEntry& e = plyr_il.entries()[i];
+                    if (e.index != id) continue;
+                    Sprite& s = out.layer[out.count];
+                    if (decode_pos(plyr_il, i, s)) {
+                        // TSprite16's visual box lands at anchor + base + shift.
+                        s.base_x += e.xshift;
+                        s.base_y += e.yshift;
+                        ++out.count;
+                    }
+                }
             }
         }
         // FontModule.Age10s - single-layer glyphs keyed by character code.
@@ -2237,6 +2324,10 @@ struct Scene {
                     decode_id(generici_il, kScanMinArt[i], scan_min[i]);
                     decode_id(generici_il, kScanHelpArt[i], scan_help[i]);
                 }
+                // The Scenario screen's 12x12 checkboxes (NGCBox.BMP 47 off /
+                // 48 checked) - the art the shipped capture shows.
+                decode_id(generici_il, kNgcBoxOff, scen_ngcbox[0]);
+                decode_id(generici_il, kNgcBoxOn, scen_ngcbox[1]);
             }
             const std::string cw = (base / "Int" / "Scenes" / "CityWin.ILB").string();
             if (citywin_il.load(cw, err)) decode_id(citywin_il, 5, event_shield_tex);
@@ -3367,20 +3458,34 @@ struct Scene {
     }
 
     // ---------------- the real-art drawing helpers (no placeholder fills) ----
-    // A TAOWPanel's body: RacePnlDrawBack (0x00412c3c) fetches the panel's
-    // ILIndexTexture image (GenericT 1 = ShadowOv.BMP) and blits it at
-    // (WinLeft + 5, WinTop + 5), clipped to the panel.
+    // A TAOWPanel's body: the panel class lays its ILTexture tile (GenericT 1 =
+    // ShadowOv.BMP) over a black veil so the backdrop still shows through a
+    // little. Measured over bin/RaceSelectorRef2.png's race cells: the body is
+    // exactly 16 % of Backg03 (e.g. (460,230): backdrop (148,76,90) -> (24,8,16)),
+    // i.e. a black veil at 215, with the maze tile adding its ~9 %.
     void blit_panel_body(Canvas& cv, int x, int y, int w, int h) const {
+        cv.fill(x, y, w, h, 0, 0, 0, kPanelBodyVeil);
         if (!scen_panel_tex.ok) return;
         const int tw = static_cast<int>(scen_panel_tex.w);
         const int th = static_cast<int>(scen_panel_tex.h);
         if (tw <= 0 || th <= 0) return;
-        // RacePnlDrawBack (0x00412c3c) blits the panel's ILIndexTexture image
-        // (GenericT 1 = ShadowOv.BMP) at (WinLeft + 5, WinTop + 5); the panel
-        // class repeats that texture to fill the whole panel, clipped to it.
-        for (int oy = y + kPanelTexInset; oy < y + h; oy += th) {
-            for (int ox = x + kPanelTexInset; ox < x + w; ox += tw) {
-                cv.blit(scen_panel_tex, ox, oy, kAlphaFull, x, y, x + w, y + h);
+        for (int oy = y; oy < y + h; oy += th) {
+            for (int ox = x; ox < x + w; ox += tw) {
+                cv.blit(scen_panel_tex, ox, oy, kPanelBodyAlpha, x, y, x + w,
+                        y + h);
+            }
+        }
+    }
+    // Tile an image over a rect, clipped to it (what a TAOWListBox / TAOWMemo
+    // does with its ILTextureNormal: blank1.bmp is a flat 50x50 body).
+    void fill_tex(Canvas& cv, const Sprite& s, int x, int y, int w,
+                  int h) const {
+        if (!s.ok || s.w == 0 || s.h == 0) return;
+        const int tw = static_cast<int>(s.w);
+        const int th = static_cast<int>(s.h);
+        for (int oy = y; oy < y + h; oy += th) {
+            for (int ox = x; ox < x + w; ox += tw) {
+                cv.blit(s, ox, oy, kAlphaFull, x, y, x + w, y + h);
             }
         }
     }
@@ -3403,13 +3508,17 @@ struct Scene {
             cv.blit(scen_panel_tex, ox, y + h - th, kAlphaFull, x, y, x + w, y + h);
         }
     }
-    // The Settings panel (SettingsPnl): black body + the bottom-anchored maze,
-    // then the STGrFr frame.
+    // The Settings panel (SettingsPnl) is a masked panel like the race cells: a
+    // black veil over the backdrop with the ShadowOv tile laid over it. The
+    // shipped capture's panel reads the backdrop's brown (41,33,24 at x 560,
+    // y 300 = 16 % of Backg03's (238,206,164)) - i.e. exactly the panel body.
     void draw_setpanel(Canvas& cv, int x, int y, int w, int h) const {
-        blit_panel_body_bottom(cv, x, y, w, h);
+        blit_panel_body(cv, x, y, w, h);
         blit9_impl(cv, scen_frame, x, y, w, h, 2, 2);
     }
-    // A TAoWFrame group (DurFr / LFr) = the ScenFr frame (GenericF 64..71).
+    // A TAoWFrame group (DurFr / LFr) with FrameType = frHollowBox: just the
+    // ScenFr frame (GenericF 64..71); ILIndexTexture 0 is the *unset* index, so
+    // the interior stays transparent and shows the panel body behind it.
     void draw_group(Canvas& cv, int x, int y, int w, int h) const {
         blit9_impl(cv, scen_scenfr, x, y, w, h, 2, 2);
     }
@@ -3437,15 +3546,18 @@ struct Scene {
         text_at(cv, glyphs10, x + w / 2, y + (kMainBtnH - 12) / 2, caption,
                 kMainBtnTextR, kMainBtnTextG, kMainBtnTextB, true, false);
     }
-    // A TAOWComboBox resting frame: the ComboBLight skin (its right cap is the
-    // drop-down arrow). `fs` selects the face (Age8s on the race cells, Age8 on
+    // A TAOWComboBox resting frame. Every combo on this form names
+    // ILEdit = IntGfxMod.TitleScreen with ILEIndex = 26, i.e. TitleM's
+    // ScenEBut 3-piece (10 / 162 / 18 x 18): a grey field whose 18 px right cap
+    // carries the dark-green drop-down funnel. The DFM's BorderWidth 6 puts the
+    // caption 6 px in. `fs` selects the face (Age8s on the race cells, Age8 on
     // the Settings panel, Age10 in the file dialog).
     void draw_combo(Canvas& cv, int x, int y, int w, const std::string& s,
                     const std::vector<Glyph>& fs, std::uint8_t r,
                     std::uint8_t g, std::uint8_t b) const {
-        const int h = scen_combo[1].ok ? static_cast<int>(scen_combo[1].h) : 18;
-        blit_btn3(cv, scen_combo, x, y, w, h);
-        text_at(cv, fs, x + 4, y + (h - 12) / 2, s, r, g, b, false, false);
+        blit_btn3(cv, scen_scenebut, x, y, w, kScenComboH);
+        text_at(cv, fs, x + 6, y + (kScenComboH - 12) / 2, s, r, g, b, false,
+                false);
     }
     // The Settings panel's turn-mode combo: TitleM's ScenEBut skin (grey field,
     // dark-green funnel in the right cap), AOWFont = FontModule.Age8s.
@@ -3526,12 +3638,17 @@ struct Scene {
         blit_btn3(cv, scen_edit, x, y, w, h);
         text_at(cv, fs, x + 4, y + (h - 12) / 2, s, r, g, b, false, false);
     }
-    // TAOWCheckBox: the 12x12 ScenChk.BMP at TitleScreen 41 (off) / 42 (on).
-    // It is a class-0x16 sprite (no mask), so it is blitted whole - keying its
-    // (0,0) colour would eat the whole face.
+    // TAOWCheckBox: the 12x12 NGCBox.BMP face (GenericI 47 empty / 48 checked) -
+    // the same square, gold-bevelled box the shipped capture shows. It is a
+    // class-0x11 sprite (masked), so blit it whole.
     void draw_check(Canvas& cv, int x, int y, bool on) const {
-        const Sprite& s = scen_chk[on ? 1 : 0];
-        if (s.ok) cv.blit(s, x, y, kAlphaFull, 0, 0, disp_w, disp_h);
+        const Sprite& s = scen_ngcbox[on ? 1 : 0];
+        if (s.ok) {
+            cv.blit(s, x, y, kAlphaFull, 0, 0, disp_w, disp_h);
+        } else if (scen_chk[on ? 1 : 0].ok) {
+            const Sprite& f = scen_chk[on ? 1 : 0];
+            cv.blit(f, x, y, kAlphaFull, 0, 0, disp_w, disp_h);
+        }
     }
     // A TAOWHScrollBar (ILIndexBack = GenericS 49 ScenSlid 3-piece track,
     // ILIndexTab = GenericS 52 3-piece thumb).
@@ -3656,50 +3773,90 @@ struct Scene {
         // corner pixels are Backg03.BMP verbatim (e.g. (20,470) = 31 20 20).
         // Everything else on the screen is a panel drawn over it.
 
-        // ScenarioLbl: the screen's own title, centred along the top. The DFM
-        // leaves it as "######################" at WinLeft 210 WinTop 8; the
-        // engine fills it with the screen name in the big AoW15WhiteGrey face
-        // (the same keyed caption path the title screen uses).
-        draw_text(cv, disp_w / 2 - 3, 7, "Scenario:");
+        // ScenarioLbl: the screen's own title. The DFM pins it at WinLeft 210
+        // WinTop 8 with Alignment awCenter / ahTop (TopOffset 8) inside the
+        // full-screen ScenSetupPnl, i.e. the caption is centred on the 640 px
+        // display whatever its width; bin/RaceSelectorRef2.png's
+        // "Scenario: Blood Isles" ink spans x 240..399 (160 px, centred on 320).
+        // The empty selection still carries the colon + space, which is why
+        // bin/RaceSelectorRef.png's "Scenario:" ink starts on 281 and not 284.
+        draw_text(cv, disp_w / 2, 7, "Scenario: " + scen_map_title);
 
         // ---- render: Scenario screen drawing ----
-// The "t" value drives the per-race fog: a race is drawn as darkgrey if
-// kScenGlowFrames - t == 0 (fully lit), and bright otherwise. Each race cell's
-// R*FogPnl stays fully applied when not in the map, so only lit races glow.
-const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
+        // FUN_00410f2c's fog term: kScenGlowFrames - t. A confirmed map maxes the
+        // counter (select_map), so its lit cells carry no fog at all and the ones
+        // whose race is not in the map stay fully fogged - the two states the
+        // shipped captures show.
+        const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
 
         // The 12 race cells, fill order R1,R5,R9,R2,... (the DFM's grid). Each
-        // cell is a TAOWPanel - the STGrFr frame (GenericF 72..79) over the
-        // ShadowOv body texture (GenericT 1), exactly what RacePnlDrawBack
-        // (0x00412c3c) blits. The contents follow the DFM's own children:
-        // R*PlayerIcon (0,20,50x46), R*Lbl inside R*CenterPnl at (28,9), the
-        // R*PlayerCB/R*BehaviorCB combos at (50,25)/(50,45), and R*InfoLbl at
-        // (49,59) which reads "Unavailable" when the race has no player
-        // (FUN_00410f2c, param_2 == 0).
+        // cell is a TAOWPanel (STGrFr frame, GenericF 72..79, over the ShadowOv
+        // body, GenericT 1) whose `OnDrawBack = RacePnlDrawBack`
+        // (0x00412c3c) blits the race crest at (WinLeft + 5, WinTop + 5):
+        //
+        //   ImageLib_TCustomImageLibrary_Get(<IntGfxMod.Shields>,
+        //                                   panel->Tag,  // race index
+        //                                   ...)->Show(WinLeft + 5, WinTop + 5)
+        //
+        // i.e. IntGfxMod.Shields (= Int\ShieldsM.ILB) id = the panel's Tag
+        // (R1Pnl Tag 0, R5Pnl Tag 4, ... - the DFM's own grid order), not the
+        // 50x46 R*PlayerIcon box the first pass drew it in.
+        //
+        // The contents follow the DFM's own children: R*Lbl inside R*CenterPnl
+        // at (28,9), R*PlayerCB/R*BehaviorCB at (50,25)/(50,45), R*InfoLbl
+        // ("Unavailable" - FUN_00410f2c's param_2 == 0 branch) which its
+        // awCenter/ahBottom alignment pins to the middle of the 99 px caption
+        // column, 7 px above the cell's bottom, and R*PlayerIcon (TAOWImage,
+        // PlyrIcns, 50x46 at (0,20)) which FUN_00410f2c fills with
+        // TAOWImage.SetCurrent(type -> 0..5).
         for (int gi = 0; gi < kScenRaceCount; ++gi) {
             int x, y;
             scen_cell(gi, x, y);
             const int race = kScenGridRace[gi];
             const bool avail = scen_available[race];
-            // The R*FogPnl overlay only plays during the "glow up" of a race
-            // that is in the game; a race with no player stays at its resting
-            // brightness (the reviewed screen shows all twelve legible).
             // R*FogPnl stays fully applied on a race the setup control does not
             // use (FUN_00410f2c's param_2 == 0 branch); a race that *is* in the
-            // game fades out of the fog over the glow counter.
-            const int fog = avail ? (kScenGlowFrames - t) * 210 / kScenGlowFrames
-                                  : 210;
-            draw_panel(cv, x, y, kScenCellW, kScenCellH);
-            // R*PlayerIcon: the race crest, in the DFM's 50x46 box at (0,20).
-            const Sprite& ic = scen_shield[race];
-            if (ic.ok) {
-                const int ix = x + (50 - static_cast<int>(ic.w)) / 2;
-                const int iy = y + 20 + (46 - static_cast<int>(ic.h)) / 2;
-                cv.blit_keyed(ic, ix, iy);
-            } else {
-                const Sprite& alt = scen_icon[race % 6];
-                if (alt.ok) cv.blit_keyed(alt, x + 3, y + 20);
+            // game has its fog dropped outright. Measured against
+            // bin/RaceSelectorRef.png: black at alpha 208 over the crest.
+            const int fog = avail ? (kScenGlowFrames - t) * 208 / kScenGlowFrames
+                                  : 208;
+            blit_panel_body(cv, x, y, kScenCellW, kScenCellH);
+            // R*PlayerIcon: the player-type icon (PlyrIcns TImageNode) in the
+            // DFM's 50x46 box at (0,20). FUN_00410f2c shows it for the player
+            // types 0..3 and 6/7 only (Independent / None have no icon).
+            const int pt = scen_ptype[race];
+            int icon_id = -1;
+            if (avail && pt >= 0 && pt < 8 &&
+                (pt < 4 || pt == 6 || pt == 7)) {
+                switch (pt) {
+                case 1: icon_id = 1; break;
+                case 2: icon_id = 2; break;
+                case 3: icon_id = 3; break;
+                case 6: icon_id = 4; break;
+                case 7: icon_id = 5; break;
+                default: icon_id = 0; break;
+                }
             }
+            // The node's aura layer goes down first, under the race crest, and
+            // the emblem on top of it: the shipped capture shows the crest's
+            // lower tip untouched by the glow while the emblem overlaps it.
+            if (icon_id >= 0 && scen_plyr[icon_id].count > 0) {
+                cv.blit_keyed(scen_plyr[icon_id].layer[0], x, y + 20);
+            }
+            // RacePnlDrawBack: the race crest, ShieldsM id = race, drawn at the
+            // panel's own +5,+5 origin.
+            const Sprite& shield = scen_shield[race];
+            if (shield.ok) {
+                cv.blit_keyed(shield, x + kPanelTexInset, y + kPanelTexInset);
+            }
+            if (icon_id >= 0) {
+                const LayeredSprite& pi = scen_plyr[icon_id];
+                for (int L = 1; L < pi.count; ++L) {
+                    const Sprite& sp = pi.layer[L];
+                    if (sp.ok) cv.blit_keyed(sp, x, y + 20);
+                }
+            }
+            blit9_impl(cv, scen_frame, x, y, kScenCellW, kScenCellH, 2, 2);
             // R*Lbl: Age10s at (48 + its own WinLeft, 9), tinted with the
             // race's own TextColor.
             text_at(cv, glyphs10, x + 48 + kScenRaceLblX[race], y + 9,
@@ -3707,22 +3864,90 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
                     kScenRaceColor[race][1], kScenRaceColor[race][2], false,
                     false);
             if (avail) {
-                // R*PlayerCB: the player type the map stored for this race
-                // (rw tag 0x3), shown with the combo's own TextColor.
-                const int pt = scen_ptype[race];
+                // R*PlayerCB / R*BehaviorCB: TitleM's ScenEBut 3-piece
+                // (ILEdit = TitleScreen, ILEIndex = 26), TextColor = the race's
+                // own colour.
                 draw_combo(cv, x + 50, y + 25, kScenComboW,
-                           kScenPTypeName[pt < 8 ? pt : 5], glyphs8, 112, 127,
-                           218);
-                draw_combo(cv, x + 50, y + 45, kScenComboW, "Normal", glyphs8,
-                           112, 127, 218);
+                           kScenPTypeName[pt < 8 ? pt : 5], glyphs8,
+                           kScenRaceColor[race][0], kScenRaceColor[race][1],
+                           kScenRaceColor[race][2]);
+                // FUN_00410f2c shows R*BehaviorCB only when the host drives the
+                // race and its type is a CPU one (1..3, 6, 7); a Human seat keeps
+                // the player combo alone - exactly what bin/RaceSelectorRef2.png
+                // shows for the Goblins cell ("Human", no "Normal" beneath it).
+                if (pt == 1 || pt == 2 || pt == 3 || pt == 6 || pt == 7) {
+                    draw_combo(cv, x + 50, y + 45, kScenComboW, "Normal",
+                               glyphs8, kScenRaceColor[race][0],
+                               kScenRaceColor[race][1],
+                               kScenRaceColor[race][2]);
+                }
             } else {
-                // R*InfoLbl ("Unavailable"), child of R*CenterPnl at (49,59).
-                text_at(cv, glyphs8, x + 48 + 49, y + 59, "Unavailable",
-                        112, 115, 218, false, false);
+                // R*InfoLbl: AOWFont Age8s, TextColor = the race's own colour,
+                // Alignment awCenter / ahBottom with BottomOffset 7 inside
+                // R*CenterPnl (48,0 99x66) - i.e. centred on the cell's 99 px
+                // caption column and 7 px above the cell's bottom edge. The
+                // shipped capture puts its ink at cell + (72..120, 48..55).
+                text_at(cv, glyphs8, x + 48 + 99 / 2, y + 48, "Unavailable",
+                        kScenRaceColor[race][0], kScenRaceColor[race][1],
+                        kScenRaceColor[race][2], true, false);
             }
             // The R*FogPnl overlay covers the whole cell, so an unlit/locked
             // cell greys out its icon and controls too.
-            if (fog > 0) cv.fill(x, y, kScenCellW, kScenCellH, 20, 16, 14, fog);
+            if (fog > 0) cv.fill(x, y, kScenCellW, kScenCellH, 0, 0, 0, fog);
+        }
+
+        // ---- ChatPnl (SidesPnl's bottom strip, DFM 0,286 484x145) -----------
+        // The panel's own children (TSCENSETUP.dfm, all relative to ChatPnl):
+        //   ChatMemo (10,12) 299x93   TAOWMemo, GenericF 64 frame + GenericT 4
+        //   ChatEdit (10,114) 299x21  TAOWEdit, ILEdit TitleScreen ILIndex 23
+        //                             (= ScenEd.BMP 2/48/2 x 21)
+        //   ConnectionPnl (318,12) 166x133, no art, holding
+        //     PlayerListSort (0,0) 71x15    "Players"     ScenCol 52/53/54
+        //     AOWButton1    (70,0) 26x15    "Ping"        ScenCol 52/53/54
+        //     PreferredRaceSort (95,0) 61x15 "Pref. Race" ScenCol 52/53/54
+        //     PlayerList (0,15) 70x78, PingList (70,15) 25x78,
+        //     PreferredRaceList (95,15) 61x78 - ScenFr frame + blank1 body.
+        // ChatFogPnl (a 484x145 TAOWImage of GenericT 1, Priority 100) sits over
+        // the lists while the header buttons carry priorities 300..500, which is
+        // why the shipped screen's headers stay legible and its lists do not.
+        {
+            const int px = kChatX, py = kChatY;
+            blit_panel_body(cv, px, py, kChatW, kChatH);
+            blit9_impl(cv, scen_frame, px, py, kChatW, kChatH, 2, 2);
+            // ChatMemo: ScenFr frame over the blank1 body.
+            const int mx = px + kChatMemoX, my = py + kChatMemoY;
+            if (scen_blank_tex.ok) {
+                fill_tex(cv, scen_blank_tex, mx, my, kChatMemoW, kChatMemoH);
+            }
+            blit9_impl(cv, scen_scenfr, mx, my, kChatMemoW, kChatMemoH, 2, 2);
+            // ChatEdit: the 21 px ScenEd 3-piece.
+            blit_btn3(cv, scen_chated, px + kChatEditX, py + kChatEditY,
+                      kChatEditW, kChatEditH);
+            // ChatFogPnl (a 484x145 TAOWImage of GenericT 1, Priority 100) is the
+            // fog the engine fades the chat area with; the shipped screen shows
+            // its tile at the same ~9 % the panel body carries, so the body's
+            // own masked fill already reproduces it.
+            // ConnectionPnl: the three column headers over their list boxes.
+            for (int i = 0; i < 3; ++i) {
+                const int hx = px + kConnX + kConnColX[i];
+                const int hy = py + kConnY;
+                const int hw = kConnColW[i];
+                blit_btn3(cv, scen_col, hx, hy, hw, kConnHdrH);
+                text_at(cv, glyphs8, hx + hw / 2, hy + 2, kConnColText[i], 238,
+                        238, 230, true, false);
+                const int lx2 = hx, ly2 = hy + kConnListY;
+                if (scen_blank_tex.ok) {
+                    fill_tex(cv, scen_blank_tex, lx2, ly2, hw, kConnListH);
+                }
+                blit9_impl(cv, scen_scenfr, lx2, ly2, hw, kConnListH, 2, 2);
+            }
+            // The chat strip is shown dimmed: measured against
+            // bin/RaceSelectorRef2.png every element inside ChatPnl sits at ~24 %
+            // of its own colour (the "Players" caption's (238,238,230) reads
+            // (57,57,49), the ScenFr frames' (82,80,90) read below 30), i.e. the
+            // ChatFogPnl (GenericT 1, Priority 100) lays a black veil at ~194
+            // over the whole panel - headers included.
+            cv.fill(px, py, kChatW, kChatH, 0, 0, 0, kChatFogAlpha);
         }
 
         // The Settings panel (SettingsPnl) is a TAOWPanel too (STGrFr frame over
@@ -3779,6 +4004,9 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
         // the celtic dialog buttons. The captions use FontModule.Age10s with
         // TextColor 15134446 (RGB 238,238,230) and TextSelColor clWhite.
         for (int i = 0; i < 3; ++i) {
+            // StartBtn only exists once a map is confirmed (the shipped screen
+            // shows Scenario/Exit alone until the picker's Select).
+            if (i == 2 && !scen_map_confirmed) continue;
             const int by = kScenBtnY0 + i * kScenBtnPitch;
             const int st = (i == scen_hover) ? (scen_pressed == i ? 1 : 2) : 0;
             draw_main_btn(cv, kScenBtnX, by, kScenBtnW, st, kScenBtnText[i]);
@@ -4310,6 +4538,17 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
         // type the map stored for it. Only a confirmed map lights them, since
         // highlighting a file in the picker just fills the info strip.
         if (confirm) {
+            // The ScenarioLbl caption + the Start! button: the shipped screen
+            // shows the chosen map's name in the title and reveals Start! only
+            // once one is confirmed (bin/RaceSelectorRef.png has two buttons,
+            // bin/RaceSelectorRef2.png three). FUN_00411460's per-race pass also
+            // *drops* every lit cell's R*FogPnl at once - there is no fade - so
+            // the counter is simply maxed out here.
+            scen_map_confirmed = true;
+            scen_glow = kScenGlowFrames;
+            const std::size_t dot = name.find_last_of('.');
+            scen_map_title = dot == std::string::npos ? name
+                                                      : name.substr(0, dot);
             for (int r = 0; r < kScenRaceCount; ++r) scen_available[r] = false;
             if (have_roster) {
                 // TSetupControl.hPickMap (0x557e20c8): one TSetupSettings record
@@ -4399,6 +4638,7 @@ const int t = scen_glow >= kScenGlowFrames ? kScenGlowFrames : scen_glow;
             return -4200;  // a click-away closes the list
         }
         for (int i = 0; i < 3; ++i) {
+            if (i == 2 && !scen_map_confirmed) continue;  // Start! hidden
             const int by = kScenBtnY0 + i * kScenBtnPitch;
             if (kScenBtnX <= x && x < kScenBtnX + kScenBtnW && by <= y &&
                 y < by + kScenBtnH) {
@@ -6729,7 +6969,9 @@ void gtype_action(int index) {
     case 0:
         // Single Computer -> TScenSetup (FUN_0042b588 -> FUN_00410bd8).
         g.scene.screen = 2;
-        g.scene.scen_glow = 0;   // start fogged; the "glow up" runs on WM_TIMER
+        // Every race reads "Unavailable" until a map is confirmed, and a
+        // confirmed map lights its races at once - so start fully lit.
+        g.scene.scen_glow = kScenGlowFrames;
         g.scene.scen_hover = -1;
         g.scene.scen_pressed = -1;
         g.scene.scen_maps_open = false;
@@ -6789,10 +7031,10 @@ void scen_action(int hit) {
         if (hit == -2000 && s.scen_map_sel >= 0 &&
             s.scen_map_sel < static_cast<int>(s.scen_maps.size())) {
             // Selecting a map loads it into the setup control, which is what
-            // lights the races (FUN_00411460).
+            // lights the races (FUN_00411460). select_map() maxes the fog
+            // counter, so the lit cells are bright on the very next frame.
             s.select_map(s.scen_maps[static_cast<std::size_t>(s.scen_map_sel)],
                          true);
-            s.scen_glow = 0;  // re-run the "glow up" with the new race set
         }
         std::printf("scenario: map dialog %s\n",
                     hit == -2000 ? "select" : "cancel");
@@ -6945,12 +7187,12 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (s.gt_frame < kGtPanelH) s.gt_frame += kGtAnimStep;
             if (s.gt_frame > kGtPanelH) s.gt_frame = kGtPanelH;
         } else if (s.screen == 2) {
-            // ---- Update handler (WM_TIMER): the "glow up" animation ----
-// Every frame, if scen_glow < kScenGlowFrames we add one. Reaching the limit
-// stops the counter and all races stay fully lit. Note: THIS is what gives the
-// UI its appear speed — there is no separate `animationSpeed` variable; the
-// frame rate is implicit (1 increment per WM_TIMER tick ~= ~60 Hz) and the total
-// number of steps (kScenGlowFrames = 90) caps the speed.
+            // ---- Update handler (WM_TIMER) ----
+            // Nothing to animate: FUN_00411460 lights the races the chosen map's
+            // roster holds the moment the map is picked, so the Scenario screen
+            // sets scen_glow to kScenGlowFrames there and each cell's R*FogPnl
+            // simply drops out (a race with no player keeps its fog -
+            // FUN_00410f2c's param_2 == 0 branch).
         } else if (s.screen == 3) {
             // The map window's own Update (AoW.exe FUN_00452e50): resolve the
             // hovered hex and edge-scroll, once per frame. This is what keeps
@@ -7342,7 +7584,8 @@ int run_headless() {
         if (g.render_hover >= 0) g.scene.gt_hover = g.render_hover;
     } else if (g.screen_scenario) {
         g.scene.screen = 2;
-        g.scene.scen_glow = g.render_frame;  // 0 = fogged, 90 = fully lit
+        // A confirmed map lights its races at once (select_map), and until then
+        // every cell is "Unavailable" whatever the fog counter says.
         if (g.render_hover >= 0) g.scene.scen_hover = g.render_hover;
         // --scen-pick confirms a map (the picker's Select), which lights its
         // races and shows each one's player type from the map's roster.
@@ -7767,7 +8010,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
     }
     if (g.screen_scenario) {
         g.scene.screen = 2;
-        g.scene.scen_glow = 0;  // start fogged and let the "glow up" run
+        g.scene.scen_glow = kScenGlowFrames;  // a picked map lights instantly
         g.scene.select_map(g.scene.scen_map_name);
     }
 
