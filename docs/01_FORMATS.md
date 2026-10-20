@@ -88,6 +88,16 @@ lookup table.
 Because the class-specific tail length is variable, records are located by
 their signature (`index, class_id, fmt, name_len, printable name`).
 
+**Sentinel slot ids.** A multi-layer sprite's *secondary* layer can be stored
+with the id `0xFFFFFFFF` instead of a real slot: `Images\Str_node.ILB`'s last
+record (`NEarth06.BMP`, the overlay layer of the node before it) carries it, as
+do the extra layers in several other `Images\*.ILB`. `0xFFFFFFFF` is the
+directory's own end marker (see the loop above) and never a real slot, so any
+consumer that sizes an array by `IlbEntry::index` must skip it - `mapviz`'s
+library index used to take the maximum and asked for 2^32 sprites, a
+`std::bad_alloc` that aborted the process as soon as a map with state nodes
+(e.g. `Scenario\Custom\Blood Isles.hsm`) was started.
+
 Implemented by `src/engine/ilb.cpp` (`aow ilb <file>`), validated against all
 538 `.ILB` files of this install; decompiled reference in
 `re/exports/ilpack/`. The older `tools/ilb_tool.py` is heuristic (name scan

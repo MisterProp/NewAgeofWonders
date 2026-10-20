@@ -297,14 +297,26 @@ void fill_library(Library& lib, const IlbFile& ilb) {
     // how `IsoHex.TUpperIsometricHexagon.Show` asking for frame 0x28 resolves to
     // `hu_er.BMP` (EARTHHEX slot 40) and how HEXTRANS.ILB's 16-spaced terrain
     // blocks line up. For a contiguous library (id == position) nothing changes.
+    //
+    // A TImageNode's extra layer carries a sentinel id instead of a slot:
+    // `Images\Str_node.ILB`'s last entry ("NEarth06.BMP", the overlay layer of
+    // the node before it) is stored with id 0xFFFFFFFF, and `Images\*.ILB` use
+    // the same convention for their secondary layers. Sizing the slot vector
+    // from such an id asks for 2^32 Sprites - a `std::bad_alloc` that aborts the
+    // process the moment a map with state nodes (e.g. Blood Isles.hsm) is
+    // started. Ignore ids that cannot be a real slot, exactly like
+    // `plausible()` guards absurd frame sizes.
+    constexpr std::uint32_t kMaxSlot = 0x10000;
     std::size_t n = 0;
     for (const IlbEntry& e : ilb.entries()) {
+        if (e.index >= kMaxSlot) continue;
         if (static_cast<std::size_t>(e.index) > n) n = e.index;
     }
     lib.frames.assign(n + 1, Sprite{});
     lib.names.assign(n + 1, std::string());
     for (std::size_t i = 0; i < ilb.entries().size(); ++i) {
         const IlbEntry& e = ilb.entries()[i];
+        if (e.index >= kMaxSlot) continue;
         const std::size_t slot = static_cast<std::size_t>(e.index);
         if (slot > n) continue;
         Sprite s;
