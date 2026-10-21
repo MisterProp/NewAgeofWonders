@@ -24,7 +24,11 @@
 //
 //   AoW.exe [--root <dir>] [--width N] [--height N]
 //                [--render <out.png> --frame N] [--frames N] [--no-music]
-//                [--captions a,b,c,d,e] [--overlay]
+//                [--captions a,b,c,d,e] [--overlay] [--fps N]
+//
+//   F1 in the game window toggles a frames-per-second read-out in the top-left
+//   corner (FpsMeter / draw_fps_overlay); --fps N bakes it into a head-less
+//   render.
 //
 // Windows-only: Win32 + GDI + WinMM (via aow::AudioOut) for output, with the
 // title music decoded by libopenmpt (aow::openmpt::Player). The asset/engine
@@ -97,6 +101,23 @@ double bench_now_ms() {
     return static_cast<double>(c.QuadPart) * 1000.0 /
            static_cast<double>(freq.QuadPart);
 }
+
+// ------------------------------------------------------------ the frame clock
+// The form's FrameRate is 30 (DFM), i.e. one frame every 33.3 ms. The replica
+// drives that clock with a high-resolution waitable timer instead of SetTimer():
+// WM_TIMER is not a high-resolution timer - it is serviced off the system clock
+// tick (15.6 ms here), so SetTimer(33) really fires every 3 ticks = 46.9 ms
+// (~21 fps). A waitable timer keeps the 33 ms period (measured 33.07 ms =
+// 30.2 fps; see docs/09_GAME_SCREEN.md). SetTimer stays as the fallback for
+// systems where no waitable timer can be created.
+constexpr UINT kFrameMs = 33;
+constexpr UINT_PTR kFrameTimerId = 1;  // the WM_TIMER fallback's id
+
+// CREATE_WAITABLE_TIMER_HIGH_RESOLUTION (Windows 10 1803+); older SDK headers
+// do not define it.
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
 
 // ------------------------------------------------------------- recovered spec
 // Frame tick (AoW.exe 0x0041ae08; it increments the scene's +0x64 and +0x68).
@@ -4306,6 +4327,20 @@ struct Scene {
         }
     }
 
+    // The same face, left-anchored and in an explicit colour - the F1 frames-
+    // per-second read-out. glyph_ink paints the ink in (r,g,b) and the glyph
+    // box's palette entry 0 black, which is what lets the read-out sit on a
+    // black plate with no seams (see draw_fps_overlay).
+    void draw_text8_left(Canvas& cv, int x, int y, const std::string& s,
+                         std::uint8_t r, std::uint8_t g, std::uint8_t b) const {
+        int pen = x;
+        for (unsigned char c : s) {
+            const Glyph& gl = glyphs8[c];
+            if (gl.ok) cv.glyph_ink(gl.face, pen, y, r, g, b);
+            pen += advance8_of(c);
+        }
+    }
+
     // --- Scenario screen (TScenSetup) ------------------------------------
     int advance10_of(unsigned char c) const {
         const Glyph& g = glyphs10[c];
@@ -6797,6 +6832,80 @@ struct Scene {
     }
 };
 
+// ---------------------------------------------------------------- FPS counter
+// F1 toggles a frames-per-second read-out in the frame's top-left corner. It
+// counts the frames the window actually *presented* - one per WM_PAINT - and
+// averages them over a one-second window, so it reports the real rate of the
+// frame clock (the 33 ms waitable timer, see start_frame_clock) rather than the
+// form's nominal FrameRate = 30: a frame that overruns its budget is not caught
+// up (the clock does not accumulate), so it shows up in the read-out.
+constexpr int kFpsWindowMs = 1000;   // averaging window
+constexpr int kFpsX = 4;             // read-out anchor (top-left of the frame)
+constexpr int kFpsY = 4;
+constexpr int kFpsPad = 2;           // plate border around the text
+constexpr int kFpsPlateAlpha = 170;  // the plate's opacity (0..255)
+
+struct FpsMeter {
+    bool on = false;            // F1 switched the read-out on
+    double value = 0.0;         // frames per second, last completed window
+    double window_start = 0.0;  // ms timestamp of the window's first frame
+    int frames = 0;             // frames presented in the current window
+
+    // Restart the averaging window. F1 calls this when it switches the read-out
+    // on so the first number comes from fresh frames instead of a stale one.
+    void reset(double now_ms) {
+        value = 0.0;
+        window_start = now_ms;
+        frames = 0;
+    }
+
+    // One presented frame. The window closes when it has spanned kFpsWindowMs,
+    // which makes the read-out update about once a second.
+    void tick(double now_ms) {
+        if (window_start <= 0.0) {
+            window_start = now_ms;
+            frames = 0;
+            return;
+        }
+        ++frames;
+        const double elapsed = now_ms - window_start;
+        if (elapsed >= static_cast<double>(kFpsWindowMs)) {
+            value = static_cast<double>(frames) * 1000.0 / elapsed;
+            window_start = now_ms;
+            frames = 0;
+        }
+    }
+
+    // The read-out's caption: a dash until the first window closes, so the
+    // counter never flashes a bogus 0 while it starts up.
+    std::string text() const {
+        if (value <= 0.0) return "FPS --";
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "FPS %.0f", value);
+        return buf;
+    }
+};
+
+// The F1 read-out, drawn over the finished frame of any screen: a translucent
+// black plate (so it stays legible on the bright title backdrop and on the
+// world map alike) with `s` - FpsMeter::text(), "FPS 30" - on it in the game's
+// own Age8s face, the small FontModule.Age8s face the GameLbl uses (glyphs8,
+// loaded by Scene::load for every screen). The plate is sized from the shipped
+// face's own metrics, so a longer number ("FPS 144") widens it instead of
+// overflowing.
+void draw_fps_overlay(Canvas& cv, const Scene& sc, const std::string& s) {
+    const int tw = sc.text_w(sc.glyphs8, s);
+    int th = 8;
+    for (unsigned char c : s) {
+        const Scene::Glyph& gl = sc.glyphs8[c];
+        if (gl.ok) th = std::max(th, static_cast<int>(gl.face.h));
+    }
+    if (tw <= 0) return;
+    cv.fill(kFpsX - kFpsPad, kFpsY - kFpsPad, tw + 2 * kFpsPad,
+            th + 2 * kFpsPad, 0, 0, 0, kFpsPlateAlpha);
+    sc.draw_text8_left(cv, kFpsX, kFpsY, s, 255, 255, 255);
+}
+
 // One head-less in-game click: `right` picks the button, so a test can drive a
 // mixed interaction (select with the left button, clear with the right).
 struct GameClick { int x; int y; bool right; };
@@ -6810,6 +6919,8 @@ struct App {
     bool running = true;
     int frames_done = 0;
     int frames_limit = 0;      // 0 = unlimited
+    FpsMeter fps;              // the F1 frames-per-second read-out
+    HANDLE frame_timer = nullptr;  // the 30 fps waitable timer (null = WM_TIMER)
     bool headless = false;
     std::string render_png;
     int render_frame = 90;     // frame to render head-less (logo fully faded in)
@@ -7156,10 +7267,93 @@ void game_action(int hit) {
     std::fflush(stdout);
 }
 
+// ----------------------------------------------------------------- frame clock
+// A 30 fps frame clock: a waitable timer (high resolution where the OS has it)
+// that the message loop waits on, so a frame lands every 33 ms. WM_TIMER - which
+// the system quantises to its 15.6 ms clock tick, so SetTimer(33) really fires
+// every 46.9 ms (~21 fps) - drives the ticks only when no waitable timer can be
+// created, so the game still runs (just slower) on such a system.
+bool start_frame_clock(HWND hwnd) {
+    HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr,
+                                          CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+                                          TIMER_ALL_ACCESS);
+    if (!timer) {
+        // Pre-1803 Windows: a plain waitable timer is still not bound to the
+        // WM_TIMER tick and keeps the 33 ms period.
+        timer = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+    }
+    if (timer) {
+        LARGE_INTEGER due{};
+        due.QuadPart = -static_cast<LONGLONG>(kFrameMs) * 10000;  // 100 ns units
+        if (SetWaitableTimer(timer, &due, static_cast<LONG>(kFrameMs), nullptr,
+                             nullptr, FALSE)) {
+            g.frame_timer = timer;
+            return true;
+        }
+        CloseHandle(timer);
+    }
+    SetTimer(hwnd, kFrameTimerId, kFrameMs, nullptr);
+    return false;
+}
+
+void stop_frame_clock(HWND hwnd) {
+    if (g.frame_timer) {
+        CancelWaitableTimer(g.frame_timer);
+        CloseHandle(g.frame_timer);
+        g.frame_timer = nullptr;
+    }
+    KillTimer(hwnd, kFrameTimerId);
+}
+
+// One frame tick (AoW.exe 0x0041ae08: the per-frame update, which increments the
+// scene's +0x64/+0x68). Run by the message loop whenever the waitable timer
+// signals, or from WM_TIMER when that timer is unavailable.
+void on_frame_tick(HWND hwnd) {
+    Scene& s = g.scene;
+    if (s.screen == 1) {
+        // MultiWinUpdate: the panels slide for kGtPanelH/kGtAnimStep
+        // frames (286/10 = 29 frames, ~1 s at the form's 30 fps).
+        if (s.gt_frame < kGtPanelH) s.gt_frame += kGtAnimStep;
+        if (s.gt_frame > kGtPanelH) s.gt_frame = kGtPanelH;
+    } else if (s.screen == 2) {
+        // ---- the Scenario screen's per-frame Update ----
+        // Nothing to animate: FUN_00411460 lights the races the chosen map's
+        // roster holds the moment the map is picked, so the Scenario screen
+        // sets scen_glow to kScenGlowFrames there and each cell's R*FogPnl
+        // simply drops out (a race with no player keeps its fog -
+        // FUN_00410f2c's param_2 == 0 branch).
+    } else if (s.screen == 3) {
+        // The map window's own Update (AoW.exe FUN_00452e50): resolve the
+        // hovered hex and edge-scroll, once per frame. This is what keeps
+        // the view scrolling while the pointer rests against an edge.
+        s.game_update();
+    } else if (s.screen == 0) {
+        s.counter64++;
+        s.counter68++;
+        // The real screen rolls the credits after frame 750 and then returns
+        // to the logo; the replica restarts the title timeline there.
+        if (s.counter68 >= static_cast<std::uint32_t>(kTitleEnd)) {
+            s.counter64 = 0;
+            s.counter68 = 0;
+        }
+    }
+    ++g.frames_done;
+    InvalidateRect(hwnd, nullptr, FALSE);
+    if (g.frames_limit && g.frames_done >= g.frames_limit) {
+        PostQuitMessage(0);
+    }
+}
+
 void blit_to_window(HDC hdc) {
     if (g.client_w <= 0 || g.client_h <= 0) return;
+    // One frame is about to be presented: F1's read-out counts them here (see
+    // FpsMeter) - every WM_PAINT is one frame the player actually sees.
+    g.fps.tick(bench_now_ms());
     const int hover = g.scene.hit_test(g.scene.mouse_x, g.scene.mouse_y);
-    const Canvas cv = g.scene.render(hover);
+    Canvas cv = g.scene.render(hover);
+    // The F1 frame-rate read-out rides on top of the finished frame, whatever
+    // screen it is, so it never disturbs a screen's own composition.
+    if (g.fps.on) draw_fps_overlay(cv, g.scene, g.fps.text());
 
     BITMAPINFO bmi{};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -7177,44 +7371,15 @@ void blit_to_window(HDC hdc) {
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE:
-        SetTimer(hwnd, 1, 33, nullptr);  // 30 fps - the form's FrameRate
+        // 30 fps - the form's FrameRate, driven by a waitable timer (WM_TIMER
+        // is only the fallback: it is quantised to the system clock tick).
+        start_frame_clock(hwnd);
         return 0;
-    case WM_TIMER: {
-        Scene& s = g.scene;
-        if (s.screen == 1) {
-            // MultiWinUpdate: the panels slide for kGtPanelH/kGtAnimStep
-            // frames (286/10 = 29 frames, ~1 s at the form's 30 fps).
-            if (s.gt_frame < kGtPanelH) s.gt_frame += kGtAnimStep;
-            if (s.gt_frame > kGtPanelH) s.gt_frame = kGtPanelH;
-        } else if (s.screen == 2) {
-            // ---- Update handler (WM_TIMER) ----
-            // Nothing to animate: FUN_00411460 lights the races the chosen map's
-            // roster holds the moment the map is picked, so the Scenario screen
-            // sets scen_glow to kScenGlowFrames there and each cell's R*FogPnl
-            // simply drops out (a race with no player keeps its fog -
-            // FUN_00410f2c's param_2 == 0 branch).
-        } else if (s.screen == 3) {
-            // The map window's own Update (AoW.exe FUN_00452e50): resolve the
-            // hovered hex and edge-scroll, once per frame. This is what keeps
-            // the view scrolling while the pointer rests against an edge.
-            s.game_update();
-        } else if (s.screen == 0) {
-            s.counter64++;
-            s.counter68++;
-            // The real screen rolls the credits after frame 750 and then returns
-            // to the logo; the replica restarts the title timeline there.
-            if (s.counter68 >= static_cast<std::uint32_t>(kTitleEnd)) {
-                s.counter64 = 0;
-                s.counter68 = 0;
-            }
-        }
-        ++g.frames_done;
-        InvalidateRect(hwnd, nullptr, FALSE);
-        if (g.frames_limit && g.frames_done >= g.frames_limit) {
-            PostQuitMessage(0);
-        }
+    case WM_TIMER:
+        // Fallback tick only: the normal clock is the waitable timer the message
+        // loop waits on (see start_frame_clock).
+        on_frame_tick(hwnd);
         return 0;
-    }
     case WM_SIZE:
         g.client_w = LOWORD(lp);
 
@@ -7395,6 +7560,15 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_KEYDOWN:
+        // F1 toggles the frame-rate read-out. It is a debugging aid that
+        // belongs to no screen, so it is resolved before the screens' own key
+        // tables (see FpsMeter / draw_fps_overlay).
+        if (wp == VK_F1) {
+            g.fps.on = !g.fps.on;
+            g.fps.reset(bench_now_ms());
+            InvalidateRect(hwnd, nullptr, FALSE);  // show / hide it at once
+            return 0;
+        }
         // TAoWHSMapKeyboard.KeyDown (AoWEPACK 0x55773b08): the in-game map's own
         // key table (the 'C' / 'L' camera keys under Screen::game_key).
         if (g.scene.screen == 3 && g.scene.game_key(wp)) return 0;
@@ -7437,7 +7611,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_ERASEBKGND:
         return 1;  // we paint every pixel
     case WM_DESTROY:
-        KillTimer(hwnd, 1);
+        stop_frame_clock(hwnd);
         PostQuitMessage(0);
         return 0;
     default:
@@ -7465,6 +7639,8 @@ void print_usage() {
         "                        (0 = font2.BMP, 1 = font.bmp; default 1)\n"
         "  --crop X Y W H        crop the rendered image (small previews)\n"
         "  --frames N            quit after N frames (smoke test)\n"
+        "  --fps N               draw the F1 frame-rate read-out with value N\n"
+        "                        (F1 toggles the live counter in the window)\n"
         "  --captions a,b,c,d,e  hover captions for the five orbs\n"
         "  --overlay             enable the engine's TSprite16 orb overlay\n"
         "  --screen title|gtype|scenario  start: title, Game Type, or Scenario\n"
@@ -7676,7 +7852,10 @@ int run_headless() {
         }
     }
     const int hover = g.render_hover;
-    const Canvas full = g.scene.render(hover);
+    Canvas full = g.scene.render(hover);
+    // --fps N bakes the F1 read-out into the render, so its placement and the
+    // shipped face it uses are provable from a PNG.
+    if (g.fps.on) draw_fps_overlay(full, g.scene, g.fps.text());
     const Canvas cv = (g.crop_w > 0 && g.crop_h > 0)
                           ? full.crop(g.crop_x, g.crop_y, g.crop_w, g.crop_h)
                           : full;
@@ -7689,6 +7868,9 @@ int run_headless() {
     std::printf("wrote %s  %dx%d  frame=%d  scene_top=%d  orb0_x=%d\n",
                 g.render_png.c_str(), cv.width(), cv.height(), g.render_frame,
                 g.scene.scene_top(), g.scene.button_left(0));
+    if (g.fps.on) {
+        std::printf("fps=%s x=%d y=%d\n", g.fps.text().c_str(), kFpsX, kFpsY);
+    }
     std::printf("orb_ids=");
     for (int i = 0; i < kButtonCount; ++i) {
         for (int s = 0; s < kOrbStride; ++s) {
@@ -7914,6 +8096,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
             if (i + 1 < argc) g.crop_h = std::atoi(acp_from_w(argv[++i]).c_str());
         }
         else if (a == "--frames") { next(); g.frames_limit = std::atoi(v.c_str()); }
+        else if (a == "--fps") {
+            // head-less: bake the F1 frame-rate read-out into the render with
+            // this value (the window's own counter is driven by WM_PAINT).
+            next();
+            g.fps.on = true;
+            g.fps.value = std::atof(v.c_str());
+        }
         else if (a == "--captions") {
             next();
             if (!split_captions(v)) {
@@ -8057,11 +8246,33 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
     ShowWindow(g.hwnd, nShow);
     UpdateWindow(g.hwnd);
 
+    // The frame clock: wait on the waitable timer (33 ms = 30 fps) and on the
+    // message queue at once. A signalled timer is one frame tick; input is
+    // dispatched as before. Without a waitable timer (fallback) there is nothing
+    // to wait on but the queue, and WM_TIMER drives the ticks.
     MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+    bool quit = false;
+    while (!quit) {
+        const DWORD wait = MsgWaitForMultipleObjectsEx(
+            g.frame_timer ? 1u : 0u, g.frame_timer ? &g.frame_timer : nullptr,
+            INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        if (g.frame_timer && wait == WAIT_OBJECT_0) {
+            on_frame_tick(g.hwnd);
+            continue;
+        }
+        if (wait != WAIT_OBJECT_0 + (g.frame_timer ? 1u : 0u)) {
+            break;  // WAIT_FAILED / an abandoned wait: do not spin
+        }
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) {
+                quit = true;
+                break;
+            }
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
     }
+    stop_frame_clock(g.hwnd);
 
     g.audio_stop.store(true);
     if (g.audio_thread.joinable()) g.audio_thread.join();

@@ -316,6 +316,7 @@ Inside the in-game screen the recovered controls are live:
 | click on the **world map** | selects the hex under the cursor; the view does **not** move (section 6) |
 | click / drag on the **scanner minimap** | centres the camera on the clicked hex (section 6) |
 | `C` | centres the camera on the selected hex (the engine's `TSelectedArmy.Center`) |
+| `F1` | toggles the frames-per-second read-out in the frame's top-left corner (`FpsMeter`) |
 | pointer against a **map edge** | edge-scrolls the view 16 px per update (section 6) |
 
 The whole flow is exercised head-less by `--start-map <file.HSM>`, which runs the
@@ -338,6 +339,42 @@ hero (via `Scene::game_center_leader`) once the map window's viewport size is
 resolved. Unlike the `L` key, the start is **not** selected by default: the leader
 is left unselected so the player starts with a clean map. On `Tutorial.hsm` the
 human (Halflings) hero sits at (15,34), so the camera lands at `296,916`.
+
+### The `F1` frame-rate read-out
+
+`F1` is a debugging aid that belongs to no screen: `FpsMeter` counts the frames
+the window actually **presented** (one per `WM_PAINT`) and averages them over a
+one-second window (`kFpsWindowMs`), so the number is the rate the player really
+sees, not what the form asked for.
+
+The form's `FrameRate = 30` is real because the frame clock is a 33 ms
+**waitable timer** (`start_frame_clock` - a high-resolution waitable timer where
+the OS has one, a plain one otherwise) that the message loop waits on next to
+its input queue. That matters: the first implementation used the form's own
+`SetTimer(33)`, and `WM_TIMER` is serviced off the 15.6 ms system clock, so the
+request rounded up to three ticks = 46.9 ms and the whole game ran at **~21 fps**
+(measured 47.12 ms over 40 ticks with an empty message loop - no rendering
+involved - and `timeBeginPeriod(1)` did not change it, 47.5 ms). The same 33 ms
+period on the other APIs is on time on the same box: waitable timer 33.07 ms
+(30.2 fps), `timeSetEvent(33, 1)` 33.04 ms (30.3 fps). With the waitable timer
+the live title screen and the live Tutorial map both report **30 fps**;
+`WM_TIMER` remains the fallback tick for systems where no waitable timer can be
+created (the game then still runs, just at the coarse rate). A frame that
+overruns the 33 ms budget is not caught up - the clock does not accumulate
+ticks - so it lowers the read-out instead.
+
+`draw_fps_overlay` composites the read-out over the finished frame in
+`blit_to_window`, whatever screen is up, so it never disturbs a screen's own
+composition: a translucent black plate (`kFpsPlateAlpha`) sized from the shipped
+face's metrics, and the game's own `FontModule.Age8s` face (`glyphs8`, the
+`GameLbl` font every screen already loads) in white - `glyph_ink` keeps the
+glyph boxes' palette entry 0 black so the text sits seamlessly on the plate.
+The anchor is `kFpsX`/`kFpsY` = (4,4), the frame's top-left corner.
+
+`--fps N` bakes the read-out into a head-less render (`fps=FPS N x=4 y=4` in the
+log), which is how the build's smoke test pins the overlay and its placement;
+the live capture is `bin/FpsCounterLive.png`, the head-less one
+`bin/FpsCounterHeadless.png`.
 
 ### 5.2 Resizing: the interface reflows, it does not stretch
 

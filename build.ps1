@@ -635,6 +635,45 @@ if ($Test) {
     Remove-Item $mpng, $mlog -Force
     Write-Host 'menu smoke test: ok'
 
+    # F1 frame-rate read-out (FpsMeter + draw_fps_overlay): `--fps N` bakes the
+    # live counter into a head-less render, so the read-out is provable without
+    # a window. The same frame rendered with and without --fps must differ (if
+    # they match, the overlay is not composited at all) and the run must report
+    # the anchor, which pins the top-left placement.
+    $fplain = Join-Path $BinDir 'fps_smoke_plain.png'
+    $ffps   = Join-Path $BinDir 'fps_smoke.png'
+    $flog   = Join-Path $BinDir 'fps_smoke.txt'
+    Remove-Item $fplain, $ffps, $flog -Force -ErrorAction SilentlyContinue
+    foreach ($case in @(@{ png = $fplain; args = '' },
+                        @{ png = $ffps; args = ' --fps 30' })) {
+        $fargs = '--root "{0}" --render "{1}" --frame 90 --no-music{2}' -f `
+            $mroot, $case.png, $case.args
+        $fproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $fargs -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $flog -RedirectStandardError "$flog.err"
+        if ($fproc.ExitCode -ne 0) {
+            throw "fps smoke test failed ($($fproc.ExitCode))"
+        }
+        if (-not (Test-Path $case.png) -or (Get-Item $case.png).Length -le 1000) {
+            throw "fps smoke test produced no PNG ($($case.png))"
+        }
+        if ($case.args -ne '') {
+            $fline = Get-Content $flog -Raw
+            if ($fline -notmatch 'fps=FPS 30 x=4 y=4') {
+                throw "fps read-out regression: $fline"
+            }
+        }
+        Remove-Item $flog -Force -ErrorAction SilentlyContinue
+        Remove-Item "$flog.err" -Force -ErrorAction SilentlyContinue
+    }
+    $fplain_hash = (Get-FileHash $fplain -Algorithm SHA256).Hash
+    $ffps_hash = (Get-FileHash $ffps -Algorithm SHA256).Hash
+    if ($fplain_hash -eq $ffps_hash) {
+        throw 'fps smoke test: --fps did not change the render (overlay missing)'
+    }
+    Remove-Item $fplain, $ffps -Force
+    Write-Host 'fps read-out smoke test: ok'
+
     # Game Type smoke test: the TMultiWindow screen shown after orb 0. Renders
     # the resting frame (the +0xF0 slide counter clamped to GamePanel's 286 px
     # height) and pins the recovered layout: a 640x480 SetupBg03 backdrop, the
