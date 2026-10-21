@@ -60,7 +60,10 @@ Write-Host "compiler: $cxx"
 
 # The port's game executable carries the game's own icon.  Compile a Win32
 # resource from Age of Wonders.ico (the very icon the original AoW.exe embeds)
-# and return the object/response file to link, or $null if it is unavailable.
+# and return the object/response file to link.  A missing icon or windres is a
+# hard error: silently linking without the resource is exactly how an icon-less
+# AoW.exe gets shipped (the shell then falls back to the generic application
+# icon).  See Test-ExeHasIconResource for the post-link check.
 function Find-Windres {
     $dir = Split-Path $cxx
     foreach ($name in 'windres.exe', 'windres') {
@@ -75,8 +78,7 @@ function Find-Windres {
 function New-IconResource {
     $icon = Join-Path $gameRoot 'Age of Wonders.ico'
     if (-not (Test-Path $icon)) {
-        Write-Warning "game icon not found ($icon) - building without an icon"
-        return $null
+        throw "game icon not found ($icon) - cannot embed the game icon in AoW.exe"
     }
     $rc = Join-Path $BinDir 'aow.rc'
     Set-Content -Path $rc -Encoding ASCII -Value @(
@@ -92,13 +94,70 @@ function New-IconResource {
     }
     $windres = Find-Windres
     if (-not $windres) {
-        Write-Warning 'windres not found - building without an icon'
-        return $null
+        throw 'windres not found - cannot embed the game icon in AoW.exe (install the mingw-w64 binutils)'
     }
     $obj = Join-Path $BinDir 'aow_res.o'
     & $windres $rc -O coff -o $obj | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "icon resource build failed ($LASTEXITCODE)" }
     return $obj
+}
+
+# True when the PE file carries RT_GROUP_ICON with the given id, i.e. Explorer
+# and the window class (LoadImage id 1 in menu.cpp) will find the embedded game
+# icon.  The menu link checks this so a binary built without aow_res.o (a manual
+# `g++ ... menu.cpp -o AoW.exe` is the usual way it happens) can never pass as a
+# good build again.
+function Test-ExeHasIconResource {
+    param([string]$Path, [uint32]$GroupIconId = 1)
+    try {
+        # Resolve first: .NET's current directory is not PowerShell's location,
+        # so a relative path would otherwise read the wrong file (or none).
+        $full = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).ProviderPath
+        $b = [System.IO.File]::ReadAllBytes($full)
+        $pe = [System.BitConverter]::ToInt32($b, 0x3c)
+        if ([System.BitConverter]::ToUInt32($b, $pe) -ne 0x4550) { return $false }
+        $numSections = [System.BitConverter]::ToUInt16($b, $pe + 6)
+        $optSize = [System.BitConverter]::ToUInt16($b, $pe + 20)
+        $opt = $pe + 24
+        $magic = [System.BitConverter]::ToUInt16($b, $opt)
+        if ($magic -eq 0x20b) { $dirs = $opt + 112 }      # PE32+ (x64)
+        elseif ($magic -eq 0x10b) { $dirs = $opt + 96 }   # PE32
+        else { return $false }
+        $resRva = [System.BitConverter]::ToUInt32($b, $dirs + 2 * 8)
+        if ($resRva -eq 0) { return $false }
+        $resOff = -1
+        for ($i = 0; $i -lt $numSections; $i++) {
+            $s = $opt + $optSize + 40 * $i
+            $va = [System.BitConverter]::ToUInt32($b, $s + 12)
+            $vs = [System.BitConverter]::ToUInt32($b, $s + 8)
+            $raw = [System.BitConverter]::ToUInt32($b, $s + 16)
+            if ($resRva -ge $va -and $resRva -lt ($va + [Math]::Max($vs, $raw))) {
+                $resOff = [System.BitConverter]::ToUInt32($b, $s + 20) + ($resRva - $va)
+                break
+            }
+        }
+        if ($resOff -lt 0) { return $false }
+        # Directory level 1: resource types - find RT_GROUP_ICON (14).
+        $named = [System.BitConverter]::ToUInt16($b, $resOff + 12)
+        $count = [System.BitConverter]::ToUInt16($b, $resOff + 14)
+        $entry = $resOff + 16 + 8 * $named
+        $typeOff = -1
+        for ($i = 0; $i -lt $count; $i++) {
+            if (([System.BitConverter]::ToUInt32($b, $entry + 8 * $i) -band 0x7fffffff) -eq 14) {
+                $typeOff = $resOff + ([System.BitConverter]::ToUInt32($b, $entry + 8 * $i + 4) -band 0x7fffffff)
+                break
+            }
+        }
+        if ($typeOff -lt 0) { return $false }
+        # Directory level 2: the icon group id (1).
+        $named = [System.BitConverter]::ToUInt16($b, $typeOff + 12)
+        $count = [System.BitConverter]::ToUInt16($b, $typeOff + 14)
+        $entry = $typeOff + 16 + 8 * $named
+        for ($i = 0; $i -lt $count; $i++) {
+            if (([System.BitConverter]::ToUInt32($b, $entry + 8 * $i) -band 0x7fffffff) -eq $GroupIconId) { return $true }
+        }
+        return $false
+    } catch { return $false }
 }
 
 # libopenmpt runtime: aow_audio / AoW.exe (the menu) / the audio tests link libopenmpt
@@ -250,6 +309,9 @@ if ((Split-Path $cxx -Leaf) -like 'cl*') {
         -lgdi32 -luser32 -lwinmm -lshell32 -lopenmpt
 }
 if ($LASTEXITCODE -ne 0) { throw "menu build failed ($LASTEXITCODE)" }
+if (-not (Test-ExeHasIconResource $mout)) {
+    throw "menu build produced an AoW.exe without the game icon ($mout) - was aow_res.o left out of the link?"
+}
 Write-Host "built $mout"
 
 if ($Viewer) {
