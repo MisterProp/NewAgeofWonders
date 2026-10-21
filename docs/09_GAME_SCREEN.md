@@ -97,8 +97,8 @@ noise - with all four 12x12 corners and every edge row / column aligned.
 | `RelationsBtn` "Relations" | 0,0* | 70x18 | TaskPanel | idem (*placed by `LeftOffPercent` 42) |
 | `InfoBtn` "Events" | 291,0 | 70x18 | TaskPanel | idem (56%) |
 | `ConButton` / `StructButton` / `ChatBtn` | - | 70x18 | TaskPanel | hidden in single-player |
-| `TBNextButton` | 568,7 | 26x38 | TaskWindow | `TBWin` NextButton up 3 / down 4 |
-| `TurnButton` | 596,7 | 41x38 | TaskWindow | `IntGfxMod.TurnButton` = `Int\TBTurnBt.ILB` NextTurn (frame 81) |
+| `TBNextButton` | 568,7 | 26x38 | TaskWindow | `TBWin` NextButton **3** (idle) / **4** (held) - one picture each, not a 3-piece |
+| `TurnButton` | 596,7 | 41x38 | TaskWindow | `IntGfxMod.TurnButton` = `Int\TBTurnBt.ILB`, frame `11 + 7*race` (see docs/22) |
 | `WGoldPnl` | 423,26 | 69x21 | TBWorld | `TBWin` BarSet2 **51**, `awRight` RightOffset 148 |
 | `WManaPnl` | 495,26 | 69x21 | TBWorld | `TBWin` BarSet2 **52**, RightOffset 76 |
 | `TCTimerImg` | 385,28 | 33x17 | TBWorld | `TBWin` BarSet2 **28** (clock body), RightOffset 222 |
@@ -106,10 +106,14 @@ noise - with all four 12x12 corners and every edge row / column aligned.
 | `TCTimeLbl` | 388,32 | - | TBWorld | FontModule.TBarNumber, clBlack, RightOffset 225 |
 | `PInd` | 290,28 | 75x17 | TBWorld | `TBWin` PlyrIndL **29/30/31** (2+5+2 x17 3-piece), RightOffset 275 |
 
-`TBTurnBt.ILB` holds 102 frames: the low indexes are the swirling "turn
-changing" glow, the solid frames are the current player's colour. The reviewed
-capture lands on frame 81 (its ground is the gold ring the reference shows) -
-`kTbTurnFrame`.
+`TBTurnBt.ILB` holds 102 frames: frames 0..10 are the swirling "turn changing"
+glow and frames `11+7*r .. 17+7*r` one block per **race** r (0..12, 12 = no
+seat), whose last frame is the block's transition swirl. `TAOWTurnButton`
+(`AOWTools.dpl`, unit `TurnButton`) draws `AnimStart + Frame` - `11 + 7*race`
+at rest - and plays a state-machine animation when the seat changes. The whole
+class, the two buttons' handlers and the turn loop they drive are documented in
+**`docs/22_TURN_BUTTONS.md`**; the proof sheet is `bin/TurnButtons.png`.
+
 
 `PInd` is painted by the form's `TBWorld.PIndDraw` (not yet decompiled): it lays
 one **PlyrIndL** (2 + 5 + 2 x 17) pill per game player, right-aligned in the
@@ -312,7 +316,8 @@ Inside the in-game screen the recovered controls are live:
 | bar **Realm** / **Magic** / **Relations** | reported; their windows are not ported yet |
 | scanner **Surface** / **Caverns** tabs (`ScannerTabClick`) | switch `game_level` and re-render the map at that level |
 | scanner **minimize** (`SMinIcon`) | hides the World Map floater |
-| **next-turn** arrow (`TBNextButton`) | reported (no turn loop yet) |
+| **next-turn** arrow (`TBNextButton`) | `TBNextButtonClick`: `Sfx\Int\Btn1.wav` + `TAoWHSMap.SelectNextArmy` - selects the next of your armies that still has move points and is not on guard, or clears the selection (docs/22) |
+| **turn** button (`TurnButton`) | `TurnButtonChange` (on mouse-DOWN): ends your turn (or withdraws it), and the server-side loop hands the turn on once every player has ended theirs; the button plays its turn-change animation (docs/22) |
 | click on the **world map** | selects the hex under the cursor; the view does **not** move (section 6) |
 | click / drag on the **scanner minimap** | centres the camera on the clicked hex (section 6) |
 | `C` | centres the camera on the selected hex (the engine's `TSelectedArmy.Center`) |
@@ -829,11 +834,11 @@ Head-less (`--game-click 513 141 --game-click 220 216` selects the hero army at
 * **Banner title/min/help art.** The `SIcon`/`Min`/`Help` sprites differ from
   the reviewed crop by a pixel or two (they sit at the crop's edge); the labels,
   portrait and crest do not.
-* **Interactive state.** The World Map / Events tabs, the scanner's level tabs
-  and its minimize button are live (section 5.1). The Realm / Magic / Relations
-  tabs, the scanner's three view toggles, the help buttons and the next-turn
-  arrow are drawn in their resting frames and only reported on click, since
-  their windows/turn loop are not ported yet.
+* **Interactive state.** The World Map / Events tabs, the scanner's level tabs,
+  its minimize button and the bar's two turn buttons are live (section 5.1 and
+  docs/22). The Realm / Magic / Relations tabs, the scanner's three view toggles
+  and the help buttons are drawn in their resting frames and only reported on
+  click, since their windows are not ported yet.
 * **Floater sizing.** The engine sizes the floaters from the window manager
   (`MinWidth/MinHeight` 200x216; the events floater is `Resizable`). The replica
   fixes them at 200x216 and, because their `WidthPercent`/`HeightPercent` are 0,
@@ -857,7 +862,9 @@ Head-less (`--game-click 513 141 --game-click 220 216` selects the hero army at
   declared colour rather than the pale sage the other banner labels use.
 * **Gold / mana numbers.** `WGoldPnl`/`WManaPnl` show the player's stockpile and
   income; the replica seeds `140`/`10` and `250`/`10` (the values the reviewed
-  screen shows) since there is no turn/economy simulation yet.
+  screen shows). The turn loop now credits income/upkeep in the roster
+  (`GameState::begin_player_turn`, docs/22), but the read-outs are not yet bound
+  to it - TODO(RE).
 * **Scanner click.** The `Scanner` unit is in `AOWTools.dpl`, which is **not** in
   the Ghidra project, so `TScanner`'s own mouse handling could not be read. The
   replica's minimap click uses the recovered camera side (the engine's

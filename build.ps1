@@ -915,7 +915,12 @@ if ($Test) {
     if ($gsproc.ExitCode -ne 0) { throw 'game select/move test failed' }
     $gsline = Get-Content $gslog -Raw
     foreach ($need in @('game_click=scanner 513,141', 'game_move=15,34->17,32',
-                        'game_army=17,32 mp=28',
+                        'game_army=17,32 mp=16',
+                        # The Party window's read-outs follow what the party has
+                        # left after the walk (32/28/36/32 - 12): each pill's
+                        # caption, the MovesLbl and the folded move budget, not
+                        # the maximum allowance.
+                        'game_party=moves=16 budget=16 sel=15 u1=20 u2=16 u3=24 u4=20 u5=-1 u6=-1 u7=-1 u8=-1',
                         'game_msg=moved (15,34) -> (17,32)')) {
         if ($gsline -notmatch [regex]::Escape($need)) {
             throw "game select/move regression ($need): $gsline"
@@ -981,6 +986,160 @@ if ($Test) {
     }
     Remove-Item $gppng, $gplog -Force
     Write-Host 'game party-window smoke test: ok'
+    # Leaving a spent unit behind revalidates the party at once. The engine's
+    # `TSelectedArmy.SetSelection` rebuilds `TArmy.MovePoints`, `TArmy.MoveTypes`
+    # and the move-point table from the *travelling* units only, so a unit with
+    # no points left must not pin the rest of the group. Walk 12 + 12 + 4 points
+    # (the Tutorial party's 32/28/36/32 leaves 4/0/8/4 - unit 2 is empty), click
+    # unit 2's pill and then walk the remaining units 3 points. The fold line
+    # after the pill is the proof: unit 2 is gone from the mask and the budget
+    # rises from 0 to 4, so the final move is accepted.
+    $gz0png = Join-Path $BinDir 'game_party_zero_before.png'
+    $gz0log = Join-Path $BinDir 'game_party_zero_before.txt'
+    Remove-Item $gz0png, $gz0log -Force -ErrorAction SilentlyContinue
+    $gz0args = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+                '--game-click 513 141 --game-click 220 216 --game-click 284 152 ' +
+                '--game-click 380 152 --game-click 348 184') -f $mroot, $gz0png
+    $gz0proc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $gz0args -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gz0log
+    if ($gz0proc.ExitCode -ne 0) { throw 'game party zero-move pre-state failed' }
+    $gz0line = Get-Content $gz0log -Raw
+    # Before the pill: the party is out of points (unit 2 has none left, every
+    # unit still travels), so the whole group is pinned at 0.
+    foreach ($need in @('game_move=15,34->17,32', 'game_move=17,32->20,33',
+                        'game_move=20,33->19,33',
+                        'game_party=moves=0 budget=0 sel=15 u1=4 u2=0 u3=8 u4=4 u5=-1 u6=-1 u7=-1 u8=-1')) {
+        if ($gz0line -notmatch [regex]::Escape($need)) {
+            throw "game party zero-move pre-state: missing `"$need`""
+        }
+    }
+    Remove-Item $gz0png, $gz0log -Force
+    $gzpng = Join-Path $BinDir 'game_party_zero.png'
+    $gzlog = Join-Path $BinDir 'game_party_zero.txt'
+    Remove-Item $gzpng, $gzlog -Force -ErrorAction SilentlyContinue
+    $gzargs = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+               '--game-click 513 141 --game-click 220 216 --game-click 284 152 ' +
+               '--game-click 380 152 --game-click 348 184 --game-click 515 296 ' +
+               '--game-click 188 200') -f $mroot, $gzpng
+    $gzproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $gzargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gzlog
+    if ($gzproc.ExitCode -ne 0) { throw 'game party zero-move test failed' }
+    $gzline = Get-Content $gzlog -Raw
+    foreach ($need in @('game_move=15,34->17,32', 'game_move=17,32->20,33',
+                        'game_move=20,33->19,33',
+                        # Unit 2 leaves: mask 0x0d, and the remaining 4/8/4 give
+                        # the party its 4-point budget back.
+                        'game_party_fold=slot=2 sel=13 budget=4',
+                        'game_msg=unit 2 is left behind',
+                        'game_msg=moved (19,33) -> (18,33)',
+                        # The moved group is the three travelling units, each 3
+                        # points lighter (4/8/4 -> 1/5/1).
+                        'game_party=moves=1 budget=1 sel=7 u1=1 u2=5 u3=1 u4=-1 u5=-1 u6=-1 u7=-1 u8=-1')) {
+        if ($gzline -notmatch [regex]::Escape($need)) {
+            throw "game party zero-move test: missing `"$need`""
+        }
+    }
+    Remove-Item $gzpng, $gzlog -Force
+    Write-Host 'game party zero-move smoke test: ok'
+    # --- the bottom bar's two turn buttons (docs/22_TURN_BUTTONS.md) ---------
+    # TBNextButtonClick (AoW.exe 0x004573e8) = the shared UI click + the map's
+    # SelectNextArmy (AoWEPACK 0x55775fa0): the first click selects the seat's
+    # first army that still has move points (>= 2) and is not on guard.
+    $gnpng = Join-Path $BinDir 'game_nextbtn.png'
+    $gnlog = Join-Path $BinDir 'game_nextbtn.txt'
+    Remove-Item $gnpng, $gnlog -Force -ErrorAction SilentlyContinue
+    $gnargs = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+               '--game-click 581 458') -f $mroot, $gnpng
+    $gnproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $gnargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gnlog
+    if ($gnproc.ExitCode -ne 0) { throw 'game next-button test failed' }
+    $gnline = Get-Content $gnlog -Raw
+    foreach ($need in @('game_click=next 581,458', 'game_next=15,34 index=0',
+                        'game_msg=party 1/1')) {
+        if ($gnline -notmatch [regex]::Escape($need)) {
+            throw "game next-button regression ($need): $gnline"
+        }
+    }
+    # A guarded army is skipped by `army_flags & 3`, and when no army answers the
+    # engine's UnselectLocation clears the selection (the party floater closes).
+    Remove-Item $gnpng, $gnlog -Force
+    Remove-Item $gnpng, $gnlog -Force -ErrorAction SilentlyContinue
+    $ggargs = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+               '--game-click 513 141 --game-click 220 216 --game-click 500 416 ' +
+               '--game-click 581 458') -f $mroot, $gnpng
+    $ggproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $ggargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gnlog
+    if ($ggproc.ExitCode -ne 0) { throw 'game next-button guard test failed' }
+    $ggline = Get-Content $gnlog -Raw
+    foreach ($need in @('game_msg=party on guard', 'game_msg=no army to select',
+                        'game_army=none')) {
+        if ($ggline -notmatch [regex]::Escape($need)) {
+            throw "game next-button guard regression ($need): $ggline"
+        }
+    }
+    Remove-Item $gnpng, $gnlog -Force
+    Write-Host 'game next-button smoke test: ok'
+    # TurnButtonChange (AoW.exe 0x004574ac) ends the seated player's turn; the
+    # turn loop only hands it on once every player has ended theirs, so each
+    # click advances the *day* by one after the Goblins' and the independents'
+    # turns have run. The TurnButton follows the seat's RACE block:
+    # frame = 11 + 7*race (Halflings = 5 -> 46).
+    $gtpng = Join-Path $BinDir 'game_turnbtn.png'
+    $gtlog = Join-Path $BinDir 'game_turnbtn.txt'
+    Remove-Item $gtpng, $gtlog -Force -ErrorAction SilentlyContinue
+    $gtargs = ('--root "{0}" --start-map Tutorial.hsm --no-music --no-cursor --render "{1}" ' +
+               '--game-click 616 458 --game-click 616 458') -f $mroot, $gtpng
+    $gtproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $gtargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gtlog
+    if ($gtproc.ExitCode -ne 0) { throw 'game turn-button test failed' }
+    $gtline = Get-Content $gtlog -Raw
+    foreach ($need in @('game_click=turn 616,458 checked=0 day=1',
+                        'game_endturn=player=1 ok=1 from=1 to=2 day=1',
+                        'game_turn=player=2 name=Borok day=1',
+                        'game_turn=player=0 name=Independents day=2',
+                        'game_turn=player=1 name=Trodsen day=2',
+                        'game_msg=your turn - day 2',
+                        'game_turnnow=player=1 day=2 frame=46',
+                        'game_turnnow=player=1 day=3 frame=46')) {
+        if ($gtline -notmatch [regex]::Escape($need)) {
+            throw "game turn-button regression ($need): $gtline"
+        }
+    }
+    # The two buttons' art is 1:1 with the libraries: the TurnButton paints
+    # TBTurnBt.ILB entry 11 + 7*race (46 for the Halflings seat) and the
+    # NextButton paints TBWin.ILB entry 3 (idle) - not entry 4, the held picture.
+    $refTurn = Join-Path $BinDir 'game_turnbtn_ref_turn.png'
+    $refNext = Join-Path $BinDir 'game_turnbtn_ref_next.png'
+    Remove-Item $refTurn, $refNext -Force -ErrorAction SilentlyContinue
+    & (Join-Path $BinDir 'aow_tools.exe') png (Join-Path $mroot 'Int\TBTurnBt.ILB') 46 $refTurn | Out-Null
+    & (Join-Path $BinDir 'aow_tools.exe') png (Join-Path $mroot 'Int\TBWin.ILB') 3 $refNext | Out-Null
+    Add-Type -AssemblyName System.Drawing
+    $bmpOur = [System.Drawing.Bitmap]::FromFile($gtpng)
+    $bmpTurn = [System.Drawing.Bitmap]::FromFile($refTurn)
+    $bmpNext = [System.Drawing.Bitmap]::FromFile($refNext)
+    $mismatch = 0
+    for ($y = 0; $y -lt 38; $y++) {
+        for ($x = 0; $x -lt 41; $x++) {
+            $a = $bmpOur.GetPixel(596 + $x, 439 + $y); $b = $bmpTurn.GetPixel($x, $y)
+            if ($a.R -ne $b.R -or $a.G -ne $b.G -or $a.B -ne $b.B) { $mismatch++ }
+        }
+        for ($x = 0; $x -lt 26; $x++) {
+            $a = $bmpOur.GetPixel(568 + $x, 439 + $y); $b = $bmpNext.GetPixel($x, $y)
+            if ($a.R -ne $b.R -or $a.G -ne $b.G -or $a.B -ne $b.B) { $mismatch++ }
+        }
+    }
+    $bmpOur.Dispose(); $bmpTurn.Dispose(); $bmpNext.Dispose()
+    if ($mismatch -ne 0) {
+        throw "game turn-button art regression: $mismatch pixels differ from the ILB entries"
+    }
+    Remove-Item $gtpng, $gtlog, $refTurn, $refNext -Force
+    Write-Host ("game turn-button smoke test: ok (day 3 after two clicks, art 1:1)")
+
     # Moving an army onto another army of ours combines the two
     # (`TMoveArmyTE.CanMoveNext@0x5574830c` -> `TArmy.CanCombine@0x55790814`,
     # `TMoveArmyTE.FinishMove@0x55747fbc` -> `TArmy.AddUnitSelection@0x5578e6b4`).
@@ -1024,7 +1183,10 @@ if ($Test) {
     $gamergline = Get-Content $gamerglog -Raw
     foreach ($need in @('game_split=15,34 stay=1 go=3',
                         'game_merge=17,32->15,34 stay=0 added=3 total=4',
-                        'game_army=15,34 mp=28')) {
+                        # The merged army's `TArmy.MovePoints` is the minimum over
+                        # the units: the three that marched have 7 left, the one
+                        # left behind still has its full allowance.
+                        'game_army=15,34 mp=7')) {
         if ($gamergline -notmatch [regex]::Escape($need)) {
             throw "game army-combine test: missing `"$need`""
         }

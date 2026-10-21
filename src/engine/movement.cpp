@@ -337,6 +337,30 @@ std::uint8_t unit_move_points(const UnitCatalog& catalog, const MapUnit& unit) {
     return 0;
 }
 
+std::uint8_t unit_move_points_left(const UnitCatalog& catalog,
+                                   const MapUnit& unit) {
+    // TUnit.GetMovePoints (+0x3d): NewTurn refills it from GetMoves, a move
+    // spends from it. -1 is the port's "fresh allowance" marker.
+    const std::uint8_t allowance = unit_move_points(catalog, unit);
+    if (unit.move_points_left < 0) return allowance;
+    const int left = static_cast<int>(unit.move_points_left);
+    if (left > static_cast<int>(allowance)) return allowance;
+    return static_cast<std::uint8_t>(left);
+}
+
+void spend_unit_move_points(const UnitCatalog& catalog, MapUnit& unit,
+                            int cost) {
+    if (cost <= 0) return;
+    const int allowance = static_cast<int>(unit_move_points(catalog, unit));
+    int left = unit.move_points_left < 0
+                   ? allowance
+                   : static_cast<int>(unit.move_points_left);
+    left -= cost;
+    if (left < 0) left = 0;
+    if (left > allowance) left = allowance;
+    unit.move_points_left = static_cast<std::int16_t>(left);
+}
+
 // ---------------------------------------------------------------------------
 // Hex geometry
 // ---------------------------------------------------------------------------

@@ -122,6 +122,15 @@ struct MapUnit {
     std::uint32_t experience = 0;  // tag 24 rwInteger
     std::uint8_t unit_level = 0;   // tag 22 rwByte
     std::string library_name;      // tag 38 rwString
+
+    // --- Runtime state (not serialised by the map file) --------------------
+    // Move points left this turn (`TUnit.GetMovePoints@0x5578276c` reads +0x3d,
+    // which `TAbstractUnit.NewTurn@0x55780d4c` refills from `GetMoves` when the
+    // owner's turn begins). A move charges every travelling unit the path's
+    // cost (`TAbstractUnit.MovePointCost`). -1 = the unit has not spent any yet,
+    // so its allowance (`aow::unit_move_points`) is still full - the same
+    // convention `MapHs::army_mp_left` uses at army level.
+    std::int16_t move_points_left = -1;
 };
 
 // One hexagon sprite (an `HSEngine.THexagonSprite` subclass) placed on a tile.
@@ -170,6 +179,17 @@ struct MapHs {
     std::uint8_t city_level = 0;
     std::vector<MapUnit> units;
     std::vector<std::uint8_t> payload;  // raw sprite bytes
+
+    // --- runtime army state (never read from the map file) -----------------
+    // `AoWE.TArmy+0x28`: bit 0 is the Guard stance (`PGuardChange`, the party
+    // window's Guard), and `TAoWHSMap.SelectNextArmy` (0x55775fa0) only offers
+    // an army whose `army_flags & 3` is 0. Cleared when the army moves.
+    std::uint8_t army_flags = 0;
+    // Remaining move points this turn (`TArmy.MovePoints` after the army has
+    // moved; `TAbstractUnit.NewTurn` refills them when its owner's turn
+    // begins). -1 = the army has not moved yet, so its units' allowance is
+    // still full. `SelectNextArmy` requires at least 2.
+    std::int16_t army_mp_left = -1;
 };
 
 // One map hex (a `TMapField`). `objects` is in placement order.

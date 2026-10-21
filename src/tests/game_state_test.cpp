@@ -318,6 +318,71 @@ int main(int argc, char** argv) {
     }
     check(exact, "full round: day advances exactly once per round");
 
+    // -- The end-turn rule: a turn only passes once its owner has ended it ----
+    // `TAoWHSMap.EndTurn` -> `TPlayerControl.EndTurn` -> `TTurnPlayerControl
+    // .EndTurn`: the hand-over happens only when the player who ended *is* the
+    // one on turn, and the day only advances when the order wraps.
+    aow::GameState turn = tut;
+    turn.begin_day(5u);
+    const std::uint8_t first = turn.turn_order.front();
+    turn.begin_first_turn(first);
+    check(turn.current() == first, "end-turn: begin_first_turn puts the seat on turn");
+    check(!turn.players[turn.index_of(first)].end_turn,
+          "end-turn: a fresh turn starts with the flag down");
+    // Ending a seat that is not on turn sets its flag but does not hand over.
+    const std::uint8_t other = turn.turn_order.back();
+    if (other != first) {
+        check(turn.end_turn(other), "end-turn: a seat may still mark itself done");
+        check(turn.current() == first, "end-turn: no hand-over for a seat off turn");
+        check(turn.cancel_end_turn(other), "end-turn: cancel clears the flag");
+    }
+    // Ending the seat on turn hands the turn on...
+    const std::uint8_t before_cur = turn.current();
+    check(turn.end_turn(before_cur), "end-turn: the seat on turn ends its turn");
+    check(turn.current() != before_cur, "end-turn: the turn moved on");
+    // A second end-turn for the same seat is refused while its flag stands.
+    check(!turn.end_turn(before_cur),
+          "end-turn: an ended seat cannot end twice");
+    // A seat's flag is cleared when its turn comes round again: run one full
+    // round (the wrap starts day 2, whose NewTurn clears the flag).
+    aow::GameState wrap = tut;
+    wrap.begin_day(5u);
+    wrap.begin_first_turn(wrap.turn_order.front());
+    for (std::size_t i = 0; i < wrap.turn_order.size(); ++i) {
+        const std::uint8_t c = wrap.current();
+        if (c == 0xff) break;
+        wrap.end_turn(c);
+    }
+    check(wrap.day == 2, "end-turn: a full round of endings advances the day");
+    check(!wrap.players[wrap.index_of(wrap.turn_order.front())].end_turn,
+          "end-turn: the new day clears the seat's end-turn flag");
+    // The event log gate: while the log is executing, EndTurn refuses.
+    aow::GameState busy = tut;
+    busy.begin_day(5u);
+    busy.begin_first_turn(busy.turn_order.front());
+    busy.event_log_busy = true;
+    busy.event_log_count = 3;
+    check(!busy.end_turn(busy.current()), "end-turn: refused while the event log runs");
+    busy.event_log_count = 0;
+    check(busy.end_turn(busy.current()), "end-turn: allowed once the log is empty");
+
+    // A day can only pass after *every* player ended a turn: three seats, three
+    // hand-overs from a known start.
+    aow::GameState round = tut;
+    round.begin_day(11u);
+    round.turn_in_order = 0;
+    round.current_player = round.turn_order[0];
+    round.players[round.index_of(round.turn_order[0])].end_turn = false;
+    int handovers = 0;
+    for (std::size_t i = 0; i < round.turn_order.size(); ++i) {
+        const std::uint8_t c = round.current();
+        if (c == 0xff) break;
+        if (round.end_turn(c)) ++handovers;
+    }
+    check(handovers == static_cast<int>(round.turn_order.size()),
+          "end-turn: one hand-over per seat in a round");
+    check(round.day == 2, "end-turn: the day advances exactly when the order wraps");
+
     // Turn limit: reaching it eliminates every player.
     aow::GameState lim = tut;
     lim.turn_limit = 3;

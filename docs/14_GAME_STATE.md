@@ -222,6 +222,31 @@ bonuses; the multiplier for 2/3 is `TODO(RE)`.
 0), then `mana = mana + mana_income - mana_upkeep`, clamped at 0 (`OutOfMana`).
 The port exposes these as `Player::magic` and `PlayerMagic::net_power_to_research`.
 
+### The end-turn rule (`TPlayer+0x2c`)
+
+A turn may pass only once the player on turn has **ended** it:
+
+* `TPlayer.SetEndTurn` (`0x55752d00`) stores `+0x2c` and fires
+  `TAoWHSMap.TriggerEndTurnEvent` (`0x55776474`);
+* `TAoWHSMap.EndTurn` (`0x5577838c`) refuses with no seated player, and while the
+  execute-event log is running with entries; otherwise it posts the end-turn
+  token (`FUN_5574757c`), whose execution calls `TPlayerControl.EndTurn`
+  (`0x5575530c`, `SetEndTurn(player, 1)` for the seated player) and then
+  `TTurnPlayerControl.EndTurn` (`0x55756db8`);
+* `TTurnPlayerControl.EndTurn` hands the turn on **only** when the player who
+  ended is the one on turn (`map+0xa4`): it walks the turn order from there,
+  skipping seats whose `+0x45 != 1` (started *and* ended in the same pass), and
+  calls `TAoWHSMap.NewDay` when the order wraps - so a day only advances when
+  every player has ended a turn;
+* `TAoWHSMap.CancelEndTurn` (`0x557783c8`) + the cancel branch of
+  `TEndTurnTE.Execute` (`0x557473c4`) withdraw the flag again.
+
+The port models this with `Player::end_turn` (`+0x2c`), `Player::playing`
+(`+0x45`), `Player::busy` (`TPlayer.GetBusy`) and `GameState::event_log_busy` /
+`event_log_count` (the `0x5577838c` gate). `GameState::advance_turn` is the loop
+above; `GameState::end_turn(who)` / `cancel_end_turn(who)` are the map routines.
+The bar's TurnButton is what drives them - see **`docs/22_TURN_BUTTONS.md`**.
+
 ## The C++ reconstruction
 
 `src/engine/game_state.cpp`:

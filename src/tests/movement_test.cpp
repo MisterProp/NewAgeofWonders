@@ -599,6 +599,25 @@ int main(int argc, char** argv) {
         const std::uint8_t mp =
             aow::unit_move_points(cat, human_army->units.front());
         check(mp == 32, "tutorial: the hero has 32 move points");
+        // `TUnit.GetMovePoints` (+0x3d) as the Party window reads it: a fresh
+        // unit answers its full allowance, a walk leaves it that much less, and
+        // the allowance itself never changes (NewTurn is what refills +0x3d).
+        {
+            aow::MapUnit u = human_army->units.front();
+            check(aow::unit_move_points_left(cat, u) == 32,
+                  "move points left: a fresh unit has its full allowance");
+            aow::spend_unit_move_points(cat, u, 12);
+            check(aow::unit_move_points_left(cat, u) == 20,
+                  "move points left: 32 - 12 = 20");
+            check(aow::unit_move_points(cat, u) == 32,
+                  "move points left: the allowance itself is unchanged");
+            aow::spend_unit_move_points(cat, u, 100);
+            check(aow::unit_move_points_left(cat, u) == 0,
+                  "move points left: never negative");
+            u.move_points_left = -1;
+            check(aow::unit_move_points_left(cat, u) == 32,
+                  "move points left: NewTurn's refill (-1) restores the maximum");
+        }
         std::vector<std::uint8_t> mts, mps;
         for (const aow::MapUnit& u : human_army->units) {
             mts.push_back(aow::unit_move_types(u));

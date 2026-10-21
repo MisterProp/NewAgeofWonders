@@ -308,8 +308,19 @@ and is `walk`.
 * A unit's **move points** are `TUnit.GetMovePoints@0x5578276c` = `+0x3d`, which
   `TAbstractUnit.NewTurn@0x55780d4c` refills each turn from `GetMoves` (`+0x2d`)
   - the `Unitres.pfs` record's `moves` field (tag 18) for a plain unit, or the
-  `Herores.pfs` record's `moves` (tag 19) for a hero. The port models a fresh
-  turn, so `aow::unit_move_points` returns that allowance.
+  `Herores.pfs` record's `moves` (tag 19) for a hero. The port reads the
+  allowance with `aow::unit_move_points` and tracks what is left this turn in
+  `MapUnit::move_points_left` (-1 = fresh): `aow::spend_unit_move_points`
+  charges a walk's cost to every travelling unit and `mv_reset_army_turn`
+  refills them, so `aow::unit_move_points_left` is the `+0x3d` value the Party
+  window prints.
+* The army fold follows the **travelling mask**: every Party-window pill click
+  re-runs `TSelectedArmy.SetSelection` -> `TArmy.CreateMovePointTable`,
+  `MoveTypes` and `MovePoints` over the selected units only
+  (`Scene::mv_fold_selection`, called from `party_refresh`). The budget, the
+  move types and the per-unit cost table therefore drop a unit as soon as it is
+  left behind - a unit with no move points left cannot pin the rest of the
+  party, and the remaining units may still march on their own balance.
 
 ## 5. The pathfinder
 
@@ -491,7 +502,7 @@ head-less proofs over `Tutorial.hsm` (§7).
   `army_move_points`, `army_move`, `army_can_add_units`, `move_point_cost`,
   `clamp_move_points`;
 * `decode_ability_bitmap`, `decode_ability_list`, `unit_move_types`,
-  `unit_move_points`;
+  `unit_move_points`, `unit_move_points_left`, `spend_unit_move_points`;
 * `hex_direction`, `hex_distance`, `hex_neighbour`, `hn_walk_hex`;
 * `fill_tile_terrain` (the per-tile resolution + the multi-hex footprint stamp);
 * `find_move_path` (a bounded Dijkstra) + `MovePath` / `MoveStep`;

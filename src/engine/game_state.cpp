@@ -251,7 +251,9 @@ void GameState::begin_player_turn(std::size_t player_index) {
     update_income(player_index);
     // TPlayerControl.NewTurn (0x557553c4): from day 2 on, credit income minus
     // upkeep; a deficit clamps gold at 0 and lowers the food penalty (-5, floor
-    // -50), otherwise the penalty resets.
+    // -50), otherwise the penalty resets. The player's end-turn flag is cleared
+    // in the same block (`TPlayer.SetEndTurn(player, false)`), so a seat always
+    // starts its turn with the flag down.
     if (day != 1) {
         p.gold = p.gold + p.income - p.upkeep();
         if (p.gold < 0) {
@@ -261,6 +263,7 @@ void GameState::begin_player_turn(std::size_t player_index) {
         } else {
             p.food_penalty = 0;
         }
+        set_end_turn(player_index, false);
     }
     // The player's turn counter always advances.
     p.turn_count += 1;
@@ -271,25 +274,117 @@ std::uint8_t GameState::current() const {
     return turn_order[turn_in_order];
 }
 
-std::uint8_t GameState::advance_turn(std::uint32_t rng_seed) {
-    if (turn_order.empty()) {
-        new_day(rng_seed);
-    } else {
-        ++turn_in_order;
-        if (turn_in_order >= turn_order.size()) new_day(rng_seed);
-    }
-    const std::uint8_t who = current();
-    if (who == 0xff) return who;
-    current_player = who;
-    // The player index byte identifies the roster entry (players[i].index == i
-    // for every shipped map); guard against a mismatch.
+std::size_t GameState::index_of(std::uint8_t player_index) const {
     for (std::size_t i = 0; i < players.size(); ++i) {
-        if (players[i].index == who) {
-            begin_player_turn(i);
+        if (players[i].index == player_index) return i;
+    }
+    return players.size();
+}
+
+bool GameState::player_playing(std::uint8_t player_index) const {
+    const std::size_t i = index_of(player_index);
+    if (i >= players.size()) return false;
+    // +0x45, the latch `TPlayerList.Update` files the active lists from and
+    // `TTurnPlayerControl.EndTurn` tests. (A seat put out by the turn limit has
+    // this cleared by `TPlayer.Validate`; `active()` is the separate +0x44.)
+    return players[i].playing;
+}
+
+bool GameState::set_end_turn(std::size_t player_index, bool value) {
+    if (player_index >= players.size()) return false;
+    if (players[player_index].end_turn == value) return false;
+    players[player_index].end_turn = value;
+    // TAoWHSMap.TriggerEndTurnEvent (0x55776474): notify the map's event list.
+    // The port has no listeners yet (the Events floater reads the seat itself),
+    // so the flag is the whole observable effect.
+    return true;
+}
+
+std::uint8_t GameState::advance_turn(std::uint32_t seed) {
+    if (turn_order.empty()) {
+        new_day(seed);
+        if (turn_order.empty()) {
+            current_player = 0xff;
+            return 0xff;
+        }
+    }
+    // TTurnPlayerControl.EndTurn (0x55756db8): walk the order from the player
+    // who just ended. A seat that is not playing (+0x45 != 1) is started and
+    // ended in the same pass (`TPlayerControl.NewTurn` + `EndTurn`), and the
+    // first seat that *is* playing becomes the current player. Running off the
+    // end of the order wraps into `NewDay` - the round only rolls over once
+    // every player has had (and ended) their turn.
+    std::size_t idx = turn_in_order;
+    for (std::size_t guard = 0; guard <= turn_order.size(); ++guard) {
+        ++idx;
+        if (idx >= turn_order.size()) {
+            new_day(seed);
+            idx = 0;
+            if (turn_order.empty()) {
+                current_player = 0xff;
+                return 0xff;
+            }
+        }
+        const std::uint8_t c = turn_order[idx];
+        const std::size_t pi = index_of(c);
+        if (pi >= players.size() || !player_playing(c)) {
+            if (pi < players.size()) {
+                begin_player_turn(pi);
+                set_end_turn(pi, true);
+            }
+            continue;
+        }
+        turn_in_order = idx;
+        current_player = c;
+        begin_player_turn(pi);
+        return c;
+    }
+    current_player = 0xff;
+    return 0xff;
+}
+
+void GameState::begin_first_turn(std::uint8_t seated) {
+    if (turn_order.empty()) return;
+    std::size_t pos = 0;
+    for (std::size_t i = 0; i < turn_order.size(); ++i) {
+        if (turn_order[i] == seated) {
+            pos = i;
             break;
         }
     }
-    return who;
+    turn_in_order = pos;
+    current_player = turn_order[pos];
+    const std::size_t pi = index_of(current_player);
+    if (pi < players.size()) begin_player_turn(pi);
+}
+
+bool GameState::end_turn(std::uint8_t who) {
+    // TAoWHSMap.EndTurn (0x5577838c): no seat -> refuse; while the event log is
+    // executing and still holds entries -> refuse.
+    if (who == 0xff) return false;
+    if (event_log_busy && event_log_count != 0) return false;
+    // FUN_5574757c: a busy player, or one that already ended, refuses.
+    const std::size_t pi = index_of(who);
+    if (pi >= players.size()) return false;
+    if (players[pi].busy || players[pi].end_turn) return false;
+    // TPlayerControl.EndTurn (0x5575530c): TPlayer.SetEndTurn(player, 1).
+    set_end_turn(pi, true);
+    // TTurnPlayerControl.EndTurn (0x55756db8): the hand-over happens only when
+    // the player who ended *is* the one on turn.
+    if (current() == who) advance_turn(rng_seed);
+    return true;
+}
+
+bool GameState::cancel_end_turn(std::uint8_t who) {
+    // TAoWHSMap.CancelEndTurn (0x557783c8) posts the end-turn token with the
+    // cancel flag; TEndTurnTE.Execute (0x557473c4) then clears the flag. The
+    // cancel is refused for a busy player or one that has not ended.
+    if (who == 0xff) return false;
+    const std::size_t pi = index_of(who);
+    if (pi >= players.size()) return false;
+    if (players[pi].busy || !players[pi].end_turn) return false;
+    set_end_turn(pi, false);
+    return true;
 }
 
 std::uint8_t apply_setup_player_types(GameState& gs,

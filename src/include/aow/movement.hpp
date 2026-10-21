@@ -234,6 +234,19 @@ std::uint8_t unit_move_types(const MapUnit& unit);
 std::uint8_t unit_move_points(const class UnitCatalog& catalog,
                               const MapUnit& unit);
 
+// What the unit can still spend *this turn*: the engine's `GetMovePoints`
+// (+0x3d) as it stands after moving, i.e. `unit_move_points` less whatever the
+// unit has spent (`MapUnit::move_points_left`). The Party window's pill caption
+// prints this, not the maximum allowance.
+std::uint8_t unit_move_points_left(const class UnitCatalog& catalog,
+                                   const MapUnit& unit);
+
+// Charges `cost` move points to one travelling unit (`TAbstractUnit
+// .MovePointCost@0x55780848` is applied step by step as the army walks, so every
+// unit of the party pays the path's cost). Clamped to 0..allowance.
+void spend_unit_move_points(const class UnitCatalog& catalog, MapUnit& unit,
+                            int cost);
+
 // `TUnit.SetMovePoints@0x55782794` clamps to 0..max; a unit's move points come
 // from the rule table (`TUnit.GetMovePoints@0x5578276c` reads +0x3d).
 std::uint8_t clamp_move_points(int value);

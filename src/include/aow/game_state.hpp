@@ -22,14 +22,21 @@
 // `AoWE.TPlayerMagicControl.ReadWrite` (0x5577c748). See docs/14_GAME_STATE.md.
 //
 // Turn loop (recovered from `AoWE.TPlayerControl.NewDay` 0x55754da4,
-// `NewTurn` 0x557553c4, `AoWE.TAoWHSMap.GenerateNewTurnOrder` 0x557782fc):
+// `NewTurn` 0x557553c4, `TTurnPlayerControl.EndTurn` 0x55756db8,
+// `AoWE.TAoWHSMap.GenerateNewTurnOrder` 0x557782fc):
 //
 //   * a "day" (turn) counter lives on the map; every round every active player
 //     gets a turn, in the order [independents(0)] + a random permutation of
 //     1..N-1 (regenerated each day when the map's turn-order mode is 2);
 //   * beginning a player's turn (from day 2 on) adds the player's income minus
-//     upkeep to their gold (clamped at 0, adding a starvation penalty), and
-//     always bumps the player's turn count.
+//     upkeep to their gold (clamped at 0, adding a starvation penalty), clears
+//     that player's end-turn flag, and always bumps the player's turn count;
+//   * a turn only passes when its owner has ended it (`TPlayer.SetEndTurn`
+//     +0x2c): `TTurnPlayerControl.EndTurn` walks the turn order from the player
+//     who just ended, skipping seats that are not playing (+0x45 != 1), starts
+//     and ends those in the same pass, and only then hands the turn on. When
+//     the order wraps, `TAoWHSMap.NewDay` starts a new day - so a day can only
+//     advance once every player has ended their turn.
 #pragma once
 
 #include <cstddef>
@@ -190,6 +197,25 @@ struct Player {
     std::uint8_t game_over_status = 0;  // +0x44 tag 0x19 (2 = eliminated)
     std::string name;                // +0x30 tag 0x18 (often empty in scenarios)
 
+    // +0x2c - has this player ended the current turn? `AoWE.TPlayer.SetEndTurn`
+    // (0x55752d00) stores it and fires the map's end-turn notify event
+    // (`TAoWHSMap.TriggerEndTurnEvent` 0x55776474). The turn may not pass while
+    // it is clear - `TTurnPlayerControl.EndTurn` (0x55756db8) only hands the
+    // turn on after this player's own `TPlayerControl.EndTurn` set it, and
+    // `TPlayerControl.NewTurn` (day != 1) clears it again when the turn returns.
+    bool end_turn = false;
+
+    // `AoWE.TPlayer.GetBusy` (0x557516d0) - a player in the middle of a
+    // transition (a combat, a modal window) refuses to end the turn. Runtime
+    // only; the port keeps it false unless a transition is in flight.
+    bool busy = false;
+
+    // +0x45 - the seat takes part in the turn order. `TPlayerList.Update`
+    // (0x55754370) files every player whose +0x45 is 1 into its active lists,
+    // and `TTurnPlayerControl.EndTurn` skips the others (it starts and ends
+    // their turn in the same pass). `TPlayer.Validate` (0x55751c00) sets it.
+    bool playing = true;
+
     // +0xd4 tag 0x1e - the player's TLeader (see Leader above).
     Leader leader;
 
@@ -234,7 +260,20 @@ struct GameState {
 
     std::vector<std::uint8_t> turn_order;  // map +0x170 (TByteList)
     std::size_t turn_in_order = 0;         // position within turn_order
-    std::uint8_t current_player = 0xff;    // map +0xa5 (seated; 0xff = none)
+    // map +0xa4 - the player whose turn it is (`TAbstractAoWHSMap
+    // .SetCurrentPlayer` 0x55772a80; 0xff = none). The *seated* player
+    // (`map+0xa5`, the local seat in a network/hotseat game) is the same
+    // player in the port's single-player games.
+    std::uint8_t current_player = 0xff;
+
+    // map +0x139 / *(map + 0x1d4). `TAoWHSMap.EndTurn` (0x5577838c) refuses to
+    // post the end-turn event while the event log is being executed and still
+    // holds entries (the turn is mid-animation).
+    bool event_log_busy = false;
+    int event_log_count = 0;
+    // The RNG seed `GenerateNewTurnOrder` draws with (the map's own `Random`
+    // in the original, whose seed the port does not carry).
+    std::uint32_t rng_seed = 0x1234567u;
 
     bool loaded = false;
 
@@ -268,6 +307,33 @@ struct GameState {
     // Advance to the next player; when the order wraps, run `new_day`. Returns
     // the player now on turn.
     std::uint8_t advance_turn(std::uint32_t rng_seed);
+
+    // Starts the turn loop on `seated` (the local player): puts the turn-order
+    // cursor on that seat and runs its turn start. A map's own first turn would
+    // otherwise belong to the independents (order entry 0).
+    void begin_first_turn(std::uint8_t seated);
+
+    // `TPlayerList.GetPlayers(..)+0x45`: does this seat take part in the order?
+    bool player_playing(std::uint8_t player_index) const;
+
+    // `AoWE.TPlayer.SetEndTurn` (0x55752d00): store the flag and fire the map's
+    // end-turn notify event when it actually changed. Returns true on a change.
+    bool set_end_turn(std::size_t player_index, bool value);
+
+    // `AoWE.TAoWHSMap.EndTurn` (0x5577838c) -> `FUN_5574757c` ->
+    // `TPlayerControl.EndTurn` (0x5575530c) -> `TTurnPlayerControl.EndTurn`
+    // (0x55756db8): end `who`'s turn. The turn only advances when `who` is the
+    // player on turn, so a turn can pass only once its owner has ended it.
+    // Returns false when the map refuses (no such seat, the seat is busy, the
+    // seat already ended, or the event log is still running).
+    bool end_turn(std::uint8_t who);
+
+    // `AoWE.TAoWHSMap.CancelEndTurn` (0x557783c8) + `TEndTurnTE.Execute`
+    // (0x557473c4, cancel branch): withdraw `who`'s end-turn flag.
+    bool cancel_end_turn(std::uint8_t who);
+
+    // Position of a seat in the roster (players.size() when there is none).
+    std::size_t index_of(std::uint8_t player_index) const;
 };
 
 // Parses the player roster (TAoWHSMap tag 0x15) out of `map.region` and fills

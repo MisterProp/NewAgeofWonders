@@ -157,10 +157,15 @@ always even.
 
 | read-out | engine | port |
 |----------|--------|------|
-| a unit's move points (the pill's caption) | `TUnit.GetMovePoints` (+0x3d, refilled from `Unitres`/`Herores` at turn start) | `aow::unit_move_points(mv_cat, unit)` |
-| the party's move points (`MovesLbl`) | `TArmy.MovePoints@0x5578d8d0` = **min over the travelling units**, capped at `0x32`, `0` when none travels | `Scene::party_move_points()` |
+| a unit's move points (the pill's caption) | `TUnit.GetMovePoints` (+0x3d, refilled from `Unitres`/`Herores` at turn start, spent by the moves) | `aow::unit_move_points_left(mv_cat, unit)` - what is **left this turn**, not the allowance |
+| the party's move points (`MovesLbl`) | `TArmy.MovePoints@0x5578d8d0` = **min over the travelling units**, capped at `0x32`, `0` when none travels | `Scene::party_move_points()` (min of the units' remaining points) |
 | the party's icon | `TArmy.GetPartyMoves@0x5578da60` = the **AND** of the travelling units' move-type bytes, OR'd with `1 << kind` from its little state machine | `Scene::party_moves_byte()` + `party_icon_frame()` |
 | the party's status | `TArmy.GetPartyStatus@0x5578f584`: a battle predictor first, then the party's lowest *morale value*: `no unit, or < 61` -> `psStable`, `< 81` -> `psContent`, else `psCheerful` | `Scene::party_status()` (the predictor's own cases answer `psUnruly` / `psUnrest`, which the world map has no equivalent of) |
+
+The travelling mask is what the read-outs and the move validation fold over
+(`TSelectedArmy.SetSelection` on every pill change), so a unit left behind stops
+counting towards `MovesLbl` and `TArmy.MovePoints` at once: deselecting a unit
+with 0 points left restores the party's budget from the remaining units.
 
 The status names are the enum's own, in declaration order - dumped from
 `TPartyStatus`'s RTTI in `AoWEPACK.dpl`:
@@ -240,7 +245,15 @@ open (`TODO(RE) TAbstractUnit vtable+0xfc`), and the id can be swept with the
 * `Scene::party_army()` / `party_unit(slot)` / `party_travels(slot)` -
   `TSelectedArmy.GetArmyHS` and the slot -> unit mapping.
 * `Scene::party_moves_byte()` / `party_status()` / `party_move_points()` -
-  the three read-outs of section 3.3.
+  the three read-outs of section 3.3. `party_move_points()` folds the units'
+  remaining points (`aow::unit_move_points_left`), so the foot number drops as
+  the party walks instead of repeating the units' maximum allowance.
+* `Scene::mv_fold_selection()` - the engine's `TSelectedArmy.SetSelection`
+  rebuild of `TArmy.CreateMovePointTable` / `MoveTypes` / `MovePoints`, from the
+  units that travel only. `party_refresh()` runs it after every mask change, so
+  a pill click changes the move-point table, the move-type union and the budget
+  together: a unit with no points left (or a terrain it cannot cross) can be
+  left behind, and the rest of the party moves on its own remaining points.
 * `Scene::party_refresh_portraits()` - the per-slot standing sprite
   (`aow::unit_pose_rgba`, the same call `mapviz` draws the map armies with),
   cached while the selection stands still.
@@ -304,7 +317,8 @@ Known deviations / open items:
 * `GetPartyStatus`'s predictor cases (a party facing a fight answers
   `psUnruly` / `psUnrest`) need the engine's combat predictor;
 * the pill's per-unit move-point caption is drawn by the port from
-  `unit_move_points` (the engine's own setter for that caption was not located -
+  `unit_move_points_left` - `TUnit.GetMovePoints`'s +0x3d after what the unit
+  spent this turn (the engine's own setter for that caption was not located -
   the value, the glyphs and the position match the capture);
 * the window is fixed to `(disp_w - 200, 216)`; the engine's `ControlWindow` is
   draggable, and its free-drag behaviour is `TODO(RE)`.
@@ -316,4 +330,22 @@ party, clicks the pill under unit 3 (`game_msg=unit 3 is left behind`), walks
 the rest of the party away (`game_split=15,34 stay=1 go=3`), toggles Guard,
 pings `PPrev` and closes the window - the same clicks a human would make, with
 the window's own id in every log line (`game_click=party <x>,<y> id=<n>`).
+
+The select/move smoke test also pins the move read-outs after a walk: the
+Tutorial party's allowances (32/28/36/32) less the 12-point path give
+`game_party=moves=16 budget=16 sel=15 u1=20 u2=16 u3=24 u4=20`, i.e. each pill's
+caption and the `MovesLbl` show what the party has **left**, not its maximum.
+A turn start refills them (`mv_reset_army_turn`): selecting the army again on
+the human's next turn prints `game_party=moves=28 budget=28 sel=15 u1=32 u2=28
+u3=36 u4=32` again. `aow_movement_tests` locks `unit_move_points_left` /
+`spend_unit_move_points`.
+
+The party zero-move smoke test drives the deselection rule: three walks
+(12 + 12 + 4) leave the party at `moves=0 budget=0` with unit 2 empty
+(`u1=4 u2=0 u3=8 u4=4`), clicking unit 2's pill prints
+`game_party_fold=slot=2 sel=13 budget=4` (the mask drops the unit and the
+remaining 4/8/4 give the budget back), and the next 3-point walk is accepted
+(`game_msg=moved (19,33) -> (18,33)`, ending at `moves=1 budget=1 sel=7`).
+Before this, the empty unit pinned the whole party at 0 and the move was
+refused with "not enough move points this turn".
 

@@ -56,6 +56,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <map>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -587,14 +588,35 @@ constexpr std::uint32_t kTbTabArt[3][3] = {{14, 15, 16}, {20, 21, 22},
                                            {17, 18, 19}};
 const char* const kTbTabText[kTbTabCount] = {"World Map", "Realm", "Magic",
                                              "Relations", "Events"};
-// TBNextButton (568,7 26x38): TBWin NextButton up 3 / down 4.
-constexpr std::uint32_t kTbNextArt[3] = {3, 3, 4};
+// TBNextButton (568,7 26x38): `TBWin` NextButton.BMP - ONE 26x38 picture per
+// state, not a 3-piece (TBWin ids 3 and 4 are both 26x38). `TAOWButton.Draw`
+// (AoWInterface.dpl 0x0040b338) picks the library's index 0 while the button is
+// at rest and index 1 after `CheckMouseDown` set +0x110 = -1, i.e. while the
+// button is held down; `CheckMouseUp` clears +0x110 and fires OnClick.
+constexpr std::uint32_t kTbNextUpArt = 3;
+constexpr std::uint32_t kTbNextDownArt = 4;
 constexpr int kTbNextW = 26, kTbNextH = 38, kTbNextX = 568, kTbNextY = 7;
-// TurnButton (596,7): Int\TBTurnBt.ILB NextTurn.BMP 41x38. The 102 frames are
-// an animation; the button idles on the current player's colour frame and the
-// reviewed capture shows frame 81 (its ground is the reference's gold ring).
+// TurnButton (596,7): Int\TBTurnBt.ILB NextTurn.BMP 41x38, 102 frames. The
+// layout is the one `TAOWTurnButton` (AOWTools.dpl, unit "TurnButton") animates:
+//   frames 0..10            the "turn changing" swirl (`Create` sets AnimStart
+//                           = 0xB; the glow block is 0..10, `Update` mode 2)
+//   frames 11+7*r .. 17+7*r one block per RACE r (0..12; 12 = "no seat"),
+//                           the block's last frame (+6) being its transition
+//                           swirl, which is also the "turn ended" picture.
+// `TAOWTurnButton.Draw` (0x59704e44) draws `AnimStart + 7*CurPlayer + 6` while
+// the button is Checked and not animating, and its `Frame` (+0x140) otherwise.
 constexpr int kTbTurnX = 596, kTbTurnY = 7, kTbTurnW = 41, kTbTurnH = 38;
-constexpr int kTbTurnFrame = 81;
+constexpr int kTbTurnFrameCount = 102;
+constexpr int kTbTurnAnimStart = 11;    // TAOWTurnButton.Create: +0x128 = 0xb
+constexpr int kTbTurnGlowFrames = 11;   // frames 0..10 (Update mode 2 stops at 10)
+constexpr int kTbTurnRaceStride = 7;    // frames per race block
+constexpr int kTbTurnNoRace = 12;       // the form maps a -1 race to block 12
+// The in-game hit-test ids (Scene::game_hit): 0..4 the five task tabs, 5/6 the
+// scanner tabs, 7 the NextButton (TBNextButtonClick), 8 the scanner's minimize,
+// 9 the TurnButton (TAOWTurnButton); the Party floater's own ids are 100+.
+constexpr int kGameHitNext = 7;
+constexpr int kGameHitScanMin = 8;
+constexpr int kGameHitTurn = 9;
 // The gold / mana read-outs: TAOWPanel WGoldPnl (awRight, RightOffset 148,
 // BottomOffset 1) at (423,26) 69x21 with TBWin BarSet2 51, and WManaPnl
 // (RightOffset 76) at (495,26) 69x21 with BarSet2 52.
@@ -1300,6 +1322,11 @@ std::string acp_from_w(const std::wstring& w) {
 // The UI thread hands the audio thread a new song list through this (it is
 // defined below, after `App g`, which owns the shared music state).
 void set_music_playlist(std::vector<std::string> songs);
+// One-shot sample playback, the game's `Sound.PlaySample` (SoundP.dpl): the
+// shared UI click is `Sfx\Int\Btn1.wav` (AoW.exe FUN_00455dfc mode 0) and a
+// human's turn start is `SFX\EVENTS\NEWTURN.WAV` (TTurnPlayerControl.NewTurn
+// 0x55756714). Resolved against the game root; silent with --no-music.
+void play_game_sfx(const std::string& rel);
 
 // ---------------------------------------------------------------- the screen
 struct Scene {
@@ -1448,8 +1475,23 @@ struct Scene {
     Sprite tb_bar[3];             // TBWin 0/1/2  BarSet 3-piece (640x48)
     Sprite tb_start[2][3];        // TBWin DragonButton (11/12/13 up, 8/9/10 down)
     Sprite tb_tab[3][3];          // TBWin BarButtonLong (14/20/17 triples)
-    Sprite tb_next[3];            // TBWin NextButton (3 up / 4 down)
-    Sprite tb_turn;               // TBTurnBt 0  NextTurn.BMP 41x38
+    Sprite tb_next_idle;          // TBWin 3  NextButton.BMP (idle)
+    Sprite tb_next_pressed;       // TBWin 4  NextButton.BMP (held down)
+    // TAOWTurnButton's own art: the whole 102-frame Int\TBTurnBt.ILB, indexed
+    // exactly like the class indexes it (+0x140 / AnimStart + 7*CurPlayer + 6).
+    std::vector<Sprite> tb_turn_frames;
+    // --- TAOWTurnButton state (AOWTools.dpl "TurnButton", instance +0x144) ---
+    int tb_turn_cur = kTbTurnNoRace;   // +0x118 CurPlayer (a RACE id; 12 = none)
+    int tb_turn_last = kTbTurnNoRace;  // +0x11c LastPlayer
+    int tb_turn_mode = 0;              // +0x124 the animation state (0..3)
+    int tb_turn_start = kTbTurnAnimStart;  // +0x128 AnimStart
+    bool tb_turn_animating = false;    // +0x120 Animating
+    bool tb_turn_checked = false;      // +0x13c Checked ("turn ended")
+    int tb_turn_frame = 0;             // +0x140 Frame
+    bool tb_next_down = false;         // TBNextButton held down (+0x110 = -1)
+    // TPlayer+0xb4 - the army index `TAoWHSMap.SelectNextArmy` continues from.
+    int tb_next_index = -1;
+    bool game_turns_started = false;   // the turn loop is running
     Sprite tb_gold;               // TBWin 51   BarSet2 69x21 (gold read-out)
     Sprite tb_mana;               // TBWin 52   BarSet2 69x21 (mana read-out)
     Sprite tb_time_body;          // TBWin 28   BarSet2 33x17 (timer body)
@@ -2315,7 +2357,9 @@ struct Scene {
                         decode_id(tbwin_il, kTbTabArt[s][p], tb_tab[s][p]);
                     }
                 }
-                for (int i = 0; i < 3; ++i) decode_id(tbwin_il, kTbNextArt[i], tb_next[i]);
+                // NextButton: one picture per state (idle 3 / held 4).
+                decode_id(tbwin_il, kTbNextUpArt, tb_next_idle);
+                decode_id(tbwin_il, kTbNextDownArt, tb_next_pressed);
                 decode_id(tbwin_il, kTbGoldArt, tb_gold);
                 decode_id(tbwin_il, kTbManaArt, tb_mana);
                 decode_id(tbwin_il, kTbTimeBodyArt, tb_time_body);
@@ -2325,8 +2369,16 @@ struct Scene {
             }
             const std::string lb = (base / "Int" / "LBIcon.ILB").string();
             if (lbicon_il.load(lb, err)) decode_id(lbicon_il, 2, tb_time_icon);
+            // The TurnButton's whole animation: 102 frames, indexed by the class
+            // exactly as the library stores them (see kTbTurnAnimStart).
             const std::string tt = (base / "Int" / "TBTurnBt.ILB").string();
-            if (turnbt_il.load(tt, err)) decode_id(turnbt_il, kTbTurnFrame, tb_turn);
+            if (turnbt_il.load(tt, err)) {
+                tb_turn_frames.assign(kTbTurnFrameCount, Sprite());
+                for (int f = 0; f < kTbTurnFrameCount; ++f) {
+                    decode_id(turnbt_il, static_cast<std::uint32_t>(f),
+                              tb_turn_frames[static_cast<std::size_t>(f)]);
+                }
+            }
             const std::string sw = (base / "Int" / "ScanWin.ILB").string();
             if (scanwin_il.load(sw, err)) {
                 for (int i = 0; i < 8; ++i) {
@@ -2788,6 +2840,12 @@ struct Scene {
         // crest) - all read from the map (see game_resolve_banner).
         game_resolve_banner();
         mv_explore_for_human();
+        // The day/turn loop starts on the seated player (TAoWHSMap.Activate
+        // hands it the first turn; the order's entry 0 is the independents).
+        // `apply_scenario_players` restarts it if the setup control moved the
+        // Human to another race.
+        game_turns_started = false;
+        game_begin_turns();
     }
 
     // `TArmy.UpdateExploration@0x5578e1a8` -> `TAoWMapLevel.ExploreArea@
@@ -2861,6 +2919,22 @@ struct Scene {
         return nullptr;
     }
 
+    // The army's remaining move points this turn: `TArmy.MovePoints` (min over
+    // its units, capped at 0x32) bounded by what it has left after moving
+    // (`army_mp_left`, set by `game_move_selected` and refilled by
+    // `mv_reset_army_turn`). `TAoWHSMap.SelectNextArmy` only offers an army
+    // whose value is at least 2. Each unit's own remaining points are read, so
+    // the number follows what the party has actually spent.
+    int army_remaining_mp(const aow::MapHs& a) const {
+        std::vector<std::uint8_t> mps;
+        for (const aow::MapUnit& u : a.units) {
+            mps.push_back(aow::unit_move_points_left(mv_cat, u));
+        }
+        int mp = aow::army_move_points(mps);
+        if (a.army_mp_left >= 0 && a.army_mp_left < mp) mp = a.army_mp_left;
+        return mp;
+    }
+
     // Folds `a` into `mv_army` and opens its party window with every unit
     // travelling - `TSelectedArmy.SetSelection` is seeded with the army's own
     // unit mask, and `TControlWin.CheckEnd` then repaints it. `x,y` is the hex
@@ -2871,7 +2945,9 @@ struct Scene {
         std::vector<std::array<bool, 256>> abs;
         for (const aow::MapUnit& u : a.units) {
             mts.push_back(aow::unit_move_types(u));
-            mps.push_back(aow::unit_move_points(mv_cat, u));
+            // The budget is what each unit has *left* this turn (TUnit
+            // .GetMovePoints +0x3d), not its fresh allowance.
+            mps.push_back(aow::unit_move_points_left(mv_cat, u));
             abs.push_back(aow::decode_ability_bitmap(u.ability_mask, u.ability_count));
         }
         mv_army = aow::army_move(mv_tables, mts, mps, abs);
@@ -2891,6 +2967,28 @@ struct Scene {
         }
         party_hover = party_pressed = -1;
         return mv_selected;
+    }
+
+    // Re-folds `mv_army` for the units that are *currently travelling*
+    // (`TSelectedArmy.SetSelection` -> `TArmy.CreateMovePointTable`,
+    // `TArmy.MoveTypes`, `TArmy.MovePoints`). The Party window's pill clicks
+    // change the mask, so this runs from `party_refresh()`: a unit left behind
+    // leaves the army's move-point table, its move-type union and its budget at
+    // once. A unit with no move points left therefore cannot pin the rest of
+    // the party, and the remaining units move on their own remaining points.
+    void mv_fold_selection() {
+        std::vector<std::uint8_t> mts, mps;
+        std::vector<std::array<bool, 256>> abs;
+        for (int s = 0; s < kPartySlots; ++s) {
+            if (!party_travels(s)) continue;
+            const aow::MapUnit& u = *party_unit(s);
+            mts.push_back(aow::unit_move_types(u));
+            mps.push_back(aow::unit_move_points_left(mv_cat, u));
+            abs.push_back(aow::decode_ability_bitmap(u.ability_mask, u.ability_count));
+        }
+        // No unit selected: `TArmy.CreateMovePointTable` leaves the table
+        // all-0xFF and `MovePoints` is 0, so the party cannot march.
+        mv_army = aow::army_move(mv_tables, mts, mps, abs);
     }
 
     // Fills `mv_army` for the army standing on (x,y). False when it is not the
@@ -3360,10 +3458,14 @@ struct Scene {
         }
         const std::uint8_t human =
             aow::apply_setup_player_types(mv_gs, rt, kScenRaceCount);
+        const std::uint8_t before = mv_human;
         mv_human = human;
         // The Events banner follows the seat (name / plural race / face / crest),
         // so re-resolve it for the player the setup control marked Human.
         game_resolve_banner();
+        // SetupMap decides which seat is the local player *before* the first
+        // turn, so the loop starts over when the chosen race moved the seat.
+        if (before != mv_human) game_begin_turns(true);
     }
 
     // The Scenario screen's Start! button (TScenSetup.StartBtnClick 0x00412568):
@@ -4921,6 +5023,11 @@ struct Scene {
         // The party floater's own hover: its title-bar and foot buttons light
         // up while the pointer is over them (TAOWBaseButton's ILIndexLit).
         party_hover = game_show_party ? party_hit_test(mouse_x, mouse_y) : -1;
+        // The TurnButton's own Update (TAOWTurnButton.Update 0x59704cd4) runs
+        // once per game frame, exactly like the window's Update, and then the
+        // turn loop hands the turn on to the seats the port does not simulate.
+        tb_turn_update();
+        game_turn_tick();
         cam_edge_scroll();
         // The building animations advance with the map clock (AoWHSMap+0x40): the
         // engine re-draws its scene every frame, so re-composite the animated
@@ -5150,6 +5257,14 @@ struct Scene {
             target->units.insert(target->units.end(),
                                  mv_merge_moving.units.begin(),
                                  mv_merge_moving.units.end());
+            // `TArmy.MovePoints` is the minimum over the units, so the merged
+            // army keeps whichever of the two parties has fewer left.
+            if (mv_merge_moving.army_mp_left >= 0 &&
+                (target->army_mp_left < 0 ||
+                 mv_merge_moving.army_mp_left < target->army_mp_left)) {
+                target->army_mp_left = mv_merge_moving.army_mp_left;
+            }
+            target->army_flags = static_cast<std::uint8_t>(target->army_flags & ~3u);
             std::printf("game_merge=%d,%d->%d,%d stay=%d added=%d total=%d\n",
                         src_x, src_y, dest_x, dest_y,
                         static_cast<int>(mv_merge_stay),
@@ -5197,6 +5312,10 @@ struct Scene {
             game_say("not enough move points this turn");
             return false;
         }
+        // The move spends this turn's move points (TAbstractUnit.MovePointCost
+        // is charged step by step; TArmy.MovePoints is then what is left).
+        const int mp_after =
+            std::max(0, static_cast<int>(mv_army.budget) - mv_path.total_cost);
         const int dest_x = dest->x, dest_y = dest->y;
         const int src_x = mv_sel_x, src_y = mv_sel_y;
         if (dest_x == src_x && dest_y == src_y) return false;
@@ -5264,6 +5383,11 @@ struct Scene {
             merge_into = target;
         }
         aow::MapHs moved = std::move(src_army);
+        // Moving drops the Guard stance (`TArmy+0x28` bit 0) and spends the move
+        // points, so `SelectNextArmy` skips this army until its owner's next turn
+        // refills it (`TAbstractUnit.NewTurn`).
+        moved.army_flags = static_cast<std::uint8_t>(moved.army_flags & ~3u);
+        moved.army_mp_left = static_cast<std::int16_t>(mp_after);
         from.objects.erase(from.objects.begin() +
                            static_cast<std::ptrdiff_t>(src_index));
         {
@@ -5275,6 +5399,12 @@ struct Scene {
                 left.owner = moved.owner;
                 left.army_direction = moved.army_direction;
                 left.units = std::move(stay);
+                // The units that stay behind never walked, so their own move
+                // points are untouched - they keep whatever they had left. The
+                // new group has not moved as a whole, so its army-level mark
+                // stays at "unspent" (the units' own values are what count).
+                left.army_flags = 0;
+                left.army_mp_left = -1;
                 from.objects.push_back(std::move(left));
                 std::printf("game_split=%d,%d stay=%d go=%d\n", src_x, src_y,
                             static_cast<int>(from.objects.back().units.size()),
@@ -5292,6 +5422,14 @@ struct Scene {
                 }
                 party_focus = moved.units.empty() ? -1 : 0;
             }
+        }
+        // Each travelling unit pays the path's cost from its own pool
+        // (`TAbstractUnit.MovePointCost@0x55780848` is charged step by step, so
+        // the whole party spends the same amount - the value the Party window's
+        // pill captions and the `MovesLbl` read out). The units left behind
+        // never walked, so their own points are untouched.
+        for (aow::MapUnit& u : moved.units) {
+            aow::spend_unit_move_points(mv_cat, u, mv_path.total_cost);
         }
         // The facing byte the army keeps (TUnitHS rw tag 9): the direction of its
         // last step. The idle render draws the *standing* pose of this facing
@@ -5900,13 +6038,14 @@ struct Scene {
     }
 
     // `AoWE.TArmy.MovePoints@0x5578d8d0` over the travelling units: 0 when none
-    // travels, else min(0x32, the smallest allowance).
+    // travels, else min(0x32, the smallest *remaining* allowance) - the engine's
+    // `MovesLbl` shows what is left this turn, not the units' maximum.
     int party_move_points() const {
         std::vector<std::uint8_t> mps;
         for (int s = 0; s < kPartySlots; ++s) {
             const aow::MapUnit* u = party_unit(s);
             if (u == nullptr || !party_travels(s)) continue;
-            mps.push_back(aow::unit_move_points(mv_cat, *u));
+            mps.push_back(aow::unit_move_points_left(mv_cat, *u));
         }
         if (mps.empty()) return 0;
         return aow::army_move_points(mps);
@@ -5987,7 +6126,9 @@ struct Scene {
     // selected party's travelling mask into +0x178 and then repaints every
     // widget from it; the port has no widget tree, so only the mask has to be
     // kept - the renderer derives each cell from it. This drops the bits of
-    // units that are no longer part of the army.
+    // units that are no longer part of the army, then re-folds the army's
+    // movement from the units that still travel, so leaving a unit behind also
+    // revalidates the party's budget, move types and move-point table.
     void party_refresh() {
         if (!game_show_party) return;
         if (party_army() == nullptr) return;
@@ -5998,6 +6139,7 @@ struct Scene {
             }
         }
         party_sel = keep;
+        mv_fold_selection();
     }
 
     // The party window's control ids (the renderer and the hit test share them).
@@ -6049,7 +6191,6 @@ struct Scene {
         const aow::MapLevel& lv =
             game_state_map.levels[static_cast<std::size_t>(game_level)];
         std::vector<std::pair<int, int>> mine;
-        int cur = -1;
         for (std::uint32_t y = 0; y < lv.height; ++y) {
             for (std::uint32_t x = 0; x < lv.width; ++x) {
                 const aow::MapTile& t =
@@ -6059,26 +6200,49 @@ struct Scene {
                         hs.units.empty() || hs.owner != mv_human) {
                         continue;
                     }
-                    if (static_cast<int>(x) == mv_sel_x &&
-                        static_cast<int>(y) == mv_sel_y) {
-                        cur = static_cast<int>(mine.size());
-                    }
                     mine.emplace_back(static_cast<int>(x),
                                       static_cast<int>(y));
                 }
             }
         }
-        if (mine.empty()) return;
         const int n = static_cast<int>(mine.size());
-        const int next = cur < 0 ? (delta > 0 ? 0 : n - 1)
-                                 : ((cur + delta) % n + n) % n;
-        game_sel_hx = mine[static_cast<std::size_t>(next)].first;
-        game_sel_hy = mine[static_cast<std::size_t>(next)].second;
+        if (n == 0) return;
+        // `TPlayer+0xb4`: the index the last SelectNext/SelectPrevArmy stopped
+        // on. Both routines continue from there (falling back to 0 when it is
+        // out of range) and advance *before* testing, so a repeated click walks
+        // the whole list and wraps.
+        int idx = tb_next_index;
+        if (idx < 0 || idx >= n) idx = 0;
+        int chosen = -1;
+        for (int k = 0; k < n; ++k) {
+            idx = ((idx + delta) % n + n) % n;
+            const auto& pos = mine[static_cast<std::size_t>(idx)];
+            const aow::MapHs* a = army_on_hex(pos.first, pos.second);
+            if (a == nullptr) continue;
+            // `TArmy.MovePoints(army, 0xff) >= 2` and `(TArmy+0x28 & 3) == 0`
+            // - the army has move points left this turn and is not on guard.
+            if (army_remaining_mp(*a) >= 2 &&
+                (a->army_flags & 3) == 0) {
+                chosen = idx;
+                break;
+            }
+        }
+        if (chosen < 0) {
+            // No army answers: the engine's `UnselectLocation` - the map's
+            // selection is cleared (the party floater closes with it).
+            mv_reset();
+            tb_next_index = -1;
+            game_say("no army to select");
+            return;
+        }
+        game_sel_hx = mine[static_cast<std::size_t>(chosen)].first;
+        game_sel_hy = mine[static_cast<std::size_t>(chosen)].second;
         mv_select(game_sel_hx, game_sel_hy);
+        tb_next_index = chosen;
         game_update_path();
         party_sel = static_cast<std::uint8_t>(mv_selected ? 0xff : 0);
         party_refresh();
-        game_say("party " + std::to_string(next + 1) + "/" + std::to_string(n));
+        game_say("party " + std::to_string(chosen + 1) + "/" + std::to_string(n));
     }
 
     // The party window's click handling, one entry per DFM handler:
@@ -6109,7 +6273,14 @@ struct Scene {
             game_sel_hy = mv_sel_y;
             game_center_selection();
             party_sel ^= static_cast<std::uint8_t>(1u << s);
-            party_refresh();
+            party_refresh();          // re-folds the travelling units
+            game_update_path();       // ... and the trail's budget with them
+            // The new fold, so a test can pin that a deselected unit stops
+            // counting towards `TArmy.MovePoints` (its table and move types too).
+            std::printf("game_party_fold=slot=%d sel=%d budget=%d\n", s + 1,
+                        static_cast<int>(party_sel),
+                        static_cast<int>(mv_army.budget));
+            std::fflush(stdout);
             game_say("unit " + std::to_string(s + 1) +
                      (party_travels(s) ? " travels with the party"
                                        : " is left behind"));
@@ -6146,8 +6317,16 @@ struct Scene {
             return;
         case kPartyGuard:
             // PGuardChange: TArmy+0x28 bit 0 - "removes the party from the
-            // next-party loop".
+            // next-party loop". The party window shows the selected army, so
+            // the flag is stored on that army (`SelectNextArmy` tests `& 3`).
             party_guard = !party_guard;
+            if (aow::MapHs* a = army_on_hex(mv_sel_x, mv_sel_y)) {
+                if (party_guard) {
+                    a->army_flags = static_cast<std::uint8_t>(a->army_flags | 1u);
+                } else {
+                    a->army_flags = static_cast<std::uint8_t>(a->army_flags & ~1u);
+                }
+            }
             game_say(party_guard ? "party on guard" : "party active");
             return;
         case kPartyMove:
@@ -6350,7 +6529,7 @@ struct Scene {
                               P.micon[s].x, P.micon[s].y);
             }
             const std::string pts =
-                std::to_string(aow::unit_move_points(mv_cat, *u));
+                std::to_string(aow::unit_move_points_left(mv_cat, *u));
             const AowBox& b = P.pill[s];
             // The engine draws the pill's caption with the control's own AOWFont
             // (FontModule.Age10) and TextColor (clBlack); the glyphs are blitted
@@ -6410,6 +6589,258 @@ struct Scene {
             }
         }
     }
+    // ---------------------------------------------------------------------
+    // The bottom bar's two turn buttons (docs/22_TURN_BUTTONS.md)
+    //
+    // TBNextButton  - TAOWButton (AoWInterface.dpl), OnClick = TBNextButtonClick
+    //                 (AoW.exe 0x004573e8): the shared click sound, then
+    //                 TAoWHSMap.SelectNextArmy (AoWEPACK 0x55775fa0).
+    // TurnButton    - TAOWTurnButton (AOWTools.dpl unit "TurnButton", class
+    //                 instance 0x144 bytes), which draws the 102-frame turn
+    //                 animation and fires TurnButtonChange on mouse-DOWN
+    //                 (CheckMouseDown 0x59705018). TurnButtonChange (AoW.exe
+    //                 0x004574ac) ends or withdraws the seat's turn.
+    //
+    // The turn loop itself is `aow::GameState::end_turn` (see game_state.*),
+    // which reproduces TTurnPlayerControl.EndTurn: the turn is handed on only
+    // once its owner has ended it, and a new day starts only when the turn
+    // order wraps - i.e. after every player has ended their turn.
+    // ---------------------------------------------------------------------
+
+    // The roster entry whose turn it is (TPlayerList.GetPlayers(AoWHSMap+0x140,
+    // AoWHSMap+0xa4)), or nullptr.
+    const aow::Player* game_current_player() const {
+        const std::uint8_t cur = mv_gs.current();
+        if (cur == 0xff) return nullptr;
+        const std::size_t i = mv_gs.index_of(cur);
+        if (i >= mv_gs.players.size()) return nullptr;
+        return &mv_gs.players[i];
+    }
+
+    static const aow::Player* game_player_by_index(const aow::GameState& gs,
+                                                   std::uint8_t idx) {
+        const std::size_t i = gs.index_of(idx);
+        return i < gs.players.size() ? &gs.players[i] : nullptr;
+    }
+
+    // The TurnButton's "player" is the block the library carries: a RACE id,
+    // with 12 for "no seat" (the form maps a -1 race to frame block 12).
+    static int tb_turn_race_of(const aow::Player* p) {
+        if (p == nullptr || p->race == 0xff) return kTbTurnNoRace;
+        if (p->race > kTbTurnNoRace) return kTbTurnNoRace;
+        return static_cast<int>(p->race);
+    }
+
+    // TAOWTurnButton.Draw (AOWTools.dpl 0x59704e44): the picture index is
+    // *AnimStart + Frame* (+0x128 + +0x140), except while the button is Checked
+    // and no change animation is playing, when it is
+    // *AnimStart + 7*CurPlayer + 6* - the block's transition frame.
+    int tb_turn_draw_frame() const {
+        if (!tb_turn_animating && tb_turn_checked) {
+            const int f = tb_turn_start + kTbTurnRaceStride * tb_turn_cur + 6;
+            if (f >= 0 && f < kTbTurnFrameCount) return f;
+        }
+        return tb_turn_start + tb_turn_frame;
+    }
+
+
+    // TAOWTurnButton.Update (AOWTools.dpl 0x59704cd4), one call per game frame -
+    // the window's own Update cadence. The state machine is reproduced verbatim:
+    //   mode 0  idle; a CurPlayer that differs from LastPlayer starts the change
+    //           from LastPlayer's block at AnimStart;
+    //   mode 1  step the frame up until the target block's +5 frame;
+    //   mode 2  run the "turn changing" glow frames 0..10;
+    //   mode 3  step down from the target block's +5 frame to its first frame,
+    //           then settle on it, keep LastPlayer = CurPlayer, clear Animating
+    //           and fire OnAnimDone (TurnButtonAnimDone clears Checked).
+    void tb_turn_update() {
+        switch (tb_turn_mode) {
+        case 0:
+            if (tb_turn_last == tb_turn_cur) break;
+            tb_turn_frame = kTbTurnRaceStride * tb_turn_last;
+            tb_turn_start = kTbTurnAnimStart;
+            tb_turn_mode = 1;
+            tb_turn_animating = true;
+            break;
+        case 1:
+            ++tb_turn_frame;
+            if (tb_turn_frame > kTbTurnRaceStride * tb_turn_cur + 5) {
+                tb_turn_frame = 0;
+                tb_turn_mode = 2;
+                tb_turn_start = 0;
+            }
+            break;
+        case 2:
+            ++tb_turn_frame;
+            if (tb_turn_frame > kTbTurnGlowFrames - 1) {
+                tb_turn_mode = 3;
+                tb_turn_frame = kTbTurnRaceStride * tb_turn_cur + 5;
+                tb_turn_start = kTbTurnAnimStart;
+            }
+            break;
+        case 3:
+            --tb_turn_frame;
+            if (tb_turn_frame <= kTbTurnRaceStride * tb_turn_cur) {
+                tb_turn_frame = kTbTurnRaceStride * tb_turn_cur;
+                tb_turn_mode = 0;
+                tb_turn_start = kTbTurnAnimStart;
+                tb_turn_last = tb_turn_cur;
+                tb_turn_animating = false;
+                // OnAnimDone -> TurnButtonAnimDone (AoW.exe 0x004572f4).
+                tb_turn_checked = false;
+            }
+            break;
+        default:
+            tb_turn_mode = 0;
+            break;
+        }
+        if (tb_turn_frame < 0) tb_turn_frame = 0;
+        if (tb_turn_frame >= kTbTurnFrameCount) tb_turn_frame = kTbTurnFrameCount - 1;
+    }
+
+    // The form's seated-player update (AoW.exe 0x004551b1): the button takes the
+    // new seat's race block; with `animate` the class walks there itself, without
+    // it the button snaps to the block's first frame (what the form does when a
+    // map opens). Either way the Checked state is dropped.
+    void tb_turn_set_player(int race, bool animate) {
+        if (race < 0 || race > kTbTurnNoRace) race = kTbTurnNoRace;
+        tb_turn_checked = false;
+        if (!animate) {
+            tb_turn_cur = tb_turn_last = race;
+            tb_turn_frame = kTbTurnRaceStride * race;
+            tb_turn_start = kTbTurnAnimStart;
+            tb_turn_mode = 0;
+            tb_turn_animating = false;
+            return;
+        }
+        tb_turn_cur = race;
+    }
+
+    // TAbstractUnit.NewTurn (@0x55780d4c) refills every unit's move points when
+    // its owner's turn begins, so the seat's armies can all march again.
+    void mv_reset_army_turn(std::uint8_t owner) {
+        for (aow::MapLevel& lv : game_state_map.levels) {
+            for (aow::MapTile& t : lv.tiles) {
+                for (aow::MapHs& hs : t.objects) {
+                    if (hs.class_id != aow::kMapArmyHsClassId) continue;
+                    if (hs.owner != owner) continue;
+                    hs.army_mp_left = -1;
+                    for (aow::MapUnit& u : hs.units) u.move_points_left = -1;
+                }
+            }
+        }
+    }
+
+    // The turn loop moved to another player: the TurnButton follows it, the day
+    // read-out follows the map, and a human seat's turn start plays its sound
+    // and refills its armies (TTurnPlayerControl.NewTurn 0x55756714).
+    void game_turn_changed(bool animate) {
+        const aow::Player* p = game_current_player();
+        tb_turn_set_player(tb_turn_race_of(p), animate);
+        game_day = mv_gs.day;
+        if (p == nullptr) {
+            std::printf("game_turn=none day=%d\n", game_day);
+            std::fflush(stdout);
+            return;
+        }
+        std::printf("game_turn=player=%d name=%s day=%d race=%d block=%d\n",
+                    static_cast<int>(p->index), p->display_name().c_str(),
+                    game_day, static_cast<int>(p->race),
+                    kTbTurnAnimStart + kTbTurnRaceStride * tb_turn_cur);
+        std::fflush(stdout);
+        if (p->index == mv_human) {
+            mv_reset_army_turn(mv_human);
+            tb_next_index = -1;   // TPlayer+0xb4 starts a fresh seat
+            play_game_sfx("SFX\\EVENTS\\NEWTURN.WAV");
+            game_say("your turn - day " + std::to_string(game_day));
+        }
+    }
+
+    // Starts (or re-starts, when the setup control moved the Human to another
+    // race) the turn loop on the local seat. The map's own order begins with the
+    // independents (entry 0), so the engine's first Activate hands the seated
+    // player its turn; the port does the same (`begin_first_turn`).
+    void game_begin_turns(bool restart = false) {
+        if (!mv_ready || mv_gs.players.empty()) return;
+        if (game_turns_started && !restart) return;
+        // The day order (`begin_day` = GenerateNewTurnOrder; it does not bump
+        // the day - only `new_day` does).
+        mv_gs.begin_day(mv_gs.rng_seed);
+        if (mv_gs.turn_order.empty()) return;
+        if (restart) {
+            for (aow::Player& p : mv_gs.players) p.end_turn = false;
+            mv_gs.turn_in_order = 0;
+        }
+        if (mv_human == 0xff) {
+            // A roster that seats no local player has no turn to take: park the
+            // loop (and the button's colour) on the first seat and leave it be.
+            mv_gs.turn_in_order = 0;
+            mv_gs.current_player = mv_gs.turn_order.front();
+            game_turns_started = false;
+            tb_turn_set_player(tb_turn_race_of(game_current_player()), false);
+            game_day = mv_gs.day;
+            return;
+        }
+        mv_gs.begin_first_turn(mv_human);
+        game_turns_started = true;
+        game_turn_changed(false);
+    }
+
+    // TurnButtonChange (AoW.exe 0x004574ac): the button ends the *seated*
+    // player's turn, or withdraws it when that player already ended. The result
+    // of the map's EndTurn/CancelEndTurn is filed back into Checked
+    // (`*(Sender+0x5c) + 0x13c`), which is what turns the button into its
+    // "turn ended" picture.
+    void game_turn_button_click() {
+        if (!mv_ready || mv_gs.players.empty() || mv_human == 0xff) return;
+        if (tb_turn_animating) return;   // CheckMouseDown's [+0x120] gate
+        const aow::Player* seat = game_player_by_index(mv_gs, mv_human);
+        const bool ended = seat != nullptr && seat->end_turn;
+        tb_turn_checked = !tb_turn_checked;
+        if (!ended) {
+            const std::uint8_t before = mv_gs.current();
+            tb_turn_checked = mv_gs.end_turn(mv_human);
+            std::printf("game_endturn=player=%d ok=%d from=%d to=%d day=%d\n",
+                        static_cast<int>(mv_human), tb_turn_checked ? 1 : 0,
+                        static_cast<int>(before),
+                        static_cast<int>(mv_gs.current()), mv_gs.day);
+            std::fflush(stdout);
+            if (tb_turn_checked) game_turn_changed(true);
+        } else {
+            tb_turn_checked = !mv_gs.cancel_end_turn(mv_human);
+            std::printf("game_endturn=cancel player=%d checked=%d\n",
+                        static_cast<int>(mv_human), tb_turn_checked ? 1 : 0);
+            std::fflush(stdout);
+        }
+    }
+
+    // TBNextButtonClick (AoW.exe 0x004573e8): the shared UI click, then
+    // TAoWHSMap.SelectNextArmy (0x55775fa0).
+    void game_next_button_click() {
+        play_game_sfx("Sfx\\Int\\Btn1.wav");
+        game_select_army(+1);
+        std::printf("game_next=%d,%d index=%d\n", mv_sel_x, mv_sel_y,
+                    tb_next_index);
+        std::fflush(stdout);
+    }
+
+    // The turn loop, driven once per game frame. Every seat that the port does
+    // not simulate - the independents (0) and the CPU wizards - plays its
+    // (empty) turn and ends it through the same `GameState::end_turn` the
+    // human's button uses. The end is paced by the TurnButton's own turn-change
+    // animation, so each seat's colour is seen before the next one begins: the
+    // AI phase as the original plays it (and no seat is ever skipped before it
+    // ended its turn).
+    void game_turn_tick() {
+        if (!game_turns_started || mv_human == 0xff) return;
+        if (mv_gs.turn_order.empty()) return;
+        const std::uint8_t cur = mv_gs.current();
+        if (cur == 0xff || cur == mv_human) return;
+        if (tb_turn_animating) return;   // the colour change is still playing
+        if (mv_gs.end_turn(cur)) game_turn_changed(true);
+    }
+
+
 
     int game_hit(int x, int y) const {
         const GameLayout L = game_layout();
@@ -6428,8 +6859,9 @@ struct Scene {
         for (int i = 0; i < 2; ++i) {
             if (in(L.scan_tab[i], x, y)) return 5 + i;
         }
-        if (in(L.next, x, y)) return 7;
-        if (in(L.scan_min, x, y)) return 8;
+        if (in(L.next, x, y)) return kGameHitNext;
+        if (in(L.turn, x, y)) return kGameHitTurn;
+        if (in(L.scan_min, x, y)) return kGameHitScanMin;
         return -1;
     }
 
@@ -6505,8 +6937,24 @@ struct Scene {
                     L.bar.y + kTbTimeLblTop, kTbTimeText, 0, 0, 0, false,
                     false);
         }
-        blit3_box(cv, tb_next, L.next);
-        cv.blit_stretch(tb_turn, L.turn.x, L.turn.y, L.turn.w, L.turn.h);
+        // TBNextButton: one 26x38 picture - id 3 at rest, id 4 while the button
+        // is held down (TAOWButton.Draw's +0x110 branch; CheckMouseUp clears it).
+        {
+            const Sprite& b = tb_next_down ? tb_next_pressed : tb_next_idle;
+            if (b.ok) cv.blit_stretch(b, L.next.x, L.next.y, L.next.w, L.next.h);
+        }
+        // TurnButton (TAOWTurnButton.Draw 0x59704e44): the current frame of the
+        // 102-frame turn animation - the seat's race block at rest, the block's
+        // transition frame when the turn has been ended, and the swirl while the
+        // change animation plays.
+        {
+            const int f = tb_turn_draw_frame();
+            if (f >= 0 && static_cast<std::size_t>(f) < tb_turn_frames.size() &&
+                tb_turn_frames[static_cast<std::size_t>(f)].ok) {
+                cv.blit_stretch(tb_turn_frames[static_cast<std::size_t>(f)],
+                                L.turn.x, L.turn.y, L.turn.w, L.turn.h);
+            }
+        }
         cv.blit_stretch(tb_gold, L.gold.x, L.gold.y, L.gold.w, L.gold.h);
         cv.blit_stretch(tb_mana, L.mana.x, L.mana.y, L.mana.w, L.mana.h);
         // The totals (FontModule.TBarNumber, clBlack) right-aligned rox 23, the
@@ -6961,6 +7409,13 @@ struct App {
     // and re-composite the building animations before the render, so the in-game
     // screen's animated buildings can be proved from a PNG (docs/17_BUILDING_ANIM.md).
     int game_clock_override = -1;
+    // --turn-frame N: head-less, freeze the TurnButton on absolute library frame
+    // N (0..101) before the render, so the turn-change swirl can be proved from
+    // a PNG (docs/22_TURN_BUTTONS.md).
+    int turn_frame_override = -1;
+    // --next-held: head-less, draw the TBNextButton with its held-down picture
+    // (TAOWButton's +0x110 state), so the pressed art can be proved from a PNG.
+    bool next_held = false;
     int crop_x = 0, crop_y = 0, crop_w = 0, crop_h = 0;  // 0 = no crop
     bool music = true;
     // --- the music player (a port of Sound.TSongPlayer, see play_music_thread)
@@ -6973,6 +7428,14 @@ struct App {
     std::vector<std::string> title_playlist;  // Songs\TITLE.IT
     std::thread audio_thread;
     std::atomic<bool> audio_stop{false};
+    // --- one-shot SFX (Sound.PlaySample) ------------------------------------
+    // The UI thread queues a decoded sample; the audio thread mixes it into the
+    // music stream, which is exactly how the game's Galaxy engine plays
+    // `Sfx\Int\Btn1.wav` over the song. `sfx_cache` is UI-thread only (a sample
+    // is decoded once); `sfx_queue` is the hand-off, `sfx_voices` the mixer's.
+    std::mutex sfx_mtx;
+    std::map<std::string, aow::PcmBuffer> sfx_cache;
+    std::vector<aow::PcmBuffer> sfx_queue;
 };
 
 App g;
@@ -7019,6 +7482,81 @@ void set_music_playlist(std::vector<std::string> songs) {
     std::fflush(stdout);
 }
 
+// `Sound.PlaySample` (SoundP.dpl, the game's one-shot sample path): decode the
+// sample (`Sfx\Int\Btn1.wav` for the shared UI click, `SFX\EVENTS\NEWTURN.WAV`
+// when a human seat's turn starts) relative to the game root and hand it to the
+// mixer. A file that is missing or silent is reported once and ignored - the
+// buttons keep working exactly as without sound.
+void play_game_sfx(const std::string& rel) {
+    if (!g.music) return;                    // --no-music silences everything
+    if (g.scene.root_dir.empty()) return;
+    auto it = g.sfx_cache.find(rel);
+    if (it == g.sfx_cache.end()) {
+        std::string path = rel;
+        for (char& c : path) {
+            if (c == '\\') c = '/';
+        }
+        const fs::path p = fs::path(g.scene.root_dir) / path;
+        aow::PcmBuffer buf;
+        std::string err;
+        if (!aow::load_sample(p.string(), buf, &err) || buf.frames() == 0) {
+            std::fprintf(stderr, "menu: sfx %s unavailable (%s)\n", path.c_str(),
+                         err.c_str());
+            it = g.sfx_cache.emplace(rel, aow::PcmBuffer()).first;
+        } else {
+            it = g.sfx_cache.emplace(rel, std::move(buf)).first;
+        }
+    }
+    if (it->second.frames() == 0) return;
+    std::lock_guard<std::mutex> lk(g.sfx_mtx);
+    // Keep the hand-off bounded: without an audio device the thread never
+    // drains it, and a player hammering the turn button would queue forever.
+    if (g.sfx_queue.size() >= 8) g.sfx_queue.erase(g.sfx_queue.begin());
+    g.sfx_queue.push_back(it->second);
+}
+
+// Mixes the queued one-shot samples over one rendered music block, resampling
+// the sample's own rate to the output's (Galaxy ran everything through one
+// 44.1 kHz mixer as well) and clamping the sum so a click can never wrap.
+void mix_sfx(std::int16_t* chunk, std::size_t frames) {
+    std::vector<aow::PcmBuffer> starting;
+    {
+        std::lock_guard<std::mutex> lk(g.sfx_mtx);
+        starting.swap(g.sfx_queue);
+    }
+    // The mixer's voices live across blocks, so a sample keeps playing while
+    // the next music block is rendered.
+    static std::vector<aow::PcmBuffer> voices;
+    static std::vector<double> pos;
+    for (aow::PcmBuffer& b : starting) {
+        voices.push_back(std::move(b));
+        pos.push_back(0.0);
+    }
+    for (std::size_t v = 0; v < voices.size();) {
+        const aow::PcmBuffer& b = voices[v];
+        const double step = static_cast<double>(b.sample_rate) / 44100.0;
+        const std::size_t n = b.frames();
+        for (std::size_t i = 0; i < frames; ++i) {
+            const std::size_t si = static_cast<std::size_t>(pos[v]);
+            if (si >= n) break;
+            const int sum_l = static_cast<int>(chunk[i * 2]) + b.samples[si * 2];
+            const int sum_r =
+                static_cast<int>(chunk[i * 2 + 1]) + b.samples[si * 2 + 1];
+            chunk[i * 2] = static_cast<std::int16_t>(
+                std::max(-32768, std::min(32767, sum_l)));
+            chunk[i * 2 + 1] = static_cast<std::int16_t>(
+                std::max(-32768, std::min(32767, sum_r)));
+            pos[v] += step;
+        }
+        if (static_cast<std::size_t>(pos[v]) >= n) {
+            voices.erase(voices.begin() + static_cast<std::ptrdiff_t>(v));
+            pos.erase(pos.begin() + static_cast<std::ptrdiff_t>(v));
+        } else {
+            ++v;
+        }
+    }
+}
+
 // The music player thread: a port of Sound.TSongPlayer (SoundP.dpl) as the
 // game's own menu / map code drives it. It holds an ordered list of songs and
 // plays them one after another - `TSongPlayer.Update` (SoundP 0x55405bf0)
@@ -7049,6 +7587,7 @@ void play_music_thread() {
             }
         }
         player.render(chunk.data(), kFrames);
+        mix_sfx(chunk.data(), static_cast<std::size_t>(kFrames));
         out.play_raw(chunk.data(), kFrames);
     }
 }
@@ -7256,8 +7795,15 @@ void game_action(int hit) {
         s.cam_set_y(s.cam_y);
         break;
     }
-    case 7: std::printf("game: next turn\n"); break;
-    case 8:  // SMinIcon - minimize the World Map floater
+    case kGameHitNext:  // TBNextButtonClick - the shared click + SelectNextArmy
+        s.game_next_button_click();
+        break;
+    case kGameHitTurn:  // TAOWTurnButton.CheckMouseDown is the mouse-DOWN path;
+                        // the head-less driver and a keyboard-style activation
+                        // land here, with the same OnChange.
+        s.game_turn_button_click();
+        break;
+    case kGameHitScanMin:  // SMinIcon - minimize the World Map floater
         s.game_show_scan = false;
         std::printf("game: world map floater minimized\n");
         break;
@@ -7481,6 +8027,21 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             // first.
             s.game_update();
             s.game_mouse_down = true;
+            // The bar's two turn buttons take the press before the map: the
+            // TurnButton fires its OnChange on mouse-DOWN (TAOWTurnButton
+            // .CheckMouseDown 0x59705018), the NextButton only arms its pressed
+            // picture (+0x110 = -1) and fires OnClick on release.
+            {
+                const int bh = s.game_hit(s.mouse_x, s.mouse_y);
+                if (bh == kGameHitTurn) {
+                    s.game_turn_button_click();
+                    return 0;
+                }
+                if (bh == kGameHitNext) {
+                    s.tb_next_down = true;
+                    return 0;
+                }
+            }
             // The party floater sits over the map (its window has a higher
             // Priority than the map window), so it takes the click first: the
             // pressed control keeps its "down" art until the button is released.
@@ -7531,7 +8092,20 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         if (s.screen == 3) {
             const int hit = s.game_hit(s.mouse_x, s.mouse_y);
-            if (hit != -1 && hit == s.game_hover) game_action(hit);
+            if (hit == kGameHitTurn) {
+                // TAOWTurnButton has only an OnChange, fired on mouse-DOWN
+                // (CheckMouseDown), so the release must not run the end-turn a
+                // second time.
+            } else if (hit == kGameHitNext) {
+                // TAOWButton.CheckMouseUp (AoWInterface.dpl 0x0040ba6c) fires
+                // OnClick only when the button was armed and the pointer is
+                // still over it; TBNextButtonClick plays the click sound and
+                // selects the next army.
+                if (s.tb_next_down) s.game_next_button_click();
+            } else if (hit != -1 && hit == s.game_hover) {
+                game_action(hit);
+            }
+            s.tb_next_down = false;      // +0x110 cleared on every release
             s.game_hover = -1;
             s.party_pressed = -1;
             s.game_mouse_down = false;   // THSMapMouse.Up (0x5560b8a0)
@@ -7663,6 +8237,8 @@ void print_usage() {
         "  --game-bench N        head-less: time the hover refresh N times\n"
         "  --game-anim N         head-less: advance a walk animation N frames\n"
         "  --game-clock N        head-less: force the map clock (building anim)\n"
+        "  --turn-frame N        head-less: freeze the TurnButton on frame N (0..101)\n"
+        "  --next-held           head-less: draw the NextButton held down\n"
 
         "  --no-music            do not start Songs\\TITLE.IT\n");
 }
@@ -7710,6 +8286,52 @@ void apply_game_click(int cx, int cy, bool right = false) {
     }
     const Scene::GameLayout L = s.game_layout();
     const AowBox& m = L.scan_map;
+    // The bar's two turn buttons (the window procedure's WM_LBUTTONDOWN order:
+    // they sit under the pointer before the map/scanner/party tests).
+    {
+        const int bh = s.game_hit(cx, cy);
+        if (bh == kGameHitTurn) {
+            // A human waits for the button's turn-change animation before it
+            // accepts the next press (CheckMouseDown's [+0x120] gate); run the
+            // ticks the window would have run.
+            s.mouse_x = -1;
+            s.mouse_y = -1;
+            for (int i = 0; i < 4000 && s.tb_turn_animating; ++i) s.game_update();
+            s.mouse_x = cx;
+            s.mouse_y = cy;
+            s.game_update();
+            s.game_turn_button_click();
+            std::printf("game_click=turn %d,%d checked=%d day=%d\n", cx, cy,
+                        s.tb_turn_checked ? 1 : 0, s.game_day);
+            std::fflush(stdout);
+            // The click starts the turn-change animation; the window's 30 fps
+            // ticks would play it out (and the AI seats' turns) before the next
+            // click, so the scripted driver does the same.
+            s.mouse_x = -1;
+            s.mouse_y = -1;
+            for (int i = 0; i < 4000; ++i) {
+                s.game_update();
+                if (!s.tb_turn_animating && s.tb_turn_mode == 0 &&
+                    s.tb_turn_last == s.tb_turn_cur &&
+                    s.mv_gs.current() == s.mv_human) {
+                    break;
+                }
+            }
+            std::printf("game_turnnow=player=%d day=%d frame=%d\n",
+                        static_cast<int>(s.mv_gs.current()), s.game_day,
+                        s.tb_turn_draw_frame());
+            std::fflush(stdout);
+            return;
+        }
+        if (bh == kGameHitNext) {
+            s.tb_next_down = true;   // armed, as CheckMouseDown does
+            s.game_next_button_click();
+            s.tb_next_down = false;
+            std::printf("game_click=next %d,%d\n", cx, cy);
+            std::fflush(stdout);
+            return;
+        }
+    }
     // The party floater is over the map and the scanner, so it takes the click
     // first (the same order the window procedure uses), then the scanner, then
     // the map itself.
@@ -7830,7 +8452,23 @@ int run_headless() {
             g.scene.mouse_x = g.mouse_x;
             g.scene.mouse_y = g.mouse_y;
         }
+        // --next-held: draw the NextButton's held-down picture (+0x110 = -1).
+        if (g.next_held) g.scene.tb_next_down = true;
         for (int i = 0; i < g.game_anim; ++i) g.scene.game_update();
+        // --turn-frame N: freeze the TurnButton on one library frame (the class
+        // draws AnimStart + Frame; frames 0..10 are the glow block, AnimStart 0).
+        if (g.turn_frame_override >= 0) {
+            int n = g.turn_frame_override;
+            if (n < 0) n = 0;
+            if (n >= kTbTurnFrameCount) n = kTbTurnFrameCount - 1;
+            Scene& s = g.scene;
+            s.tb_turn_start = n < kTbTurnGlowFrames ? 0 : kTbTurnAnimStart;
+            s.tb_turn_frame = n - s.tb_turn_start;
+            s.tb_turn_last = s.tb_turn_cur;
+            s.tb_turn_mode = 0;
+            s.tb_turn_animating = false;
+            s.tb_turn_checked = false;
+        }
         // --game-clock N: force the map clock and re-composite the building
         // animations, so a head-less render shows a chosen animation frame.
         if (g.game_clock_override >= 0) {
@@ -8021,6 +8659,29 @@ int run_headless() {
         } else {
             std::printf("game_army=none\n");
         }
+        // The Party window's move read-outs (docs/20_PARTY_WINDOW.md): every
+        // pill caption (`U{n}MIcon`, the unit's own remaining points), the
+        // party's `MovesLbl` and the folded `TArmy.MovePoints` budget that
+        // validates a move - so the smoke test can pin that they show what the
+        // travelling units have left, not their maximum allowance. `u{n}=-1` is
+        // an empty slot, `game_party=none` a closed window.
+        if (g.scene.game_show_party) {
+            std::printf("game_party=moves=%d budget=%d sel=%d",
+                        g.scene.party_move_points(),
+                        static_cast<int>(g.scene.mv_army.budget),
+                        static_cast<int>(g.scene.party_sel));
+            for (int s = 0; s < kPartySlots; ++s) {
+                const aow::MapUnit* u = g.scene.party_unit(s);
+                std::printf(" u%d=%d", s + 1,
+                            u == nullptr ? -1
+                                         : static_cast<int>(
+                                               aow::unit_move_points_left(
+                                                   g.scene.mv_cat, *u)));
+            }
+            std::printf("\n");
+        } else {
+            std::printf("game_party=none\n");
+        }
     }
     return 0;
 }
@@ -8080,6 +8741,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
             next();
             g.game_clock_override = std::atoi(v.c_str());
         }
+        else if (a == "--turn-frame") {
+            next();
+            g.turn_frame_override = std::atoi(v.c_str());
+        }
+        else if (a == "--next-held") { g.next_held = true; }
         else if (a == "--font-variant") {
             next();
             g.scene.font_variant = std::atoi(v.c_str());
