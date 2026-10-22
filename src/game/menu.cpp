@@ -1638,6 +1638,17 @@ struct Scene {
     // plain fill. See mv_draw_hex_selector and docs/09_GAME_SCREEN.md 6.9.
     std::vector<std::uint8_t> mv_px_contents;  // objects, roads, cities, armies
     bool mv_contents_stale = true;             // the layer must be rebuilt
+    // The selected structure's opacity pulse (TStructure.Select / TIWindow):
+    // `mv_px_struct_bg` is the same level rendered with only that map object
+    // hidden. Every frame the object's pixels are re-blended over this
+    // background at a clock-driven alpha, exactly like the engine re-drawing
+    // the scene with the selected building's opacity oscillating.
+    std::vector<std::uint8_t> mv_px_struct_bg;  // level minus the selected object
+    AowBox mv_struct_fade_box;                  // its pixel bounding box
+    bool mv_struct_fade = false;                // the background is valid
+    int mv_struct_fade_level = -1;
+    std::uint32_t mv_struct_fade_tag = 0;
+    int mv_struct_fade_alpha = 255;             // last applied 0..255
     // Pixels of the marker's far wall that the level's contents were composited
     // back over in the last marker draw - evidence that a city/unit on the hovered
     // hex is visible inside the marker (pinned by build.ps1).
@@ -3372,6 +3383,9 @@ struct Scene {
         } else {
             mv_restore_dirty();
         }
+        // The selected structure's own opacity pulse, over the background render
+        // that omits only that object (TStructure.Select).
+        mv_apply_structure_fade();
         // The animated buildings are re-composited every map frame (their previous
         // rectangle was just restored from `game_px`).
         mv_draw_structure_anim();
@@ -3478,6 +3492,111 @@ struct Scene {
         game_draw.clear();
         mv_dirty = false;
         return ok;
+    }
+
+    // Builds the selected structure's opacity-pulse background: the exact same
+    // level render with only the selected map object omitted. The difference
+    // between `game_px` and this canvas is the structure's own pixels (body,
+    // walls, pad, owner flag), whose bounding box is small enough to re-blend
+    // every map frame.
+    void mv_clear_structure_fade() {
+        mv_px_struct_bg.clear();
+        mv_struct_fade = false;
+        mv_struct_fade_level = -1;
+        mv_struct_fade_tag = 0;
+        mv_struct_fade_box = AowBox{};
+        mv_struct_fade_alpha = 255;
+    }
+
+    bool mv_prepare_structure_fade(int level, std::uint32_t tag) {
+        mv_clear_structure_fade();
+        if (game_px.empty() || game_state_map.levels.empty()) return false;
+        aow::MapVizOptions opt;
+        opt.level = level;
+        opt.objects = true;
+        opt.max_dim = 0;
+        opt.hide_army_level = mv_hide_level;
+        opt.hide_army_x = mv_hide_x;
+        opt.hide_army_y = mv_hide_y;
+        opt.no_animated_overlays = true;
+        opt.no_units = true;
+        opt.hide_object_level = level;
+        opt.hide_object_tag = tag;
+        std::uint32_t bw = 0, bh = 0;
+        std::string err;
+        if (!aow::render_map_rgba(game_state_map, game_res, root_dir, opt,
+                                  mv_px_struct_bg, bw, bh, err, nullptr)) {
+            mv_clear_structure_fade();
+            return false;
+        }
+        if (bw != game_pw || bh != game_ph ||
+            mv_px_struct_bg.size() != game_px.size()) {
+            mv_clear_structure_fade();
+            return false;
+        }
+        int x0 = static_cast<int>(bw), y0 = static_cast<int>(bh);
+        int x1 = -1, y1 = -1;
+        for (std::uint32_t y = 0; y < bh; ++y) {
+            const std::size_t row = static_cast<std::size_t>(y) * bw * 4;
+            for (std::uint32_t x = 0; x < bw; ++x) {
+                const std::size_t p = row + static_cast<std::size_t>(x) * 4;
+                if (game_px[p] == mv_px_struct_bg[p] &&
+                    game_px[p + 1] == mv_px_struct_bg[p + 1] &&
+                    game_px[p + 2] == mv_px_struct_bg[p + 2] &&
+                    game_px[p + 3] == mv_px_struct_bg[p + 3]) {
+                    continue;
+                }
+                if (static_cast<int>(x) < x0) x0 = static_cast<int>(x);
+                if (static_cast<int>(y) < y0) y0 = static_cast<int>(y);
+                if (static_cast<int>(x) > x1) x1 = static_cast<int>(x);
+                if (static_cast<int>(y) > y1) y1 = static_cast<int>(y);
+            }
+        }
+        if (x1 < x0 || y1 < y0) return false;
+        mv_struct_fade_box = AowBox{x0, y0, x1 - x0 + 1, y1 - y0 + 1};
+        mv_struct_fade = true;
+        mv_struct_fade_level = level;
+        mv_struct_fade_tag = tag;
+        return true;
+    }
+
+    // Re-blends the selected structure over its background at a clock-driven
+    // opacity. This is the visual TStructure.Select leaves behind: the building
+    // itself fades up/down against the terrain, not a hex marker drawn over it.
+    void mv_apply_structure_fade() {
+        if (!mv_struct_fade || !game_show_structure ||
+            mv_struct_fade_level != game_level ||
+            game_draw.size() != game_px.size() ||
+            mv_px_struct_bg.size() != game_px.size()) {
+            return;
+        }
+        // 64-frame period, 55% .. 100% opacity (an ease-in/ease-out pulse).
+        const double phase = 0.5 + 0.5 * std::sin(
+            static_cast<double>(game_clock) * 6.283185307179586 / 64.0);
+        const int a = 140 + static_cast<int>(phase * 115.0);
+        const AowBox& b = mv_struct_fade_box;
+        for (int y = b.y; y < b.y + b.h; ++y) {
+            if (y < 0 || y >= static_cast<int>(game_ph)) continue;
+            const std::size_t row = static_cast<std::size_t>(y) * game_pw * 4;
+            for (int x = b.x; x < b.x + b.w; ++x) {
+                if (x < 0 || x >= static_cast<int>(game_pw)) continue;
+                const std::size_t p = row + static_cast<std::size_t>(x) * 4;
+                if (game_px[p] == mv_px_struct_bg[p] &&
+                    game_px[p + 1] == mv_px_struct_bg[p + 1] &&
+                    game_px[p + 2] == mv_px_struct_bg[p + 2] &&
+                    game_px[p + 3] == mv_px_struct_bg[p + 3]) {
+                    continue;
+                }
+                for (int c = 0; c < 3; ++c) {
+                    game_draw[p + c] = static_cast<std::uint8_t>(
+                        (mv_px_struct_bg[p + c] * (255 - a) +
+                         game_px[p + c] * a) / 255);
+                }
+                game_draw[p + 3] = 255;
+            }
+        }
+        mv_struct_fade_alpha = a;
+        mv_mark_dirty(b.x, b.y, b.x + b.w, b.y + b.h);
     }
 
     // Renders the shown level twice: the flat canvas (`game_px`, the port's
@@ -7258,6 +7377,10 @@ struct Scene {
         }
         game_show_structure = true;
         game_struct_hover = game_struct_pressed = -1;
+        // TStructure.Select leaves the building pulsing: build the background
+        // without this object, then re-blend the object over it every frame.
+        mv_prepare_structure_fade(game_level, hs->tag);
+        mv_refresh_draw();
         play_game_sfx("Sfx\\Int\\Btn1.wav");
         return true;
     }
@@ -7268,6 +7391,9 @@ struct Scene {
         game_struct_hover = game_struct_pressed = -1;
         game_struct_art = Sprite();
         game_struct_art_lib.clear();
+        // Restore the normal (fully opaque) building sprite.
+        mv_clear_structure_fade();
+        if (!game_px.empty()) mv_refresh_draw();
     }
 
     int game_hit(int x, int y) const {
@@ -7304,25 +7430,6 @@ struct Scene {
     // current window, so growing the window *reflows* the interface - the tabs
     // widen and spread, the floaters ride the right edge, the bar stays 48 px -
     // instead of magnifying the whole composition.
-    // The selected building's pulsing marker (TSelectedStructure / the hexagon
-    // selection the engine keeps around the selected object). Drawn in the map
-    // viewport, under the floaters, and advanced by AoWHSMap+0x40.
-    void render_structure_marker(Canvas& cv) const {
-        if (!game_show_structure || game_struct_hx < 0) return;
-        const AowBox m = game_layout().map_area;
-        int hx = 0, hy = 0;
-        aow::hex_origin(game_struct_hx, game_struct_hy, hx, hy);
-        const int pulse = 70 + ((game_clock >> 2) & 0x7f);  // 70..197
-        auto put = [&](const Sprite& s) {
-            if (!s.ok) return;
-            const int dx = m.x - cam_x + hx + s.anchor_dx - s.base_x;
-            const int dy = m.y - cam_y + hy + s.anchor_dy - s.base_y;
-            cv.blit(s, dx, dy, pulse, m.x, m.y, m.x + m.w, m.y + m.h);
-        };
-        put(hex_sel_back);
-        put(hex_sel_front);
-    }
-
     // TIWindow's own paint pass. Draw order follows the DFM: the stone base,
     // the paper body, the 9-slice floater frame, the title bar controls, the
     // city/production panel, the city-view arch, and finally the foot buttons.
@@ -7508,9 +7615,6 @@ struct Scene {
                               m.x, m.y, m.w, m.h);
             blit_frame_box(cv, map_frame, L.map_window);
         }
-        // The selected structure's pulsing marker is part of the map scene.
-        render_structure_marker(cv);
-
         // 2. The bottom bar: the BarSet 3-piece body, the start button, the five
         //    task tabs, the next-turn / turn buttons and the gold & mana panels.
         blit3_box(cv, tb_bar, L.bar);
@@ -8436,6 +8540,8 @@ void game_action(int hit) {
     {
         const int lvl = hit - 5;
         if (lvl == s.game_level) break;
+        // The selected object belongs to the level being left.
+        if (s.game_show_structure) s.close_structure();
         if (!s.game_set_level(lvl)) {
             // The map has no such level - the previous render stays up.
             std::fprintf(stderr, "menu: level %d unavailable\n", lvl);

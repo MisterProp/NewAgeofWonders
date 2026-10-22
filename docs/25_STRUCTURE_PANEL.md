@@ -159,10 +159,13 @@ uses the same `kPartyTop` anchor and the DFM boxes, not a stretched bitmap.
   the structure when the hex has no army selection.
 * Right-click closes the floater (the shared floater rule) before it clears an
   army selection.
-* The selected building keeps a pulsing hexagon marker; `TStructure.Select`
-  (`0x5575ea40`) also plays `Sfx\Int\Btn1.wav`. The port pulses the two
-  `Images\General.ILB` selector halves off `AoWHSMap+0x40`
-  (`Scene::render_structure_marker`).
+* The selected building keeps pulsing its own opacity; `TStructure.Select`
+  (`0x5575ea40`) also plays `Sfx\Int\Btn1.wav`. The port renders the level once
+  more with only that map object hidden (`MapVizOptions::hide_object_tag`), takes
+  the pixel bounding box of the difference, and every map frame re-blends the
+  building over that background at a `AoWHSMap+0x40`-driven opacity
+  (`Scene::mv_prepare_structure_fade` / `mv_apply_structure_fade`). It is the
+  building itself that fades, not a hexagon marker drawn over it.
 
 ## 6. Verification
 

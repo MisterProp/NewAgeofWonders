@@ -110,6 +110,17 @@ int city_body_race(int city_race, unsigned owner,
     return -1;  // unowned, unknown roster, or an owner race that is itself unset
 }
 
+// See mapviz.hpp. `Crops.TCrop.GetTerrainTypeImage@0x557a5f14`:
+//   if (owner != null && owner.GetRace() == 0x0b) terrain += 0x1e;
+// The terrain is the map field's terrain byte (`TCrop+0x18`), which is what
+// `TILTerrainMO.Activate` resolved for the crop's hex. `0x0b` is Undead in the
+// game's race order (docs/11_UNIT_CATALOG.md), and the resource library carries
+// the second art block at slot terrain+0x1e for exactly that case.
+int crop_image_index(int terrain, int owner_race) {
+    if (terrain < 0) return -1;
+    return terrain + (owner_race == 0x0b ? 0x1e : 0);
+}
+
 // See mapviz.hpp. HSEngine.HNtoHX@5560e08c returns the six neighbour offsets as
 // (dx,dy) per direction 1..6 = N/NE/E/S/W/NW; HSEngine.TranslateHX@509C8955
 // folds the column stagger (odd column + odd dx -> one row up). The transition
@@ -1466,6 +1477,49 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
     // (TPlayer rw tag 2) once; the race libraries are `race_ilbs` below (docs/19).
     const std::vector<std::uint8_t> player_races = map_player_races(m);
 
+    // Crops (`Crops.TCrop`, class 0x2036a) are TILTerrainMO overlays whose sprite
+    // is selected by the hex's terrain (aow::crop_image_index). Their owner is a
+    // `TPlayerCropStructure` - the only shipped subclass is `Farm.TFarm`
+    // (0x2036e): `TCrop.LinkToCropOwner@0x557a5dac` latches the structure on an
+    // adjacent field, and `TPlayerCropStructure.LinkToCrops@0x557a686c` assigns
+    // every crop in its surrounding-hex table. A scenario does not serialize the
+    // owner pointer, so resolve it geometrically: the nearest farm within reach
+    // of its crop field (the farm's footprint is at most 3 hexes, plus one ring
+    // of crops). The race only matters for the Undead crop-art block.
+    struct CropFarm {
+        int x;
+        int y;
+        int race;
+    };
+    std::vector<CropFarm> crop_farms;
+    for (std::uint32_t y = 0; y < lv.height; ++y) {
+        for (std::uint32_t x = 0; x < lv.width; ++x) {
+            for (const MapHs& hs :
+                 lv.tiles[static_cast<std::size_t>(y) * lv.width + x].objects) {
+                if (hs.class_id != kFarmClassId) continue;
+                int race = -1;  // owner 0 / unknown roster: no race-specific art
+                if (hs.structure_owner >= 1 &&
+                    hs.structure_owner < player_races.size()) {
+                    race = player_races[hs.structure_owner];
+                }
+                crop_farms.push_back(
+                    {static_cast<int>(x), static_cast<int>(y), race});
+            }
+        }
+    }
+    auto crop_owner_race = [&](int cx, int cy) {
+        int race = -1;
+        int best = 0x7fffffff;
+        for (const CropFarm& f : crop_farms) {
+            const int d = hex_distance(cx, cy, f.x, f.y);
+            if (d <= 3 && d < best) {
+                best = d;
+                race = f.race;
+            }
+        }
+        return race;
+    };
+
     // Map-space top-left corner of a hex's sprite box, straight from the engine:
     // HXtoHP(x, y) -> (x*0x20 + 8, y*0x20 + (x & 1)*0x10).
     auto origin = [&](std::uint32_t x, std::uint32_t y, int& sx, int& sy) {
@@ -2301,6 +2355,13 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
                 origin(x, y, sx, sy);
                 for (const MapHs& hs : t.objects) {
                     if (hs.tag == 50) continue;
+                    // Diagnostic/selection support: leave this exact map object
+                    // out (the root Scene uses it to render the selected
+                    // structure's background for the opacity pulse).
+                    if (opt.hide_object_level == opt.level &&
+                        hs.tag == opt.hide_object_tag) {
+                        continue;
+                    }
                     if (hs.class_id == kRoadClassId) continue;   // drawn above
                     if (hs.class_id == kHexBridgeClassId) continue;  // drawn above
 
@@ -2389,8 +2450,35 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
                                     object_anim_phase(static_cast<int>(x),
                                                       static_cast<int>(y)));
                     p.race = hs.race;
-                    log_hex("object", x, y, hs.resource,
-                            p.ilb.empty() && r != nullptr ? r->ilb : p.ilb, p);
+                    // Crops.TCrop: `TILTerrainMO.Show` asks the resource's image
+                    // library for `TCrop.GetTerrainTypeImage(terrain)` - the field
+                    // terrain, +0x1e for an Undead owner (`crop_image_index`) -
+                    // instead of the resource's slot 0. Without this every crop
+                    // resolved to slot 0, which the shipped Crops.bmp leaves empty
+                    // (its ids start at 1), so no crop ever appeared.
+                    if (hs.class_id == kCropClassId) {
+                        const int terrain =
+                            terrain_of_hex[static_cast<std::size_t>(y) * lv.width + x];
+                        const int frame = crop_image_index(
+                            terrain, crop_owner_race(static_cast<int>(x),
+                                                     static_cast<int>(y)));
+                        if (frame < 0 || p.lib == nullptr ||
+                            static_cast<std::size_t>(frame) >= p.lib->frames.size() ||
+                            !p.lib->frames[static_cast<std::size_t>(frame)].ok) {
+                            // TCrop.UpdateSettings frees a crop whose image does
+                            // not exist for the terrain it now sits on.
+                            log_hex("crop", x, y, hs.resource,
+                                    p.ilb.empty() && r != nullptr ? r->ilb : p.ilb, p);
+                            continue;
+                        }
+                        p.frame = static_cast<std::size_t>(frame);
+                        p.sprite = &p.lib->frames[p.frame];
+                        log_hex("crop", x, y, hs.resource,
+                                p.ilb.empty() && r != nullptr ? r->ilb : p.ilb, p);
+                    } else {
+                        log_hex("object", x, y, hs.resource,
+                                p.ilb.empty() && r != nullptr ? r->ilb : p.ilb, p);
+                    }
                     if (p.sprite == nullptr) continue;
                     // An object that resolved to a *body sequence* is a real
                     // structure (e.g. a Shipyard -> PRO_SYRD.ILB) even when the
@@ -2540,6 +2628,318 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
     out_h = static_cast<std::uint32_t>(dh);
     if (contents != nullptr) contents->swap(contents_canvas);
     return true;
+}
+
+bool render_tb_map_rgba(const Map& m, const std::vector<MapResource>& combat,
+                        const std::vector<MapResource>& world,
+                        const std::string& ilb_root, const TbMapVizOptions& opt,
+                        std::vector<std::uint8_t>& rgba, std::uint32_t& out_w,
+                        std::uint32_t& out_h, std::string& error) {
+    rgba.clear();
+    out_w = out_h = 0;
+    if (opt.level < 0 || static_cast<std::size_t>(opt.level) >= m.levels.size()) {
+        error = "level out of range";
+        return false;
+    }
+    const MapLevel& lv = m.levels[static_cast<std::size_t>(opt.level)];
+    if (lv.width == 0 || lv.height == 0) {
+        error = "empty level";
+        return false;
+    }
+
+    LibResolver& resolver = shared_resolver(ilb_root);
+    std::map<std::string, Library>& cache = shared_libraries();
+    const int tile_w = 48, tile_h = 32;
+    const int field_x = 8, pitch_x = 32, pitch_y = 32, stagger = 16;
+    const int dw = field_x + pitch_x * (static_cast<int>(lv.width) - 1) + tile_w;
+    const int dh = stagger + pitch_y * (static_cast<int>(lv.height) - 1) + tile_h;
+    std::vector<std::uint8_t> canvas(static_cast<std::size_t>(dw) * dh * 4, 0);
+    for (std::size_t i = 0; i < canvas.size(); i += 4) {
+        canvas[i] = 12; canvas[i + 1] = 12; canvas[i + 2] = 20;
+        canvas[i + 3] = 255;
+    }
+
+    auto find_res = [](const std::vector<MapResource>& list, std::uint32_t id)
+        -> const MapResource* {
+        return find_map_resource(list, id);
+    };
+    auto lib_of_name = [&](const std::string& name) -> const Library* {
+        if (name.empty()) return nullptr;
+        const std::string file = resolver.resolve(name);
+        if (file.empty()) return nullptr;
+        const Library& lib = get_library(cache, file);
+        return lib.frames.empty() ? nullptr : &lib;
+    };
+    auto lib_of = [&](const MapResource* r) -> const Library* {
+        if (r == nullptr) return nullptr;
+        const ImageSequence* body = body_sequence(*r);
+        const std::string name =
+            body != nullptr ? body->library : (r->seq_lib.empty() ? r->ilb : r->seq_lib);
+        return lib_of_name(name);
+    };
+    auto draw = [&](const Library* lib, int frame, int dx, int dy) {
+        if (lib == nullptr || frame < 0 ||
+            static_cast<std::size_t>(frame) >= lib->frames.size()) {
+            return;
+        }
+        const Sprite& s = lib->frames[static_cast<std::size_t>(frame)];
+        if (!s.ok) return;
+        const int ox = dx + s.vx, oy = dy + s.vy;
+        if (s.class_id == 0x16) blit_brighten(canvas, dw, dh, s, ox, oy);
+        else blit(canvas, dw, dh, s, ox, oy);
+    };
+    auto origin_of = [&](std::uint32_t x, std::uint32_t y, int& sx, int& sy) {
+        sx = field_x + static_cast<int>(x) * pitch_x;
+        sy = static_cast<int>(y) * pitch_y + static_cast<int>(x & 1u) * stagger;
+    };
+    // BorderHx.TBorderHexagon's H_Border.BMP is not shipped; the engine's own
+    // border reads as open ocean, which is WATERHEX.ILB's H_Wa2 base set.
+    const Library* border_lib = lib_of_name("Waterhex.ILB");
+
+    struct TileInfo {
+        const MapHs* terr = nullptr;
+        const MapResource* res = nullptr;
+        int terrain = -1;
+        int overlay = -1;
+    };
+    std::vector<TileInfo> info(lv.tiles.size());
+    for (std::size_t i = 0; i < lv.tiles.size(); ++i) {
+        for (const MapHs& hs : lv.tiles[i].objects) {
+            if (hs.tag != 50) continue;
+            info[i].terr = &hs;
+            const MapResource* r = find_res(combat, hs.resource);
+            if (r == nullptr) r = find_res(world, hs.resource);
+            info[i].res = r;
+            if (r != nullptr) {
+                if (r->has_terrain) {
+                    info[i].terrain = r->terrain;
+                    info[i].overlay = r->overlay;
+                } else {
+                    info[i].terrain = terrain_type_of(r->ilb);
+                }
+            }
+            break;
+        }
+    }
+
+    // Phase 1: a solid hexagon under every field, coloured from the base
+    // terrain library. This is the engine's Shop background before any sprite.
+    for (std::uint32_t y = 0; y < lv.height; ++y) {
+        for (std::uint32_t x = 0; x < lv.width; ++x) {
+            const std::size_t i = static_cast<std::size_t>(y) * lv.width + x;
+            int sx, sy;
+            origin_of(x, y, sx, sy);
+            std::uint8_t rgb[3] = {96, 110, 72};
+            const MapResource* r = info[i].res;
+            if (info[i].terr != nullptr &&
+                info[i].terr->class_id == kBorderHexagonClassId) {
+                rgb[0] = 34; rgb[1] = 56; rgb[2] = 90;
+            } else if (r != nullptr) {
+                terrain_color(r->ilb, rgb);
+            }
+            fill_hex(canvas, dw, dh, sx, sy, tile_w, tile_h, rgb);
+        }
+    }
+
+    // Phase 2: base terrain hexagons. TCombatHexagon.Show draws the sequence's
+    // base frame at (HXtoHP - 8, HXtoHP.y); the per-hex frame is a RandInt(12)
+    // in Activate - a positional hash stands in for the engine's random pick.
+    for (std::uint32_t y = 0; y < lv.height; ++y) {
+        for (std::uint32_t x = 0; x < lv.width; ++x) {
+            const std::size_t i = static_cast<std::size_t>(y) * lv.width + x;
+            const TileInfo& ti = info[i];
+            if (ti.terr == nullptr) continue;
+            int sx, sy;
+            origin_of(x, y, sx, sy);
+            const std::uint32_t cid = ti.terr->class_id;
+            if (cid == kBorderHexagonClassId) {
+                // The frame around the battlefield: BorderHx.TBorderHexagon.Show
+                // (the world-map Hexagon path). H_Border.BMP is absent from the
+                // retail install, so draw the H_Wa2 base hexes from WATERHEX.ILB,
+                // the same ocean the border abuts.
+                if (border_lib != nullptr) {
+                    const unsigned v = (x * 3u + y * 5u) & 15u;
+                    draw(border_lib,
+                         static_cast<int>(terrain_frame(*border_lib, v)), sx, sy);
+                }
+                continue;
+            }
+            const MapResource* r = ti.res;
+            const Library* lib = lib_of(r);
+            if (lib == nullptr || r == nullptr) continue;
+            int frame = 0;
+            if (cid == kSingleCombatHexagonClassId) {
+                frame = static_cast<int>(r->seq_frame);
+            } else if (cid == kIsoCombatHexagonClassId) {
+                frame = lib->frames.size() > 0x28 ? 0x28
+                                                  : static_cast<int>(r->seq_frame);
+            } else {
+                const unsigned h = (x * 7u + y * 13u) % 12u;
+                frame = static_cast<int>(h);
+            }
+            if (static_cast<std::size_t>(frame) >= lib->frames.size()) frame = 0;
+            draw(lib, frame, sx - 8, sy);
+        }
+    }
+
+    // Phase 3: the three upper edge transitions (NW, N, NE) in CTransHx.ILB.
+    // TCombatHexagon.UpdateTransition computes `type * 6 + RandInt(2) * 3 +
+    // (dir - 1)`; the static renderer uses transition variant 0.
+    const Library* trans = lib_of_name("TCombat\\Base_Hex\\CTransHx.ILB");
+    if (trans != nullptr) {
+        static const int combat_dir[3] = {6, 1, 2};  // DAT_0046701f[1..3]
+        for (std::uint32_t y = 0; y < lv.height; ++y) {
+            for (std::uint32_t x = 0; x < lv.width; ++x) {
+                const std::size_t i = static_cast<std::size_t>(y) * lv.width + x;
+                const TileInfo& ti = info[i];
+                if (ti.terr == nullptr) continue;
+                const std::uint32_t cid = ti.terr->class_id;
+                if (cid != kCombatHexagonClassId && cid != kWaterCombatHexagonClassId) {
+                    continue;
+                }
+                const int cur = ti.terrain;
+                if (cur < 0) continue;
+                int sx, sy;
+                origin_of(x, y, sx, sy);
+                for (int d = 1; d <= 3; ++d) {
+                    int nx = 0, ny = 0;
+                    if (!hn_neighbour(x, y, combat_dir[d - 1], nx, ny)) continue;
+                    if (nx < 0 || ny < 0 || nx >= static_cast<int>(lv.width) ||
+                        ny >= static_cast<int>(lv.height)) {
+                        continue;
+                    }
+                    const int nb = info[static_cast<std::size_t>(ny) * lv.width +
+                                        static_cast<std::size_t>(nx)].terrain;
+                    if (nb < 0 || nb == cur || nb == 7) continue;
+                    int type = -1;
+                    if (cur == 0) type = (nb == 6) ? 10 : nb + 4;
+                    else if (cur == 6) type = (nb == 0) ? 16 : nb + 10;
+                    else if (cur == 12) type = 17;
+                    else if (cur == 10) {
+                        if (nb == 12) type = 18;
+                        else if (nb == 13) type = 19;
+                        else if (nb == 9) type = 20;
+                    } else if (cur == 13) {
+                        if (nb == 12) type = 21;
+                        else if (nb == 10) type = 22;
+                        else if (nb == 9) type = 23;
+                    } else if (cur == 9) {
+                        type = (nb == 12) ? 24 : 25;
+                    } else {
+                        type = cur - 1;
+                    }
+                    if (type < 0) continue;
+                    draw(trans, type * 6 + (d - 1), sx - 8, sy - 16);
+                }
+            }
+        }
+    }
+
+    // Phase 4: roads. TCombatRoad.Show draws its base at (HXtoHP - 8, y) and six
+    // edge pieces at (HXtoHP - 8, y - 16). UpdateTransition maps the six HN
+    // directions onto the road resource's frames 1,2,6,7,8,0 (variant 0).
+    if (!opt.no_objects) {
+        static const int road_frame[6] = {1, 2, 6, 7, 8, 0};
+        for (std::uint32_t y = 0; y < lv.height; ++y) {
+            for (std::uint32_t x = 0; x < lv.width; ++x) {
+                const MapTile& t = lv.tiles[static_cast<std::size_t>(y) * lv.width + x];
+                int sx, sy;
+                origin_of(x, y, sx, sy);
+                for (const MapHs& hs : t.objects) {
+                    if (hs.class_id != kCombatRoadClassId) continue;
+                    const MapResource* r = find_res(combat, hs.resource);
+                    const Library* lib = lib_of(r);
+                    if (lib == nullptr) continue;
+                    const int base = 10 + static_cast<int>((x * 5u + y * 3u) % 12u);
+                    draw(lib, base, sx - 8, sy);
+                    for (int d = 1; d <= 6; ++d) {
+                        int nx = 0, ny = 0;
+                        if (!hn_neighbour(x, y, d, nx, ny)) continue;
+                        if (nx < 0 || ny < 0 || nx >= static_cast<int>(lv.width) ||
+                            ny >= static_cast<int>(lv.height)) {
+                            continue;
+                        }
+                        const TileInfo& nt =
+                            info[static_cast<std::size_t>(ny) * lv.width +
+                                 static_cast<std::size_t>(nx)];
+                        if (nt.overlay != 4) continue;
+                        draw(lib, road_frame[d - 1], sx - 8, sy - 16);
+                    }
+                }
+            }
+        }
+    }
+
+    // Phase 5: the remaining map objects (trees, rocks, crops, walls, houses,
+    // obstacles, structures). TMapObject.Show / ShowComplexImage anchors a
+    // sequence at HXtoHP - 8 + seq.xoff/yoff; the sprite's own base+shift is
+    // added by draw().
+    if (!opt.no_objects) {
+        for (std::uint32_t y = 0; y < lv.height; ++y) {
+            for (std::uint32_t x = 0; x < lv.width; ++x) {
+                const MapTile& t = lv.tiles[static_cast<std::size_t>(y) * lv.width + x];
+                int sx, sy;
+                origin_of(x, y, sx, sy);
+                for (const MapHs& hs : t.objects) {
+                    if (hs.tag == 50) continue;
+                    if (hs.class_id == kCombatRoadClassId) continue;
+                    if (hs.class_id == kUnitPositionHSClassId) continue;
+                    const MapResource* r = find_res(combat, hs.resource);
+                    if (r == nullptr) r = find_res(world, hs.resource);
+                    if (r == nullptr) continue;
+                    const ImageSequence* body = body_sequence(*r);
+                    if (body == nullptr) continue;
+                    const int phase = static_cast<int>((x * 17u + y * 29u) & 0xffffu);
+                    const bool wall_object =
+                        hs.class_id == 0x220504 || hs.class_id == 0x220506;
+                    // TCityWall.Show / THouse.Show / TILTerrainMO.Show draw the
+                    // resource's sequence *chain* (body, wall, flag/effect), each
+                    // anchored at HXtoHP + seq.xoff/yoff. They do NOT subtract the
+                    // world-map TMapObject.Show margin of 8 px. A wall uses
+                    // GetUnloopedFrameIndex(seq, wall+0x14); a static renderer's
+                    // tick is 0, so the base frame / frame_table[0] is the one.
+                    for (const ImageSequence* s : image_sequence_chain(*body)) {
+                        if (s->library.empty() || s->reserved == 7) continue;
+                        const Library* slib = lib_of_name(s->library);
+                        if (slib == nullptr) continue;
+                        int frame = s->base_frame;
+                        if (wall_object) {
+                            const int f = image_sequence_unlooped_frame(
+                                *s, static_cast<int>(slib->frames.size()), 0);
+                            if (f >= 0) frame = f;
+                        } else {
+                            const int smode = s->mode & 0x7f;
+                            if (smode == 1 || smode == 2 || smode == 4 ||
+                                smode == 5) {
+                                const int f = image_sequence_frame(
+                                    *s, static_cast<int>(slib->frames.size()),
+                                    opt.clock, phase);
+                                if (f >= 0) frame = f;
+                            }
+                        }
+                        draw(slib, frame, sx + s->xoff, sy + s->yoff);
+                    }
+                }
+            }
+        }
+    }
+
+    rgba.swap(canvas);
+    out_w = static_cast<std::uint32_t>(dw);
+    out_h = static_cast<std::uint32_t>(dh);
+    return true;
+}
+
+bool render_tb_map_png(const Map& m, const std::vector<MapResource>& combat,
+                       const std::vector<MapResource>& world,
+                       const std::string& ilb_root, const TbMapVizOptions& opt,
+                       const std::string& out_path, std::string& error) {
+    std::vector<std::uint8_t> rgba;
+    std::uint32_t w = 0, h = 0;
+    if (!render_tb_map_rgba(m, combat, world, ilb_root, opt, rgba, w, h, error)) {
+        return false;
+    }
+    return write_png_rgba(out_path, w, h, rgba, error);
 }
 
 bool render_map_png(const Map& m, const std::vector<MapResource>& res,

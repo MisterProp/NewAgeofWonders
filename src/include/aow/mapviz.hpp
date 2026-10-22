@@ -299,6 +299,34 @@ bool resolve_structure_flag(const MapResource* res, std::uint32_t object_class_i
                             const std::vector<std::string>& race_libraries,
                             int clock, int hex_pixel_x, StructureFlag& out);
 
+// ---------------------------------------------------------------------------
+// Crops - `Crops.TCrop` (class 0x2036a, resource `Crops.TCropResource` 0x2036b).
+// ---------------------------------------------------------------------------
+//
+// A crop is a `TILTerrainMO` overlay placed on a field. Its `Show` is the
+// ILTerrain variant (`ILTer.TILTerrainMO.Show@0x55618940`): it draws
+// `resource.ImageLibrary.Get(image_index)` at
+// `HXtoHP + resource.dXmainP/dYmainP` + the sprite's own base+shift - exactly the
+// object anchor the renderer already uses (`object_sprite_origin`). The image
+// index comes from `Crops.TCrop.GetTerrainTypeImage@0x557a5f14`:
+//
+//     index = field_terrain;
+//     if (owner.GetRace() == 0x0b) index += 0x1e;   // Undead crop art
+//
+// `TCrop.UpdateSettings@0x557a5cc8` stores that index and frees the crop when
+// `ImageExist(resource.ImageLibrary, index)` is false, so a terrain with no crop
+// frame draws nothing. The shipped inline ILB has the sparse ids
+// 1,2,3,4 (grass/desert/snow/steppe), 12 (upper/underground) and 31..35,41 (the
+// Undead variants); `fill_library` already indexes frames by image-slot id, so
+// the index can be used directly.
+//
+// `owner_race` is the race of the `TPlayerCropStructure` that owns the crop
+// (`TCrop.GetTerrainTypeImage` calls vtable +0x238 = `GetRace`, whose vtable
+// slot is 0x557a586c in AoWEPACK.dpl). Pass -1 when the crop has no owner (a
+// decorative crop, or no farm nearby); it then uses the normal terrain art.
+// Returns -1 for an unknown terrain (-1).
+int crop_image_index(int terrain, int owner_race);
+
 struct MapVizOptions {
     int level = 0;         // level to render (0 = surface)
     bool objects = true;   // overlay object sprites
@@ -314,6 +342,12 @@ struct MapVizOptions {
     int hide_army_level = -1;
     int hide_army_x = -1;
     int hide_army_y = -1;
+    // When >= 0 and `hide_object_level == level`, the object carrying this
+    // field-table tag is left out of the render. Used to build the "terrain +
+    // every other object" background a selected structure's opacity pulse fades
+    // against (`Scene::mv_prepare_structure_fade`).
+    int hide_object_level = -1;
+    std::uint32_t hide_object_tag = 0;
     // The map animation clock `AoWHSMap+0x40` (`HSEngine.THSMap.NewFrame@5560d758`
     // adds one per map frame, wrapping at 0x100000). Every image sequence's frame
     // is resolved from it with `ImageLib.TImageSequence.GetFrameIndex@0x552186ec`
@@ -672,6 +706,55 @@ bool draw_unit_overlays(const Map& m, const std::string& ilb_root, int level,
                         int& dirty_y1, std::string& error, int hide_level = -1,
                         int hide_x = -1, int hide_y = -1, int clip_x0 = 0,
                         int clip_y0 = 0, int clip_x1 = 0, int clip_y1 = 0);
+
+// ---------------------------------------------------------------------------
+// Tactical battle maps (TCMaps\*.HSM)
+// ---------------------------------------------------------------------------
+// The interior of a tactical map is built from AoWTCPCK.dpl's combat classes:
+//   TCombatHexagon        0x220500  base terrain hex (rw draw: base + 3 edge
+//                                   transitions from TCombat\Base_Hex\CTransHx)
+//   TWaterCombatHexagon   0x220597  water variant of the same
+//   TSingleCombatHexagon  0x22051e  one-layer floor hex (dungeons/expl)
+//   TIsometricCombatHexagon 0x22050a elevated/stacked hex
+//   TCombatRoad           0x220502  road overlay (base + six edge pieces)
+//   TCombatILTerrain      0x220136  trees/rocks/crops (TMapObject.Show)
+//   TCombatTerrain        0x220166  combat terrain object
+//   TCombatObstacle       0x22052a / THouse 0x220512 / CityWall 0x220504 /
+//   TMainStructure 0x22051c / TFleeLocation 0x220528
+//   TUnitPositionHS       0x220103  editor/deployment marker (not drawn)
+//   BorderHx.TBorderHexagon 0x20557 the frame around the 65x59 playfield
+constexpr std::uint32_t kBorderHexagonClassId = 0x20557;
+constexpr std::uint32_t kCombatHexagonClassId = 0x220500;
+constexpr std::uint32_t kCombatRoadClassId = 0x220502;
+constexpr std::uint32_t kCombatILTerrainClassId = 0x220136;
+constexpr std::uint32_t kCombatTerrainClassId = 0x220166;
+constexpr std::uint32_t kWaterCombatHexagonClassId = 0x220597;
+constexpr std::uint32_t kIsoCombatHexagonClassId = 0x22050a;
+constexpr std::uint32_t kSingleCombatHexagonClassId = 0x22051e;
+constexpr std::uint32_t kUnitPositionHSClassId = 0x220103;
+
+struct TbMapVizOptions {
+    int level = 0;
+    bool no_objects = false;
+    int clock = 0;  // frame counter for animated object sequences
+};
+
+// Renders a tactical battle map (`TCMaps\*.HSM`) at 1:1: the 65x59 staggered hex
+// grid, the base terrain hexes with their CTransHx edge transitions, roads,
+// obstacles and structures. `combat` is `load_combat_resources()`'s table
+// (Release\comb_res.pfs); `world` is Release.hss and is only used for the
+// BorderHx frame. The output is RGBA, the same shape `render_map_rgba` produces.
+bool render_tb_map_rgba(const Map& m, const std::vector<MapResource>& combat,
+                        const std::vector<MapResource>& world,
+                        const std::string& ilb_root, const TbMapVizOptions& opt,
+                        std::vector<std::uint8_t>& rgba, std::uint32_t& out_w,
+                        std::uint32_t& out_h, std::string& error);
+
+// PNG wrapper for render_tb_map_rgba.
+bool render_tb_map_png(const Map& m, const std::vector<MapResource>& combat,
+                       const std::vector<MapResource>& world,
+                       const std::string& ilb_root, const TbMapVizOptions& opt,
+                       const std::string& out_path, std::string& error);
 
 // Renders `m`'s level `opt.level` to `out_path` (PNG).
 bool render_map_png(const Map& m, const std::vector<MapResource>& res,
