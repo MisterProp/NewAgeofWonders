@@ -12,6 +12,7 @@
 // a flat colour keyed by terrain type.
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -342,12 +343,15 @@ struct MapVizOptions {
     int hide_army_level = -1;
     int hide_army_x = -1;
     int hide_army_y = -1;
-    // When >= 0 and `hide_object_level == level`, the object carrying this
-    // field-table tag is left out of the render. Used to build the "terrain +
-    // every other object" background a selected structure's opacity pulse fades
-    // against (`Scene::mv_prepare_structure_fade`).
+    // When >= 0 and `hide_object_level == level`, the object whose map-file
+    // region starts at this offset is left out of the render. Used to build the
+    // "terrain + every other object" background the selected structure's 50%
+    // blink fades against (`Scene::mv_prepare_structure_fade`;
+    // bin/Screen Selection.gif). `MapHs::offset` is unique per placed object:
+    // `MapHs::tag` is only the field-table slot within a hex record and is
+    // reused on every tile, so it cannot identify a single building.
     int hide_object_level = -1;
-    std::uint32_t hide_object_tag = 0;
+    std::size_t hide_object_offset = static_cast<std::size_t>(-1);
     // The map animation clock `AoWHSMap+0x40` (`HSEngine.THSMap.NewFrame@5560d758`
     // adds one per map frame, wrapping at 0x100000). Every image sequence's frame
     // is resolved from it with `ImageLib.TImageSequence.GetFrameIndex@0x552186ec`

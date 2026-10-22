@@ -161,11 +161,22 @@ uses the same `kPartyTop` anchor and the DFM boxes, not a stretched bitmap.
   army selection.
 * The selected building keeps pulsing its own opacity; `TStructure.Select`
   (`0x5575ea40`) also plays `Sfx\Int\Btn1.wav`. The port renders the level once
-  more with only that map object hidden (`MapVizOptions::hide_object_tag`), takes
-  the pixel bounding box of the difference, and every map frame re-blends the
-  building over that background at a `AoWHSMap+0x40`-driven opacity
+  more with only that map object hidden (`MapVizOptions::hide_object_offset` -
+  the object's unique map-file region offset; `MapHs::tag` is only the
+  field-table slot inside a hex record and is reused by every tile, so it would
+  hide all buildings of that slot), takes the pixel bounding box of the
+  difference, and every map frame re-blends the building over that background
   (`Scene::mv_prepare_structure_fade` / `mv_apply_structure_fade`). It is the
   building itself that fades, not a hexagon marker drawn over it.
+* **The exact pulse is `bin/Screen Selection.gif`**, not a smooth sine: the
+  capture is 13 consecutive map frames (30 ms/frame, i.e. the game's 30 fps
+  clock). Frames 1-5 and 8-13 draw the building at 100%; only frames 6-7 drop the
+  *body* to 50% over the terrain, then it is opaque again. The owner flag, the
+  city wall and the armies on/next to the hex are separate scene objects and stay
+  opaque throughout. `Scene::mv_apply_structure_fade` therefore uses a square
+  pulse (`kStructurePulsePeriod = 13`, first dimmed frame 5 for two frames,
+  alpha 128/255); its phase 0 is the map clock when the floater opens, so the
+  first five frames after a click are opaque exactly like the capture.
 
 ## 6. Verification
 
@@ -181,6 +192,10 @@ AoW.exe --render bin/struct_final.png --start-map "Barondir Bay.HSM" `
   --structure-status Cheerful --crop 440 216 199 217 --no-music
 python tools/structure_bench.py bin/StructurePReference.png bin/struct_final.png
 ```
+
+`build.ps1 -Test` also renders the first Barondir Bay city at map clocks 4-7 and
+asserts the pulse's square shape: clocks 4 and 7 are byte-identical (opaque),
+clocks 5 and 6 are byte-identical (the 50% dip), and 4 differs from 5.
 
 `tools/structure_bench.py` writes `bin/structure_bench.png` (reference / port /
 diff) and prints the mean per-channel absolute difference. The current result

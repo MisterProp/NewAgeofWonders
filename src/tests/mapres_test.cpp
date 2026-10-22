@@ -1526,6 +1526,104 @@ int main(int argc, char** argv) {
     }
 
     {
+        // The Structure floater's fade background hides ONE placed object. The
+        // object's rw field tag (`MapHs::tag`) is only its slot inside a hex
+        // record, so every tile reuses it; the renderer must match the object's
+        // unique map-file offset instead. Barondir Bay has 19 cities, several of
+        // them sharing that field tag - hiding by tag used to fade them all.
+        const std::string bpath =
+            (fs::path(root) / "Scenario/Custom/Barondir Bay.HSM").string();
+        aow::Map bmap;
+        std::string berr;
+        if (!aow::load_map(bpath, bmap, berr)) {
+            check(false, "load Barondir Bay.HSM for the object-mask check (" +
+                             berr + ")");
+        } else if (bmap.levels.empty()) {
+            check(false, "Barondir Bay has no level for the object-mask check");
+        } else {
+            std::size_t city_offset = static_cast<std::size_t>(-1);
+            std::uint32_t city_tag = 0;
+            int cities = 0, same_tag = 0;
+            for (const aow::MapTile& t : bmap.levels[0].tiles) {
+                for (const aow::MapHs& hs : t.objects) {
+                    if (hs.class_id != aow::kCityClassId) continue;
+                    ++cities;
+                    if (city_offset == static_cast<std::size_t>(-1)) {
+                        city_offset = hs.offset;
+                        city_tag = hs.tag;
+                    } else if (hs.tag == city_tag) {
+                        ++same_tag;
+                    }
+                }
+            }
+            check(cities >= 2,
+                  "Barondir Bay carries several cities (" +
+                      std::to_string(cities) + ")");
+            check(same_tag > 0,
+                  "Barondir Bay has another city with the same field tag (" +
+                      std::to_string(same_tag) + ")");
+            aow::MapVizOptions opt;
+            opt.level = 0;
+            opt.no_animated_overlays = true;
+            opt.no_units = true;
+            std::vector<std::uint8_t> base, masked;
+            std::uint32_t w = 0, h = 0, mw = 0, mh = 0;
+            std::string rerr;
+            const bool ok =
+                aow::render_map_rgba(bmap, res, root, opt, base, w, h, rerr);
+            check(ok, "render Barondir Bay L0 for the object-mask check (" +
+                          rerr + ")");
+            if (ok) {
+                opt.hide_object_level = 0;
+                opt.hide_object_offset = city_offset;
+                std::string merr;
+                const bool mok =
+                    aow::render_map_rgba(bmap, res, root, opt, masked, mw, mh,
+                                         merr);
+                check(mok && mw == w && mh == h,
+                      "render Barondir Bay L0 with one city hidden (" + merr +
+                          ")");
+                if (mok && mw == w && mh == h && masked.size() == base.size()) {
+                    std::size_t changed = 0;
+                    int x0 = static_cast<int>(w), y0 = static_cast<int>(h);
+                    int x1 = -1, y1 = -1;
+                    for (std::uint32_t y = 0; y < h; ++y) {
+                        for (std::uint32_t x = 0; x < w; ++x) {
+                            const std::size_t p =
+                                (static_cast<std::size_t>(y) * w + x) * 4;
+                            if (base[p] == masked[p] &&
+                                base[p + 1] == masked[p + 1] &&
+                                base[p + 2] == masked[p + 2] &&
+                                base[p + 3] == masked[p + 3]) {
+                                continue;
+                            }
+                            ++changed;
+                            if (static_cast<int>(x) < x0) x0 = static_cast<int>(x);
+                            if (static_cast<int>(y) < y0) y0 = static_cast<int>(y);
+                            if (static_cast<int>(x) > x1) x1 = static_cast<int>(x);
+                            if (static_cast<int>(y) > y1) y1 = static_cast<int>(y);
+                        }
+                    }
+                    const int bw = x1 >= x0 ? x1 - x0 + 1 : 0;
+                    const int bh = y1 >= y0 ? y1 - y0 + 1 : 0;
+                    std::printf(
+                        "object mask: %d cities, %d share tag %u; one city "
+                        "hides %zu px in %dx%d box\n",
+                        cities, same_tag, city_tag, changed, bw, bh);
+                    check(changed > 100,
+                          "hiding the selected city changes its pixels (" +
+                              std::to_string(changed) + ")");
+                    check(bw > 0 && bh > 0 && bw < 300 && bh < 300,
+                          "hide_object_offset hides only the selected city, "
+                          "not every city sharing its field tag (box " +
+                              std::to_string(bw) + "x" + std::to_string(bh) +
+                              ")");
+                }
+            }
+        }
+    }
+
+    {
         // The debug CSV names the animated overlay rows and their frames change
         // with the clock (the wizard tower's orb wtwr05.bmp at clock 0).
         const std::string tpath =

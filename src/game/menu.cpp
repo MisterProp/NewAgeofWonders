@@ -234,6 +234,18 @@ constexpr int kHoverCursorClockMask = kHoverCursorFrames - 1;
 // per map frame and wraps it at 0x100000. The units' image sequences and the
 // hover pointer both read it.
 constexpr int kMapClockWrap = 0x100000;
+// The selected structure's blink (`TStructure.Select` -> its body sprite fading
+// against the world). `bin/Screen Selection.gif` is the ground truth: 13 map
+// frames at 30 fps - frames 1-5 and 8-13 are fully opaque, and only frames 6-7
+// (offsets 5 and 6) drop the building to 50%. The owner flag, the city wall and
+// the armies on the hex are separate scene objects and stay opaque. The cycle is
+// phased on the map clock at the moment the Structure floater opens, so the first
+// five frames after a click are always opaque - exactly the order of the reference
+// capture.
+constexpr int kStructurePulsePeriod = 13;   // map frames (30 fps -> ~0.43 s)
+constexpr int kStructurePulseFirst = 5;     // first dimmed frame (0-based)
+constexpr int kStructurePulseFrames = 2;    // frames 6 and 7 of the capture
+constexpr int kStructurePulseAlpha = 128;   // 50% body opacity
 // The map's "exploration enabled" flag (`TAoWHSMap+0xc9`, written by
 // `TAoWHSMap.SetExplorationEnabled@0x557723d4`). A normal game has it on: the
 // scenario's unexplored hexes are fogged and cannot be walked into, which is what
@@ -1647,7 +1659,8 @@ struct Scene {
     AowBox mv_struct_fade_box;                  // its pixel bounding box
     bool mv_struct_fade = false;                // the background is valid
     int mv_struct_fade_level = -1;
-    std::uint32_t mv_struct_fade_tag = 0;
+    std::size_t mv_struct_fade_offset = static_cast<std::size_t>(-1);
+    int mv_struct_fade_clock0 = 0;              // map clock when the floater opened
     int mv_struct_fade_alpha = 255;             // last applied 0..255
     // Pixels of the marker's far wall that the level's contents were composited
     // back over in the last marker draw - evidence that a city/unit on the hovered
@@ -3503,12 +3516,13 @@ struct Scene {
         mv_px_struct_bg.clear();
         mv_struct_fade = false;
         mv_struct_fade_level = -1;
-        mv_struct_fade_tag = 0;
+        mv_struct_fade_offset = static_cast<std::size_t>(-1);
         mv_struct_fade_box = AowBox{};
+        mv_struct_fade_clock0 = 0;
         mv_struct_fade_alpha = 255;
     }
 
-    bool mv_prepare_structure_fade(int level, std::uint32_t tag) {
+    bool mv_prepare_structure_fade(int level, std::size_t offset) {
         mv_clear_structure_fade();
         if (game_px.empty() || game_state_map.levels.empty()) return false;
         aow::MapVizOptions opt;
@@ -3521,7 +3535,7 @@ struct Scene {
         opt.no_animated_overlays = true;
         opt.no_units = true;
         opt.hide_object_level = level;
-        opt.hide_object_tag = tag;
+        opt.hide_object_offset = offset;
         std::uint32_t bw = 0, bh = 0;
         std::string err;
         if (!aow::render_map_rgba(game_state_map, game_res, root_dir, opt,
@@ -3556,13 +3570,19 @@ struct Scene {
         mv_struct_fade_box = AowBox{x0, y0, x1 - x0 + 1, y1 - y0 + 1};
         mv_struct_fade = true;
         mv_struct_fade_level = level;
-        mv_struct_fade_tag = tag;
+        mv_struct_fade_offset = offset;
+        // The blink's phase 0 is the click that opened the floater, so the first
+        // five map frames show the building fully opaque (the GIF's frames 1-5).
+        mv_struct_fade_clock0 = game_clock;
         return true;
     }
 
-    // Re-blends the selected structure over its background at a clock-driven
-    // opacity. This is the visual TStructure.Select leaves behind: the building
-    // itself fades up/down against the terrain, not a hex marker drawn over it.
+    // Re-blends the selected structure over its background at the clock-driven
+    // opacity of `bin/Screen Selection.gif` (see kStructurePulse*). This is the
+    // visual `TStructure.Select` leaves behind: the building body itself blinks
+    // against the terrain - a short 50% dip, not a smooth sinusoidal fade and not
+    // a hex marker drawn over it. The flag/wall/armies are separate objects and
+    // are re-composited opaque after this (mv_draw_structure_anim).
     void mv_apply_structure_fade() {
         if (!mv_struct_fade || !game_show_structure ||
             mv_struct_fade_level != game_level ||
@@ -3570,10 +3590,21 @@ struct Scene {
             mv_px_struct_bg.size() != game_px.size()) {
             return;
         }
-        // 64-frame period, 55% .. 100% opacity (an ease-in/ease-out pulse).
-        const double phase = 0.5 + 0.5 * std::sin(
-            static_cast<double>(game_clock) * 6.283185307179586 / 64.0);
-        const int a = 140 + static_cast<int>(phase * 115.0);
+        // A square pulse: opaque for eleven of the thirteen map frames, 50% for
+        // the two consecutive frames 6-7 of the capture. Wrapped by hand because
+        // the map clock keeps counting (and `--game-clock` may step it backwards).
+        int phase = (game_clock - mv_struct_fade_clock0) % kStructurePulsePeriod;
+        if (phase < 0) phase += kStructurePulsePeriod;
+        const bool dim = phase >= kStructurePulseFirst &&
+                         phase < kStructurePulseFirst + kStructurePulseFrames;
+        if (!dim) {
+            // The prepare/refresh path already restored `game_px` (the opaque
+            // building), so an on-frame needs no pixels written - only the box
+            // recorded by the previous dimmed frame is left untouched.
+            mv_struct_fade_alpha = 255;
+            return;
+        }
+        const int a = kStructurePulseAlpha;
         const AowBox& b = mv_struct_fade_box;
         for (int y = b.y; y < b.y + b.h; ++y) {
             if (y < 0 || y >= static_cast<int>(game_ph)) continue;
@@ -7379,7 +7410,7 @@ struct Scene {
         game_struct_hover = game_struct_pressed = -1;
         // TStructure.Select leaves the building pulsing: build the background
         // without this object, then re-blend the object over it every frame.
-        mv_prepare_structure_fade(game_level, hs->tag);
+        mv_prepare_structure_fade(game_level, hs->offset);
         mv_refresh_draw();
         play_game_sfx("Sfx\\Int\\Btn1.wav");
         return true;

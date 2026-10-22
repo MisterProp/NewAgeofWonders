@@ -1567,6 +1567,45 @@ if ($Test) {
     }
     Remove-Item $stpng, $stlog -Force
     Write-Host 'structure panel smoke test: ok'
+    # The selected structure's blink is `bin/Screen Selection.gif`, not a smooth
+    # sine: 13 map frames, opaque except the two consecutive frames 6-7 (offsets
+    # 5-6 after the click) where the body drops to 50%. Barondir Bay's first city
+    # is on screen at the opening camera; the 200x150 crop is only its tower, so
+    # the map clock's water/flag animations cannot mask the result.
+    $sfdir = Join-Path $BinDir 'struct_fade'
+    New-Item -ItemType Directory -Force $sfdir | Out-Null
+    $sfpng = @{}
+    foreach ($n in @(4, 5, 6, 7)) {
+        $p = Join-Path $sfdir "clock$n.png"
+        Remove-Item $p -Force -ErrorAction SilentlyContinue
+        $sfargs = ('--root "{0}" --start-map "Barondir Bay.HSM" --scen-human 0 ' +
+                   '--structure-panel --game-clock {1} --crop 0 0 200 150 ' +
+                   '--render "{2}" --no-music --no-cursor') -f $mroot, $n, $p
+        $sfproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $sfargs -Wait -PassThru -NoNewWindow
+        if ($sfproc.ExitCode -ne 0) {
+            throw "structure fade smoke test failed at clock $n ($($sfproc.ExitCode))"
+        }
+        if (-not (Test-Path $p)) {
+            throw "structure fade smoke test produced no PNG at clock $n"
+        }
+        $sfpng[$n] = $p
+    }
+    $h4 = (Get-FileHash $sfpng[4]).Hash
+    $h5 = (Get-FileHash $sfpng[5]).Hash
+    $h6 = (Get-FileHash $sfpng[6]).Hash
+    $h7 = (Get-FileHash $sfpng[7]).Hash
+    if ($h4 -ne $h7) {
+        throw 'structure fade regression: the two opaque frames (4 and 7) differ'
+    }
+    if ($h5 -ne $h6) {
+        throw 'structure fade regression: the two dimmed frames (5 and 6) differ'
+    }
+    if ($h4 -eq $h5) {
+        throw 'structure fade regression: frame 5 did not dim the building'
+    }
+    Remove-Item $sfdir -Recurse -Force
+    Write-Host 'structure fade smoke test: ok'
     # The Scenario screen's per-race player choice must decide which race's cities
     # and armies (its units) are played - TSetupControl.SetupMap (0x557e0b64)
     # writes the screen's type back into the roster. Tutorial.hsm's default human

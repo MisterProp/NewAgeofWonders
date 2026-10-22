@@ -2357,9 +2357,12 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
                     if (hs.tag == 50) continue;
                     // Diagnostic/selection support: leave this exact map object
                     // out (the root Scene uses it to render the selected
-                    // structure's background for the opacity pulse).
+                    // structure's background for the opacity pulse). Match the
+                    // object's unique map-file offset, not `hs.tag`: that tag is
+                    // only the field-table slot inside a hex record, so every
+                    // tile's first object shares it.
                     if (opt.hide_object_level == opt.level &&
-                        hs.tag == opt.hide_object_tag) {
+                        hs.offset == opt.hide_object_offset) {
                         continue;
                     }
                     if (hs.class_id == kRoadClassId) continue;   // drawn above
