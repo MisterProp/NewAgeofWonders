@@ -7,8 +7,12 @@ the reverse engineering behind `Scene::open_structure`,
 `Scene::render_structure_panel`, `Scene::structure_layout` and the new
 `--structure-panel` capture hook in `src/game/menu.cpp`.
 
-The reference capture is `bin/StructurePReference.png` (199x217 - the 200x216
-window with its right/bottom edge cropped by the capture, see section 6).
+The reference capture is `bin/StructurePReference.png` (199x217). It is a crop
+taken 3 px left and 2 px above the 200x216 window origin, so its first three
+columns / two rows show the frame's outer edge and the frame itself starts at
+(3,2); every component inside it is at its DFM box relative to that origin. The
+screenshot is a 16-bit RGB555 surface capture (all channel values are in the
+32-step RGB555-expanded set - see section 6).
 
 ## 1. Where the window lives
 
@@ -112,38 +116,57 @@ The routine starts with `ResetPanels`, then `ShowBase`, then:
 | CityBorderPnl | `Int\GenericF.ILB` | 115..122 `FrGoldD` (3x3) |
 | City view | `Images\RACES\R*.ILB` | **42 `BCS_<race>.BMP`** (57x278), 45 `BCU_...` underground |
 | Arch | `Int\CeltDeco.ILB` | 8 (76x58 top), 9 (76x58 border tile) |
-| Name plaque lines | `Int\CeltDeco.ILB` | 17 (50x5), 22 (50x6) |
+| Celt frame edges | `Int\CeltDeco.ILB` | 0 (7x27 `ILIndexLine` knot) + FrameMain2 30..37 |
+| RaceRelationIcon | `Int\Scenes\RelFr.ILB` | ids 11..18 (51x36 faces; 15 = friendly blue face); `CityPanel+32,86` |
+| Income icon | `Int\LBIcon.ILB` | 31 (16x13) at `InfoPnl+10,2` |
+| City level icon | `Int\LBIcon.ILB` | **1** (11x12 gold upgrade tree) at `InfoPnl+61,3` - 33 is the unrelated mana diamond |
+| Name plaque | `Int\GenericT.ILB` | 14 `RedText` 100x100 parchment + the measured 3-line bevel |
 | RazePnl | `Int\CeltDeco.ILB` | 74 (56x35) |
-| RazeBtn | `Int\GenericI.ILB` | 53/55/54 |
-| GoldIcn | `Int\LBIcon.ILB` | 31 |
-| Mana icon | `Int\LBIcon.ILB` | 33 |
+| RazeBtn | `Int\GenericI.ILB` | 53/55/54 (43x20 at `RazePnl+8,13`) |
 | ProdOrb | `Int\ProdWin.ILB` | 4 (39x37) |
 
+The city view is the RACES library's **id 42** (57x278). Its decoder buffer is
+blitted at window (135,-88); the visual source (10,180) then lands on the
+capture's (144,89), i.e. the visual banner box starts 3 px left of the window's
+`CityBorderPnl`. The 80x194 panel clips it and the two CeltDeco arch pieces are
+drawn over it (top at (119,19), id-9 tile at (119,77) and (119,135)).
+
 The BCS city view is the one that makes the reference capture's right-hand
-painting: the 57x278 race banner's bottom 194 rows are visible in the 80x194
-panel. The capture aligns it at `(134,-91)` (the window's title area above the
-panel is clipped); the port draws it 1:1 with `Canvas::blit_clip` so its ILB
-`base`/shift cannot move it. The arch (CeltDeco 8) is drawn on top, then the
-left pillar strip and the id-9 border repeat every 58 px below it.
+painting: the 57x278 race banner's lower rows are visible in the 80x194 panel.
+The capture puts the visual banner box at (131,-93) (the window's title area
+above the panel is clipped); the port blits the decoder buffer at (135,-88) so
+the visual source (10,180) lands on the capture's (144,89) byte-for-byte. The
+arch is drawn on top: CeltDeco 8 at (119,19) and the id-9 tile at (119,77) and
+(119,135); below y~193 the city painting / window frame shows through.
 
 ## 4. Layout
 
 `TIWINDOW.dfm` evaluates to (at the 200x216 design size):
 
 ```
-InfoWin         (0,0 200x216)       Title        (25,4 165x16)
+InfoWin         (0,0 200x216)       Title ink    (25,4)   Age10 clBlack
 SIcon           (2,1 19x16)         Help         (138,1 15x16)
 Center          (153,1 15x16)       Min          (167,1 15x16)
 Close           (181,1 15x16)       NamePnl      (4,17 136x27)
-StructNameLbl   centred, y = 10     CityPanel    (4,45 114x138)
-CityRaceLbl     centred, y = 73     CivilStatus  centred, bottom 1
-CityBorderPnl   (120,18 80x194)     MainBtn      (10,184 108x27)
-RazePnl         (128,174 56x35)     RazeBtn      (8,13 43x20 inside RazePnl)
+StructNameLbl   ink (52,27)         CityPanel    (4,45 114x138)
+CityRaceLbl     ink centred, y=118  CityBorderPnl(120,18 80x194)
+CivilStatusLbl  ink centred, y=171  MainBtn      (10,184 108x27)
+InfoPnl+GoldIcn (20,96 16x13)       Income ink   (42,97)  Age10s white
++UgradeI        (71,97 11x12)       Level ink    (91,97)  Age10s white
+RaceRelationIcon(42,131 37x36 vis)  Production   (12,68)  Age8 clBlack
+RazePnl         (128,174 56x35)     RazeBtn      (136,187 43x20)
 ```
 
 The floater is anchored `awRight`/`ahTop` at `TopOffset 216`, so in a 640x480
 window it sits at `(440,216)` - the same place as the Party floater. The port
 uses the same `kPartyTop` anchor and the DFM boxes, not a stretched bitmap.
+
+Fonts (all decoded from `Int\Fonts`): Title and Enter are **Age10**;
+StructNameLbl, CityIncomeLbl and CityLevelLbl are **Age10s** (their black
+pixels are real shadow); CityRaceLbl/CivilStatusLbl are **Age8s** (thin face,
+black pixels are the colour key); ActiveCityActionMemo is **Age8**. The
+`glyph()` blitter keeps the glyph's own black shadow for the first four and
+keys it for Age8s.
 
 ## 5. Input / selection
 
@@ -153,6 +176,24 @@ uses the same `kPartyTop` anchor and the DFM boxes, not a stretched bitmap.
   (`kCursorStateHover`), which the existing cursor code already paints.
 * A left click with no army selected opens `TIWindow.ShowInfo` for the building
   (`Scene::game_map_click` -> `Scene::open_structure`).
+* **A large building answers on every tile its sprite occupies.** A multi-hex
+  object is stored as *one* `MapHs` on its home hex, but
+  `TMultiHexMO.UpdateMapFields@5560af6c` registers it on every `TTerrainList`
+  entry that has an opinion, walking the engine's HN spiral (`hn_walk_hex`) from
+  that home hex. The resource data therefore names the occupied tiles exactly:
+  a size-1 `City.TCityResource` (CITY1.ILB) covers only its hex, CITY2 two,
+  CITY3 three and CITY4 (a capital) four - entries 0/1/2/6 = home, N, NE, NW.
+  `Scene::structure_on_hex` first checks the hovered/clicked tile's own object
+  list, then searches the surrounding five-hex HN radius (the largest shipped
+  `TTerrainList` has 65 entries, ring 5) for a structure whose footprint covers
+  the tile, using `aow::object_covers_hex`. `open_structure` still records the
+  object's *home* hex in `game_struct_hx/hy`, so the floater, its Center button
+  and the selection pulse stay anchored to the building rather than the tile
+  that was clicked. This makes the whole capital (four tiles) and every other
+  large building selectable, not only its centre. The head-less
+  `--structure-tile X Y` hook opens the structure selectable at a given tile
+  (`build.ps1 -Test` uses Barondir Bay's size-4 city at (12,20): tiles
+  (12,19), (13,19) and (11,19) all open it, (14,20) does not).
 * Multiple objects on one hex page party -> structure -> party (the help text:
   "The first click will bring up the party floater, the second will bring up
   the structure floater"). The port keeps the party path unchanged and opens
@@ -189,9 +230,14 @@ scenario that is not part of the install, the hook also has
 AoW.exe --render bin/struct_final.png --start-map "Barondir Bay.HSM" `
   --scen-human 0 --structure-panel --structure-name Venice --structure-race Human `
   --structure-race-index 0 --structure-gold 38 --structure-mana 2 `
-  --structure-status Cheerful --crop 440 216 199 217 --no-music
+  --structure-status Cheerful --structure-relation 4 --crop 437 214 199 217 `
+  --no-music --no-cursor
 python tools/structure_bench.py bin/StructurePReference.png bin/struct_final.png
 ```
+
+`--structure-relation` selects the RelFr face band (11 + relation); the
+reference's city owner is at relation 4, i.e. RelFr id 15, the blue laughing
+face. The default is 4 as well (the port has no diplomacy model yet).
 
 `build.ps1 -Test` also renders the first Barondir Bay city at map clocks 4-7 and
 asserts the pulse's square shape: clocks 4 and 7 are byte-identical (opaque),
@@ -199,8 +245,17 @@ clocks 5 and 6 are byte-identical (the 50% dip), and 4 differs from 5.
 
 `tools/structure_bench.py` writes `bin/structure_bench.png` (reference / port /
 diff) and prints the mean per-channel absolute difference. The current result
-is a mean of **~30.8/255** over the 199x217 panel. The remaining differences
-are the external Dict city name/portrait (the capture's "Venice" and blue
-leader face), the 16-bit screenshot's palette dithering, and the city view
-column/painting composition; every element, its DFM box and its original
-library entry is reproduced.
+is a mean of **~4.1/255** over the 199x217 panel (title 0.3, name 5.3,
+left body 4.5, right city 4.2, footer 5.3); the build smoke test fails at 8.
+
+All of the capture's *elements* now match: the frame, title bar and buttons,
+the parchment and text pixels (byte-identical glyph masks), the RelFr relation
+face, both InfoPnl icons, the BCS city painting, the two arch pieces, the raze
+panel/button and the Enter button. The residual is the last few pixels of the
+hand-drawn bevel around NamePnl/CityPanel, the celtic frame's corner knots
+(TAoWFrame's rotated `ILIndexLine` tiling) and the 1 px frame overdraw at the
+crop's left/top edge - i.e. sub-2 % per channel, not a layout or art-entry
+difference. `Canvas::to_rgba(g.rgb555)` quantises the PNG through the engine's
+16-bit RGB555 back surface when the capture hook is used (`--structure-panel`,
+or `--rgb555` on another screen), which removed the palette delta that the
+first pass (mean ~30.8) mistook for art differences.

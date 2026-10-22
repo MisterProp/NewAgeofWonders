@@ -1,0 +1,104 @@
+597015e0  70 59                  jo 0x5970163b
+597015e2  8b c0                  mov eax, eax
+597015e4  ff 25 28 de 70 59      jmp dword ptr [0x5970de28]
+597015ea  8b c0                  mov eax, eax
+597015ec  ff 25 24 de 70 59      jmp dword ptr [0x5970de24]
+597015f2  8b c0                  mov eax, eax
+597015f4  ff 25 34 de 70 59      jmp dword ptr [0x5970de34]
+597015fa  8b c0                  mov eax, eax
+597015fc  ff 25 30 de 70 59      jmp dword ptr [0x5970de30]
+59701602  8b c0                  mov eax, eax
+59701604  ff 25 40 de 70 59      jmp dword ptr [0x5970de40]
+5970160a  8b c0                  mov eax, eax
+5970160c  ff 25 3c de 70 59      jmp dword ptr [0x5970de3c]
+59701612  8b c0                  mov eax, eax
+59701614  ff 25 64 de 70 59      jmp dword ptr [0x5970de64]
+5970161a  8b c0                  mov eax, eax
+5970161c  ff 25 60 de 70 59      jmp dword ptr [0x5970de60]
+59701622  8b c0                  mov eax, eax
+59701624  ff 25 5c de 70 59      jmp dword ptr [0x5970de5c]
+5970162a  8b c0                  mov eax, eax
+5970162c  ff 25 58 de 70 59      jmp dword ptr [0x5970de58]
+59701632  8b c0                  mov eax, eax
+59701634  ff 25 54 de 70 59      jmp dword ptr [0x5970de54]
+5970163a  8b c0                  mov eax, eax
+5970163c  ff 25 50 de 70 59      jmp dword ptr [0x5970de50]
+59701642  8b c0                  mov eax, eax
+59701644  ff 25 4c de 70 59      jmp dword ptr [0x5970de4c]
+5970164a  8b c0                  mov eax, eax
+5970164c  ff 25 48 de 70 59      jmp dword ptr [0x5970de48]
+59701652  8b c0                  mov eax, eax
+59701654  ff 25 94 de 70 59      jmp dword ptr [0x5970de94]
+5970165a  8b c0                  mov eax, eax
+5970165c  ff 25 90 de 70 59      jmp dword ptr [0x5970de90]
+59701662  8b c0                  mov eax, eax
+59701664  ff 25 8c de 70 59      jmp dword ptr [0x5970de8c]
+5970166a  8b c0                  mov eax, eax
+5970166c  ff 25 88 de 70 59      jmp dword ptr [0x5970de88]
+59701672  8b c0                  mov eax, eax
+59701674  ff 25 84 de 70 59      jmp dword ptr [0x5970de84]
+5970167a  8b c0                  mov eax, eax
+5970167c  ff 25 80 de 70 59      jmp dword ptr [0x5970de80]
+59701682  8b c0                  mov eax, eax
+59701684  ff 25 7c de 70 59      jmp dword ptr [0x5970de7c]
+5970168a  8b c0                  mov eax, eax
+5970168c  ff 25 78 de 70 59      jmp dword ptr [0x5970de78]
+59701692  8b c0                  mov eax, eax
+59701694  ff 25 74 de 70 59      jmp dword ptr [0x5970de74]
+5970169a  8b c0                  mov eax, eax
+5970169c  ff 25 08 df 70 59      jmp dword ptr [0x5970df08]
+597016a2  8b c0                  mov eax, eax
+597016a4  ff 25 04 df 70 59      jmp dword ptr [0x5970df04]
+597016aa  8b c0                  mov eax, eax
+597016ac  ff 25 00 df 70 59      jmp dword ptr [0x5970df00]
+597016b2  8b c0                  mov eax, eax
+597016b4  ff 25 fc de 70 59      jmp dword ptr [0x5970defc]
+597016ba  8b c0                  mov eax, eax
+597016bc  ff 25 f8 de 70 59      jmp dword ptr [0x5970def8]
+597016c2  8b c0                  mov eax, eax
+597016c4  ff 25 f4 de 70 59      jmp dword ptr [0x5970def4]
+597016ca  8b c0                  mov eax, eax
+597016cc  ff 25 f0 de 70 59      jmp dword ptr [0x5970def0]
+597016d2  8b c0                  mov eax, eax
+597016d4  ff 25 ec de 70 59      jmp dword ptr [0x5970deec]
+597016da  8b c0                  mov eax, eax
+597016dc  ff 25 e8 de 70 59      jmp dword ptr [0x5970dee8]
+597016e2  8b c0                  mov eax, eax
+597016e4  ff 25 e4 de 70 59      jmp dword ptr [0x5970dee4]
+597016ea  8b c0                  mov eax, eax
+597016ec  ff 25 e0 de 70 59      jmp dword ptr [0x5970dee0]
+597016f2  8b c0                  mov eax, eax
+597016f4  ff 25 dc de 70 59      jmp dword ptr [0x5970dedc]
+597016fa  8b c0                  mov eax, eax
+597016fc  ff 25 d8 de 70 59      jmp dword ptr [0x5970ded8]
+59701702  8b c0                  mov eax, eax
+59701704  ff 25 d4 de 70 59      jmp dword ptr [0x5970ded4]
+5970170a  8b c0                  mov eax, eax
+5970170c  ff 25 d0 de 70 59      jmp dword ptr [0x5970ded0]
+59701712  8b c0                  mov eax, eax
+59701714  ff 25 cc de 70 59      jmp dword ptr [0x5970decc]
+5970171a  8b c0                  mov eax, eax
+5970171c  ff 25 c8 de 70 59      jmp dword ptr [0x5970dec8]
+59701722  8b c0                  mov eax, eax
+59701724  ff 25 c4 de 70 59      jmp dword ptr [0x5970dec4]
+5970172a  8b c0                  mov eax, eax
+5970172c  ff 25 c0 de 70 59      jmp dword ptr [0x5970dec0]
+59701732  8b c0                  mov eax, eax
+59701734  ff 25 bc de 70 59      jmp dword ptr [0x5970debc]
+5970173a  8b c0                  mov eax, eax
+5970173c  ff 25 b8 de 70 59      jmp dword ptr [0x5970deb8]
+59701742  8b c0                  mov eax, eax
+59701744  ff 25 b4 de 70 59      jmp dword ptr [0x5970deb4]
+5970174a  8b c0                  mov eax, eax
+5970174c  ff 25 b0 de 70 59      jmp dword ptr [0x5970deb0]
+59701752  8b c0                  mov eax, eax
+59701754  ff 25 ac de 70 59      jmp dword ptr [0x5970deac]
+5970175a  8b c0                  mov eax, eax
+5970175c  ff 25 a8 de 70 59      jmp dword ptr [0x5970dea8]
+59701762  8b c0                  mov eax, eax
+59701764  ff 25 a4 de 70 59      jmp dword ptr [0x5970dea4]
+5970176a  8b c0                  mov eax, eax
+5970176c  ff 25 14 df 70 59      jmp dword ptr [0x5970df14]
+59701772  8b c0                  mov eax, eax
+59701774  ff 25 10 df 70 59      jmp dword ptr [0x5970df10]
+5970177a  8b c0                  mov eax, eax

@@ -59,6 +59,8 @@ int usage() {
         "  aow mapviz <map.HSM> <out.png> [--res <Release.hss>] [--root <dir>]\n"
         "             [--level N] [--no-objects] [--max N]\n"
         "                                  render a map level to a PNG\n"
+        "  aow tbmapviz <TCMaps\\map.HSM> <out.png> [--root <dir>] [--level N]\n"
+        "             [--no-objects]        render a tactical battle map\n"
         "  aow version                     print tool version\n");
     return 2;
 }
@@ -493,6 +495,41 @@ int cmd_mapviz(const char* map_path, const char* out_path,
                 level, m.width, m.height, res.size());
     return 0;
 }
+
+// Renders a tactical battle map (`TCMaps\*.HSM`) with the combat renderer.
+// `combat` comes from <root>\Release\comb_res.pfs; `world` from Release.hss for
+// the BorderHx frame. This is the head-less path AoWTBViewer also uses.
+int cmd_tbmapviz(const char* map_path, const char* out_path,
+                 const std::string& root, int level, bool objects) {
+    aow::Map m;
+    std::string err;
+    if (!aow::load_map(map_path, m, err)) {
+        std::fprintf(stderr, "error: %s\n", err.c_str());
+        return 1;
+    }
+    const std::string combat_path = root + "\\Release\\comb_res.pfs";
+    const std::string world_path = root + "\\Release\\Release.hss";
+    std::vector<aow::MapResource> combat, world;
+    if (!aow::load_combat_resources(combat_path, combat, err)) {
+        std::fprintf(stderr, "error: %s\n", err.c_str());
+        return 1;
+    }
+    if (!aow::load_map_resources(world_path, world, err)) {
+        std::fprintf(stderr, "warning: %s (border frame unavailable)\n", err.c_str());
+        world.clear();
+    }
+    aow::TbMapVizOptions opt;
+    opt.level = level;
+    opt.no_objects = !objects;
+    if (!aow::render_tb_map_png(m, combat, world, root, opt, out_path, err)) {
+        std::fprintf(stderr, "error: %s\n", err.c_str());
+        return 1;
+    }
+    std::printf("wrote %s  level=%d  %ux%u hexes  combat resources=%zu\n",
+                out_path, level, m.width, m.height, combat.size());
+    return 0;
+}
+
 
 // Lists the armies a scenario places on its map and the units/heroes they
 // carry (docs/13_UNITS_ON_MAP.md). With --root <game-dir> each unit's on-map
@@ -1073,6 +1110,19 @@ int main(int argc, char** argv) {
         }
         return cmd_mapviz(argv[2], argv[3], res, root, level, objects, max_dim,
                           debug_csv);
+    }
+    if (cmd == "tbmapviz") {
+        if (argc < 4) return usage();
+        std::string root = "..";
+        int level = 0;
+        bool objects = true;
+        for (int i = 4; i < argc; ++i) {
+            const std::string a = argv[i];
+            if (a == "--root" && i + 1 < argc) root = argv[++i];
+            else if (a == "--level" && i + 1 < argc) level = std::atoi(argv[++i]);
+            else if (a == "--no-objects") objects = false;
+        }
+        return cmd_tbmapviz(argv[2], argv[3], root, level, objects);
     }
     if (cmd == "roster") {
         if (argc < 3) return usage();

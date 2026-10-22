@@ -67,6 +67,14 @@ add_executable(aow_view WIN32
 )
 target_link_libraries(aow_view PRIVATE aow_engine comdlg32 gdi32 user32 shell32 ole32)
 
+# `GameRecorder`: record a game window to an animated GIF (Win32 + GDI only).
+# Pick the window and the frame rate, Start / Pause / Stop, then save the .gif.
+# Head-less modes for scripting/tests: --record ... and --selftest.
+add_executable(GameRecorder WIN32
+    game/gamerecorder.cpp
+)
+target_link_libraries(GameRecorder PRIVATE comdlg32 gdi32 user32 shell32 ole32)
+
 # `aow_unitview`: the unit viewer (Win32 + GDI). Browse every unit of the game
 # (its idle sprite); click / Enter opens the unit's page with the name,
 # description, stats and attributes. `--png` renders one view head-lessly.
@@ -74,6 +82,13 @@ add_executable(aow_unitview WIN32
     game/unitviewer.cpp
 )
 target_link_libraries(aow_unitview PRIVATE aow_engine gdi32 user32 shell32)
+
+# `AoWTBViewer`: the tactical battle map viewer (TCMaps\*.HSM, comb_res.pfs).
+# Win32 + GDI only; it lists every battlefield and pans/zooms the 1:1 render.
+add_executable(AoWTBViewer WIN32
+    game/tbviewer.cpp
+)
+target_link_libraries(AoWTBViewer PRIVATE aow_engine gdi32 user32 shell32)
 
 # `aow_audio`: the audio showcase.  Replays the game's .IT music and .WAV/.VAG
 # samples through the ported engine using the WinMM waveOut API.
@@ -172,6 +187,7 @@ if(MSVC)
   target_compile_options(aow_engine PRIVATE /W4)
   target_compile_options(aow_tools PRIVATE /W4)
   target_compile_options(aow_view PRIVATE /W4)
+  target_compile_options(GameRecorder PRIVATE /W4)
   target_compile_options(aow_unitview PRIVATE /W4)
   target_compile_options(aow_audio PRIVATE /W4)
   target_compile_options(aow_menu PRIVATE /W4)
@@ -190,6 +206,7 @@ else()
   target_compile_options(aow_engine PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(aow_tools PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(aow_view PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(GameRecorder PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(aow_unitview PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(aow_audio PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(aow_menu PRIVATE -Wall -Wextra -Wpedantic)
@@ -267,3 +284,7 @@ add_test(NAME scenario_render
                  --root ${CMAKE_CURRENT_SOURCE_DIR}/../..
                  --render ${CMAKE_CURRENT_BINARY_DIR}/scenario_test.png
                  --screen scenario --scen-frame 90 --no-music --no-cursor)
+# GIF recorder smoke test: encode a synthetic animation head-lessly.
+add_test(NAME game_recorder_selftest
+         COMMAND GameRecorder --selftest
+                 ${CMAKE_CURRENT_BINARY_DIR}/gamerecorder_selftest.gif)

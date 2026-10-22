@@ -3,14 +3,16 @@
     python tools/structure_bench.py bin/StructurePReference.png bin/struct_final.png
 
 Both images must be the same size (the reference is the 199x217 crop of the
-200x216 InfoWin). Writes bin/structure_bench.png: reference, port and an
-amplified absolute difference, and prints the mean per-channel |delta| plus a
-per-region breakdown. Exit code XC=1 when the mean exceeds 40.
+200x216 InfoWin taken 3 px left / 2 px above the window origin, so it also
+shows the frame's outer edge). Writes bin/structure_bench.png: reference, port
+and an amplified absolute difference, and prints the mean per-channel |delta|
+plus a per-region breakdown. Exit code XC=1 when the mean exceeds 8 (the
+current capture matches at ~4.3/255; anything above 8 is a visible regression).
 """
 import sys
 from PIL import Image, ImageChops, ImageEnhance
 
-LIMIT = 40.0
+LIMIT = 8.0
 
 
 def mean_abs(a, b):

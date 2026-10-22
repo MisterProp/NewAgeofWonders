@@ -1,0 +1,2 @@
+file 0x1cbe0c va 0x005cfc0c (.rsrc)  CurPlayer
+file 0x1cef89 va 0x005d2d89 (.rsrc)  CurPlayer

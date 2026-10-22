@@ -1,0 +1,25 @@
+void AoWLabel_TAOWLabel_SetGText_23EDC2EF(int *param_1,undefined4 param_2)
+{
+undefined1 *puVar1;
+undefined4 *in_FS_OFFSET;
+undefined4 uStack_18;
+undefined1 *puStack_14;
+undefined1 *puStack_10;
+undefined4 local_8;
+/* 0x11f3c  281  AoWLabel.TAOWLabel.SetGText@23EDC2EF */
+puStack_10 = (undefined1 *)0x411f4e;
+local_8 = param_2;
+System__LStrAddRef_51F89FF7(param_2);
+puStack_14 = &LAB_00411f87;
+uStack_18 = *in_FS_OFFSET;
+*in_FS_OFFSET = &uStack_18;
+puStack_10 = &stack0xfffffffc;
+System__LStrAsg_51F89FF7(param_1 + 0x23,local_8);
+(**(code **)(*param_1 + 0x50))();
+puVar1 = puStack_10;
+*in_FS_OFFSET = uStack_18;
+puStack_10 = &LAB_00411f8e;
+puStack_14 = (undefined1 *)0x411f86;
+System__LStrClr_40929B27(&local_8,uStack_18,puVar1);
+return;
+}

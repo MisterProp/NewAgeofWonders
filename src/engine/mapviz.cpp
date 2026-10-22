@@ -67,12 +67,20 @@ std::size_t city_image_slot(int size, int terrain) {
 }
 
 // The fallback GetCityImage tries when `city_image_slot` is absent from the
-// race library: `size + (wall_flag == 0 ? 0x32 : 0x3c) - 1`. `wall_flag` is the
-// TMapField byte at +0x12 (a walled city sets it); the port passes 1 when the
-// city resource carries a wall type. The engine's exact byte is still
-// [TODO(RE)].
-std::size_t city_image_fallback_slot(int size, int wall_flag) {
-    return static_cast<std::size_t>(size + (wall_flag == 0 ? 0x32 : 0x3c) - 1);
+// race library: `size + (level == 0 ? 0x32 : 0x3c) - 1`.
+//
+// `level` is the value `TCity.UpdateImages` hands GetCityImage:
+// `*(char *)(city[1] + 0x12)`, i.e. the *TMapField* level byte. TMapField.GetXYL
+// packs `x + y*0x100 + L*0x10000` out of +0x10/+0x11/+0x12, and
+// TMapField.UpdateTerrainType reads the terrain from the same field at +0x14.
+// Level 0 is the surface, so the fallback selects the race library's overworld
+// block (slots 50..53); a non-zero level (the underground) selects its
+// underground block (slots 60..63). It is NOT the city's wall byte: that is
+// `TCity+0x4c` and only selects the CityN wall sprites (T + wallType*2).
+// Evidence: re/exports/hsepack/HSEngine.TMapField.{GetXYL,UpdateTerrainType}.c
+// and re/exports/aowepack/AoWE.TCity.UpdateImages.c.
+std::size_t city_image_fallback_slot(int size, int level) {
+    return static_cast<std::size_t>(size + (level == 0 ? 0x32 : 0x3c) - 1);
 }
 
 // See mapviz.hpp. The four `City.TCityResource` records name their library
@@ -1809,11 +1817,13 @@ bool render_map_rgba(const Map& m, const std::vector<MapResource>& res,
             const std::string rf = resolver.resolve(race_name);
             if (!rf.empty()) {
                 const Library& rl = get_library(cache, rf);
-                const int wall_flag =
-                    (hs.wall_type > 0 && hs.wall_type != 3) ? 1 : 0;
+                // GetCityImage's last argument is the map field's LEVEL byte
+                // (TMapField+0x12: 0 = surface, non-zero = underground), not the
+                // city's wall type - see city_image_fallback_slot.
+                const int level = static_cast<int>(lv.index);
                 std::size_t slot = city_image_slot(size, tcode);
                 if (!(slot < rl.frames.size() && rl.frames[slot].ok)) {
-                    slot = city_image_fallback_slot(size, wall_flag);
+                    slot = city_image_fallback_slot(size, level);
                 }
                 if (slot < rl.frames.size() && rl.frames[slot].ok) {
                     body_lib = &rl;

@@ -1,0 +1,4 @@
+Images/Effects/Magic.ILB: Teleport00.BMP, Teleport01.BMP, Teleport02.BMP, Teleport03.BMP, Teleport04.BMP, Teleport05.BMP, Teleport06.BMP, Teleport07.BMP, Teleport08.BMP, Teleport09.BMP, Teleport10.BMP, Teleport11.BMP
+Int/GenericF.ILB: FaceDlgF.BMP, FaceDlgI.BMP
+Int/Scenes/EndScene.ILB: EndFaceFr.BMP
+Int/Scenes/PyreFrm.ILB: FaceFr.BMP

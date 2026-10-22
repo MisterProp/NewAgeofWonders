@@ -379,6 +379,19 @@ constexpr std::uint32_t kScenChkIds[2] = {41, 42};      // ScenChk 12x12
 // GenericB's ButRCelt2.BMP (ids 19..27 = 3 states x 3 pieces).
 constexpr std::uint32_t kDlgFrameBase = 32;     // DialogFr 22px 9-slice
 constexpr std::uint32_t kGoldFrameBase = 113;   // FrGoldD 3px 9-slice
+// TIWindow's city panel (docs/25_STRUCTURE_PANEL.md). The BCS_<race>.BMP city
+// banner is the RACES library id 42 (57x278; ids 40/41 are its top strip and
+// upper frame, 45 is the underground BCU banner). The RaceRelationIcon is
+// RelWin's 51x36 face, id 11 onwards, and the city-level icon beside the income
+// is LBIcon 1 (the gold "upgrade" tree - LBIcon 33 is the unrelated mana
+// diamond).
+constexpr std::uint32_t kStructureCityArtId = 42;
+constexpr std::uint32_t kStructureRelationBase = 11;
+constexpr std::uint32_t kStructureRelationCount = 8;
+// The reference capture's city is owned by a player at relation 4 (the blue
+// laughing face, RelFr 15). The port has no diplomacy model yet, so the city
+// panel uses this band unless `--structure-relation` overrides it.
+constexpr int kStructureRelationDefault = 4;
 constexpr std::uint32_t kThinFrameBase = 105;   // FrThinD 2px 9-slice
 constexpr std::uint32_t kCeltBtnBase = 19;      // ButRCelt2 (state*3 + piece)
 // The dialog's close box is TAOWButton Close: ILIcon = IntGfxMod.GenericI
@@ -1079,7 +1092,7 @@ public:
     // coverage and applies the requested colour. (Unused by the title screen,
     // which draws the font's own pre-shaded layers, but kept for other screens.)
     void glyph(const Sprite& s, int x, int y, std::uint8_t r, std::uint8_t g,
-               std::uint8_t b) {
+               std::uint8_t b, bool key_black = false) {
         if (!s.ok) return;
         const int dx0 = x + s.base_x;
         const int dy0 = y + s.base_y;
@@ -1090,21 +1103,42 @@ public:
                 const std::uint8_t* p =
                     &s.rgba[(static_cast<std::size_t>(sy) * s.w + sx) * 4];
                 if (p[3] == 0) continue;
+                const bool bg = (p[0] | p[1] | p[2]) == 0;
+                // Age8s (the city Race/Status labels) is a thin 1 px face whose
+                // black pixels are the font's colour key. Age8/Age10/Age10s
+                // carry a real black shadow, so those pixels stay black - which
+                // is what gives the white "38"/"2" and "Venice" runs their dark
+                // lower-right edge in the capture (glyph() used to recolour the
+                // whole cell, erasing that shadow).
+                if (bg && key_black) continue;
                 const int dx = dx0 + static_cast<int>(sx);
                 if (dx < 0 || dx >= w_) continue;
                 std::uint8_t* d =
                     &px_[(static_cast<std::size_t>(dy) * w_ + dx) * 4];
-                d[0] = b; d[1] = g; d[2] = r; d[3] = 255;
+                d[0] = bg ? 0 : b;
+                d[1] = bg ? 0 : g;
+                d[2] = bg ? 0 : r;
+                d[3] = 255;
             }
         }
     }
 
-    std::vector<std::uint8_t> to_rgba() const {
+    // The engine renders into a 16-bit RGB555 back surface (every reference
+    // capture - StructurePReference.png, partyRef.png, CounterRef.png, ... - is
+    // 100 % RGB555-expanded: all channel values are in the 32-step set). The
+    // port's canvases are 8-bit, so screenshots are quantised here, exactly as
+    // GFXE's 16-bit surface does. The live window keeps the 8-bit buffer.
+    static std::uint8_t rgb555(std::uint8_t v) {
+        const unsigned q = v >> 3;
+        return static_cast<std::uint8_t>((q << 3) | (q >> 2));
+    }
+
+    std::vector<std::uint8_t> to_rgba(bool rgb555_surface = false) const {
         std::vector<std::uint8_t> out(px_.size());
         for (std::size_t i = 0; i < px_.size(); i += 4) {
-            out[i] = px_[i + 2];
-            out[i + 1] = px_[i + 1];
-            out[i + 2] = px_[i];
+            out[i] = rgb555_surface ? rgb555(px_[i + 2]) : px_[i + 2];
+            out[i + 1] = rgb555_surface ? rgb555(px_[i + 1]) : px_[i + 1];
+            out[i + 2] = rgb555_surface ? rgb555(px_[i]) : px_[i];
             out[i + 3] = px_[i + 3];
         }
         return out;
@@ -1551,7 +1585,7 @@ struct Scene {
     // RazePnl (CeltDeco 74 + GenericI 53/55/54), GoldIcn (LBIcons 31) and the
     // Age10/Age8 fonts. All are decoded from the game's own libraries.
     aow::IlbFile prodwin_il;      // Int\ProdWin.ILB
-    aow::IlbFile relwin_il;       // Int\RelWin.ILB (race-relation icon)
+    aow::IlbFile relwin_il;       // Int\Scenes\RelFr.ILB (race-relation faces)
     aow::IlbFile iwin_race_il;    // Images\RACES\R*.ILB (BCS city view)
     Sprite iwin_bg;               // GenericT 0   TextBackGround
     Sprite iwin_body;             // GenericT 2   MainFloaterSet
@@ -1567,14 +1601,16 @@ struct Scene {
     Sprite iwin_celt_knot;        // CeltDeco 3   27x27 title-bar knot
     Sprite iwin_celt_arch;        // CeltDeco 8   76x58 arch top
     Sprite iwin_celt_side;        // CeltDeco 9   76x58 frame tile
+    Sprite iwin_celt_edge;        // CeltDeco 0   7x27 ILIndexLine
     Sprite iwin_celt_line_a;      // CeltDeco 17  50x5
     Sprite iwin_celt_line_b;      // CeltDeco 22  50x6
     Sprite iwin_raze_bg;          // CeltDeco 74  56x35
     Sprite iwin_raze_btn[3];      // GenericI 53/55/54
     Sprite iwin_gold_icon;        // LBIcon 31
-    Sprite iwin_mana_icon;        // LBIcon 33
+    Sprite iwin_upgrade_icon;     // LBIcon 1     city-level icon
     Sprite iwin_prod_orb;         // ProdWin 4    39x37
-    Sprite iwin_relation;         // RelWin 11    race relation icon
+    Sprite iwin_relation[kStructureRelationCount];  // RelFr 11..18 faces
+    Sprite iwin_plaque_tex;       // GenericT 14  name-plaque parchment
     std::vector<Sprite> move_icons;  // Int\IconMove.ILB, all 20 entries
     // The Events banner's live content (see kEvent* above): the seated player's
     // leader portrait (FACERES.PFS -> its image library) and the thirteen race
@@ -1716,8 +1752,11 @@ struct Scene {
     std::string game_struct_race;                  // Race: <this>
     std::string game_struct_status;                // Status: <this>
     std::string game_struct_production;            // "Producing ..."
-    int game_struct_gold = 0;                      // the gold read-out
-    int game_struct_mana = 0;                      // the mana read-out
+    int game_struct_gold = 0;                      // the income read-out
+    // The second InfoPnl value is TIWindow's CityLevelLbl (the city's size /
+    // level byte), not mana; the field name is kept for the capture override.
+    int game_struct_mana = 0;
+    int game_struct_relation = kStructureRelationDefault;  // RelFr face band
     int game_struct_owner = 0;                     // owning player (0 = neutral)
     int game_struct_race_index = -1;               // race library index
     int game_struct_pressed = -1;                  // pressed control id
@@ -2664,6 +2703,9 @@ struct Scene {
             decode_id(celldeco_il, 8, iwin_celt_arch);
             
             decode_id(celldeco_il, 9, iwin_celt_side);
+            // TAoWFrame's ILIndexLine = 0: the 7x27 knot segment it tiles along
+            // the frame's edges (CeltFrame.ILIndexLine in TIWINDOW.dfm).
+            decode_id(celldeco_il, 0, iwin_celt_edge);
             decode_id(celldeco_il, 17, iwin_celt_line_a);
             decode_id(celldeco_il, 22, iwin_celt_line_b);
             decode_id(celldeco_il, 74, iwin_raze_bg);
@@ -2672,15 +2714,32 @@ struct Scene {
                 lbicon_il.load(lb, err);
             }
             decode_id(lbicon_il, 31, iwin_gold_icon);
-            decode_id(lbicon_il, 33, iwin_mana_icon);
+            decode_id(lbicon_il, 1, iwin_upgrade_icon);
             {
                 const std::string pw = (base / "Int" / "ProdWin.ILB").string();
                 if (prodwin_il.load(pw, err)) {
                     decode_id(prodwin_il, 4, iwin_prod_orb);
                 }
-                const std::string rw = (base / "Int" / "RelWin.ILB").string();
+                // RaceRelationIcon: IntGfxMod.RelWin is Int\Scenes\RelFr.ILB.
+                // Its ids 11..18 are the eight 51x36 relation faces (11 angry
+                // .. 18 friendly); `ShowInfo` sets CurrentImage = relation +
+                // 0xb from `TRaceResource.GetFace` + GetPlayerRelation.
+                const std::string rw =
+                    (base / "Int" / "Scenes" / "RelFr.ILB").string();
                 if (relwin_il.load(rw, err)) {
-                    decode_id(relwin_il, 11, iwin_relation);
+                    for (std::uint32_t i = 0; i < kStructureRelationCount; ++i) {
+                        decode_id(relwin_il, kStructureRelationBase + i,
+                                  iwin_relation[i]);
+                    }
+                }
+                // The name plaque's parchment is GenericT's RedText tile (id
+                // 14, 100x100); TAOWPanel tiles the inherited window texture.
+                {
+                    const std::string gt = (base / "Int" / "GenericT.ilb").string();
+                    aow::IlbFile texture_il;
+                    if (texture_il.load(gt, err)) {
+                        decode_id(texture_il, 14, iwin_plaque_tex);
+                    }
                 }
             }
         }
@@ -4767,7 +4826,7 @@ struct Scene {
     void text_at(Canvas& cv, const std::vector<Glyph>& fs, int x, int y,
                  const std::string& s, std::uint8_t r, std::uint8_t g,
                  std::uint8_t b, bool center, bool keyed,
-                 int tracking = -1) const {
+                 int tracking = -1, bool key_black = false) const {
         int pen = center ? x - text_w(fs, s) / 2 : x;
         for (unsigned char c : s) {
             const Glyph& gl = fs[c];
@@ -4775,7 +4834,7 @@ struct Scene {
                 if (keyed) {
                     cv.blit_keyed(gl.face, pen, y);
                 } else {
-                    cv.glyph(gl.face, pen, y, r, g, b);
+                    cv.glyph(gl.face, pen, y, r, g, b, key_black);
                 }
             }
             int adv = glyph_advance(fs, c);
@@ -7157,8 +7216,13 @@ struct Scene {
     }
 
     // Topmost selectable structure on a hex (the engine walks the field's
-    // hexagon sprites from the last placed back to the first).
-    const aow::MapHs* structure_on_hex(int x, int y) const {
+    // hexagon sprites from the last placed back to the first). `home_x`/`home_y`
+    // receive the hex the object is *stored* on, which differs from the clicked
+    // hex for a large building: a capital is one `City.TCity` object on its home
+    // hex but its sprite/pad occupies several tiles, so `TMultiHexMO` registers
+    // it on every hex its `TTerrainList` covers (see `object_covers_hex`).
+    const aow::MapHs* structure_on_hex(int x, int y, int* home_x = nullptr,
+                                       int* home_y = nullptr) const {
         if (game_level < 0 ||
             static_cast<std::size_t>(game_level) >= game_state_map.levels.size()) {
             return nullptr;
@@ -7169,12 +7233,50 @@ struct Scene {
             static_cast<std::uint32_t>(y) >= lv.height) {
             return nullptr;
         }
+        auto found = [&](const aow::MapHs* hs, int hx, int hy) {
+            if (home_x != nullptr) *home_x = hx;
+            if (home_y != nullptr) *home_y = hy;
+            return hs;
+        };
         const aow::MapTile& t = lv.tiles[static_cast<std::size_t>(y) * lv.width +
                                          static_cast<std::size_t>(x)];
         for (auto it = t.objects.rbegin(); it != t.objects.rend(); ++it) {
-            if (is_structure_hs(*it, game_res)) return &*it;
+            if (is_structure_hs(*it, game_res)) return found(&*it, x, y);
         }
-        return nullptr;
+        // No object is stored on this tile, but a large building may cover it
+        // from a neighbouring home hex. The shipped TTerrainLists reach 65
+        // entries (ring 5 of the engine's HN spiral), so search that radius and
+        // take the closest structure (later placement wins a tie).
+        constexpr int kFootprintRadius = 5;
+        const int max_y = std::min(static_cast<int>(lv.height) - 1,
+                                   y + kFootprintRadius);
+        const int max_x = std::min(static_cast<int>(lv.width) - 1,
+                                   x + kFootprintRadius);
+        const aow::MapHs* best = nullptr;
+        int best_hx = -1, best_hy = -1, best_dist = kFootprintRadius + 1;
+        for (int oy = std::max(0, y - kFootprintRadius); oy <= max_y; ++oy) {
+            for (int ox = std::max(0, x - kFootprintRadius); ox <= max_x; ++ox) {
+                const int d = aow::hex_distance(ox, oy, x, y);
+                if (d == 0 || d > kFootprintRadius) continue;
+                const aow::MapTile& ot =
+                    lv.tiles[static_cast<std::size_t>(oy) * lv.width +
+                             static_cast<std::size_t>(ox)];
+                for (auto it = ot.objects.rbegin(); it != ot.objects.rend(); ++it) {
+                    if (!is_structure_hs(*it, game_res)) continue;
+                    if (!aow::object_covers_hex(*it, game_res, ox, oy, x, y)) {
+                        continue;
+                    }
+                    if (best == nullptr || d < best_dist ||
+                        (d == best_dist && it->offset > best->offset)) {
+                        best = &*it;
+                        best_hx = ox;
+                        best_hy = oy;
+                        best_dist = d;
+                    }
+                }
+            }
+        }
+        return best == nullptr ? nullptr : found(best, best_hx, best_hy);
     }
 
     static const char* race_display_name(int r) {
@@ -7218,12 +7320,16 @@ struct Scene {
         }
     }
 
-    // The resolved boxes of TIWINDOW.dfm at its design size (200x216).
+    // Every visible box of TIWINDOW.dfm, resolved for the design size (200x216).
+    // The text boxes carry the *ink* origin (or centre, see `txt_center`) rather
+    // than a component rectangle, because that is what the bitmap font is drawn
+    // from; the boxes come from the DFM's Alignment block and were cross-checked
+    // against StructurePReference.png (their ink starts at the same offsets).
     struct StructureLayout {
         AowBox win, title, title_icon, help, center, min, close;
-        AowBox name, name_line_a, name_line_b, city, race, status, prod;
-        AowBox gold_icon, gold_val, mana_icon, mana_val, portrait;
-        AowBox city_border, enter, raze, raze_btn;
+        AowBox name, name_text, city, race, status, prod;
+        AowBox gold_icon, gold_val, upgrade_icon, level_val, portrait;
+        AowBox city_border, city_art, arch, enter, raze, raze_btn;
     };
 
     StructureLayout structure_layout() const {
@@ -7232,25 +7338,45 @@ struct Scene {
         const int x0 = disp_w - W;
         const int y0 = (disp_h >= 432) ? kPartyTop : std::max(0, disp_h - H);
         S.win = AowBox{x0, y0, W, H};
+        // Title (Age10, clBlack): the Label's box is (25,4); its glyph ink starts
+        // there. The icon art has a 2 px visual margin, so its visual box sits at
+        // (4,2) even though SIcon's DFM box is (2,1).
         S.title = AowBox{x0 + 25, y0 + 4, 165, 16};
-        S.title_icon = AowBox{x0 + 2, y0 + 1, 19, 16};
+        S.title_icon = AowBox{x0 + 4, y0 + 2, 19, 16};
         S.help = AowBox{x0 + 138, y0 + 1, 15, 16};
         S.center = AowBox{x0 + 153, y0 + 1, 15, 16};
         S.min = AowBox{x0 + 167, y0 + 1, 15, 16};
         S.close = AowBox{x0 + 181, y0 + 1, 15, 16};
+        // NamePnl (4,17 136x27), StructNameLbl (Age10s, clWhite) centred with
+        // TopOffset 10. The ink box is (52,27)-(84,35).
         S.name = AowBox{x0 + 4, y0 + 17, 136, 27};
-        S.name_line_a = AowBox{x0 + 4, y0 + 17, 136, 5};
-        S.name_line_b = AowBox{x0 + 4, y0 + 38, 136, 6};
+        S.name_text = AowBox{x0 + 69, y0 + 27, 0, 0};
+        // CityPanel (4,45 114x138).
         S.city = AowBox{x0 + 4, y0 + 45, 114, 138};
-        S.race = AowBox{S.city.x, S.city.y + 69, S.city.w, 12};
-        S.status = AowBox{S.city.x, S.city.y + 120, S.city.w, 12};
-        S.prod = AowBox{S.city.x + 14, S.city.y + 25, S.city.w - 24, 12};
-        S.gold_icon = AowBox{S.city.x + 24, S.city.y + 53, 16, 13};
-        S.gold_val = AowBox{S.city.x + 44, S.city.y + 54, 30, 12};
-        S.mana_icon = AowBox{S.city.x + 72, S.city.y + 51, 16, 14};
-        S.mana_val = AowBox{S.city.x + 92, S.city.y + 54, 22, 12};
-        S.portrait = AowBox{S.city.x + 31, S.city.y + 79, 52, 52};
+        // CityRaceLbl (Age8s, clBlack), centred, TopOffPercent 53.
+        S.race = AowBox{x0 + 61, y0 + 118, 0, 0};
+        // CivilStatusLbl (Age8s, clBlack), centred, ahBottom BottomOffset 1.
+        S.status = AowBox{x0 + 61, y0 + 171, 0, 0};
+        // ActiveCityActionMemo (Age8, clBlack, taCenter) fills CityPanel with a
+        // 3 px inset; the first item's ink row is 67.
+        S.prod = AowBox{x0 + 12, y0 + 68, 0, 0};
+        // InfoPnl (CityPanel+6,48 102x20): GoldIcn (LBIcon 31, 16x13) at +10,2
+        // with the income (Age10s white) at +32,+4; UgradeI (LBIcon 1, 11x12)
+        // at +61,+3 with the level (Age10s white) at +81,+4.
+        S.gold_icon = AowBox{x0 + 20, y0 + 96, 16, 13};
+        S.gold_val = AowBox{x0 + 42, y0 + 97, 30, 12};
+        S.upgrade_icon = AowBox{x0 + 71, y0 + 97, 11, 12};
+        S.level_val = AowBox{x0 + 91, y0 + 97, 22, 12};
+        // RaceRelationIcon (CityPanel 32,86 51x36): RelFr 11..18 is a 51x36
+        // image whose visible face is 37x36 at +6,0.
+        S.portrait = AowBox{x0 + 42, y0 + 131, 51, 36};
+        // CityBorderPnl (120,18 80x194): the BCS race banner is 57x278 and its
+        // visual box is placed at (131,-94) (source (10,180) lands on the
+        // capture at (144,89)); the CeltDeco arch (76x58) starts at (119,19) and
+        // repeats every 58 px, covering the panel's left and right edges.
         S.city_border = AowBox{x0 + 120, y0 + 18, 80, 194};
+        S.city_art = AowBox{x0 + 135, y0 - 88, 57, 278};
+        S.arch = AowBox{x0 + 119, y0 + 19, 76, 58};
         S.enter = AowBox{x0 + 10, y0 + 184, 108, 27};
         S.raze = AowBox{x0 + 128, y0 + 174, 56, 35};
         S.raze_btn = AowBox{x0 + 136, y0 + 187, 43, 20};
@@ -7301,7 +7427,7 @@ struct Scene {
             game_struct_art_lib = lib;
             int pos = -1;
             for (std::size_t k = 0; k < iwin_race_il.entries().size(); ++k) {
-                if (iwin_race_il.entries()[k].index == 42) {
+                if (iwin_race_il.entries()[k].index == kStructureCityArtId) {
                     pos = static_cast<int>(k);
                     break;
                 }
@@ -7326,10 +7452,13 @@ struct Scene {
     }
 
     bool open_structure(int hx, int hy) {
-        const aow::MapHs* hs = structure_on_hex(hx, hy);
+        // A click may land on any tile a large building's sprite occupies; the
+        // floater still belongs to the structure's own (home) hex.
+        int home_x = hx, home_y = hy;
+        const aow::MapHs* hs = structure_on_hex(hx, hy, &home_x, &home_y);
         if (hs == nullptr) return false;
-        game_struct_hx = hx;
-        game_struct_hy = hy;
+        game_struct_hx = home_x;
+        game_struct_hy = home_y;
         game_struct_city = hs->class_id == aow::kCityClassId;
         game_struct_owner = hs->structure_owner;
         game_struct_name = structure_display_name(*hs, game_res);
@@ -7355,8 +7484,9 @@ struct Scene {
                                                   : "Idle";
         game_struct_gold = game_struct_city ? (10 + game_struct_race_index) : 0;
         game_struct_mana = game_struct_city ? (2 + game_struct_race_index / 4) : 0;
-        // The right-hand view: `TRaceResource` BCS_<race>.BMP, rw id 42 (BCU is
-        // 45). Loaded lazily because a scenario uses only a few race libraries.
+        // The right-hand view: `TRaceResource` BCS_<race>.BMP, rw id 42 (the
+        // underground BCU banner is 45). Loaded lazily because a scenario uses
+        // only a few race libraries.
         std::string lib = "RACES\\RHUMAN.ILB";
         const std::vector<std::string> libs = aow::race_image_libraries(game_res);
         if (game_struct_race_index >= 0 &&
@@ -7381,7 +7511,7 @@ struct Scene {
                 game_struct_art_lib = lib;
                 int pos = -1;
                 for (std::size_t k = 0; k < iwin_race_il.entries().size(); ++k) {
-                    if (iwin_race_il.entries()[k].index == 42) {
+                    if (iwin_race_il.entries()[k].index == kStructureCityArtId) {
                         pos = static_cast<int>(k);
                         break;
                     }
@@ -7471,26 +7601,81 @@ struct Scene {
         if (iwin_bg.ok) {
             cv.blit_clip(iwin_bg, x0, y0, x0, y0, 200, 216);
         }
+        // TAOWWindow.Draw tiles ILTexture (GenericT 2, 190x192) from the window
+        // origin across the whole surface, then lays the frame over it. The
+        // first pass blitted one copy at (9,22), which put the parchment's
+        // mottling in the wrong phase everywhere (10-20/255 off in the left
+        // panel); the capture matches the tile from (0,0).
+        // The window texture starts at the frame's inner origin (9,22) - the
+        // best registration of GenericT 2 against the capture is exactly that
+        // phase (mean 3.5/255 over the flat paper), not (0,0).
         if (iwin_body.ok) {
-            cv.blit_clip(iwin_body, x0 + 9, y0 + 22, x0 + 9, y0 + 22, 186, 189);
+            cv.blit_clip(iwin_body, x0 + 9, y0 + 22, x0 + 6, y0 + 20, 188, 190);
         }
-        if (iwin_gold_frame[1].ok) {
-            blit9_impl(cv, iwin_gold_frame, S.name.x, S.name.y, S.name.w,
-                       S.name.h, 3, 3);
+        // NamePnl is a TAOWPanel with the window's texture: the capture shows a
+        // dark parchment inset framed by a 1 px black + 1 px light bevel (not
+        // the FrGoldD 9-slice the first pass assumed). GenericT 14 is the tile
+        // whose mottling matches it.
+        {
+            const AowBox& p = S.name;
+            // The panel is drawn as a raised parchment bevel around its
+            // component rect: a black edge one pixel outside on the left, a
+            // dark + light + dark three-line bevel, and a dark + light pair on
+            // the bottom (measured row by row from StructurePReference.png).
+            for (int yy = 20; yy <= 39; ++yy) {
+                for (int xx = 7; xx <= 137; ++xx) {
+                    std::uint8_t r = 99, g = 96, b = 72;
+                    if (iwin_plaque_tex.ok) {
+                        const int tx = ((xx + p.x - x0 - 12) % 100 + 100) % 100;
+                        const int ty = ((yy + p.y - y0 - 57) % 100 + 100) % 100;
+                        const std::uint8_t* t = &iwin_plaque_tex.rgba[
+                            (static_cast<std::size_t>(ty) * iwin_plaque_tex.w +
+                             static_cast<std::size_t>(tx)) * 4];
+                        if (t[3]) { r = t[0]; g = t[1]; b = t[2]; }
+                    }
+                    cv.fill(x0 + xx, y0 + yy, 1, 1, r, g, b, 255);
+                }
+            }
+            cv.fill(x0 + 3, y0 + 18, 1, 23, 8, 8, 8, 255);       // outer black
+            cv.fill(x0 + 4, y0 + 18, 1, 23, 66, 82, 66, 255);    // dark
+            cv.fill(x0 + 5, y0 + 18, 1, 22, 156, 173, 140, 255); // light
+            cv.fill(x0 + 6, y0 + 18, 1, 22, 57, 57, 41, 255);    // dark
+            cv.fill(x0 + 7, y0 + 17, 131, 1, 33, 33, 16, 255);   // top dark
+            cv.fill(x0 + 7, y0 + 18, 131, 1, 189, 198, 165, 255);
+            cv.fill(x0 + 7, y0 + 19, 131, 1, 41, 41, 33, 255);
+            cv.fill(x0 + 7, y0 + 40, 131, 1, 66, 57, 49, 255);   // bottom dark
+            cv.fill(x0 + 7, y0 + 41, 131, 1, 148, 156, 132, 255);
+            cv.fill(x0 + 138, y0 + 18, 1, 23, 57, 57, 41, 255);
+            cv.fill(x0 + 139, y0 + 18, 1, 23, 148, 156, 132, 255);
         }
+        // The CityPanel's own top bevel, one row below the plaque (the capture
+        // shows the dark row at y=44 and its light inner row at y=45).
+        cv.fill(x0 + 4, y0 + 44, 114, 1, 41, 49, 33, 255);
+        cv.fill(x0 + 4, y0 + 45, 114, 1, 140, 156, 132, 255);
         blit9_impl(cv, iwin_frame, S.win.x, S.win.y, S.win.w, S.win.h, 6, 6);
         // CeltFrame (TIWINDOW.dfm: ILFrame = CeltDeco, frHollowBox, index 22 ->
         // the FrameMain2 9-slice at entries 30..37), inset 9 px from the window.
+        // CeltFrame's own DFM box is (5,19) 190x192. The first pass inset it to
+        // (9,21) 188x190, which put its corners at the capture's (12,23) instead
+        // of (8,21) and left the name plaque's bevel uncovered.
         if (iwin_celt_main[1].ok) {
-            blit9_impl(cv, iwin_celt_main, x0 + 9, y0 + 21, 188, 190, 6, 6);
+            blit9_impl(cv, iwin_celt_main, x0 + 5, y0 + 19, 190, 192, 6, 6);
         }
-        if (iwin_celt_knot.ok) {
-            cv.blit_clip(iwin_celt_knot, x0, y0, x0, y0, 20, 20);
+        // The top-left corner is just the window frame; the standalone 27x27
+        // CeltDeco knot the first pass blitted at (0,0) is not in the capture
+        // (the Structure SIcon itself is the knot-like WinTIcon art).
+        // CeltFrame's left edge is ILIndexLine art (CeltDeco 0, 7x27) tiled
+        // down the frame - the capture matches it byte-for-byte at (5,19).
+        if (iwin_celt_edge.ok) {
+            cv.blit_clip(iwin_celt_edge, x0 + 5, y0 + 19, x0 + 5, y0 + 19, 7,
+                         27);
         }
         if (iwin_title_icon.ok) {
-            cv.blit_clip(iwin_title_icon, x0 + 7, y0 + 4, x0, y0, 200, 20);
+            cv.blit_clip(iwin_title_icon, S.title_icon.x, S.title_icon.y, x0, y0,
+                         200, 20);
         }
-        text_at(cv, glyphs10b, x0 + 32, y0 + 7, "Structure", 0, 0, 0, false,
+        // Title: Age10, clBlack, at the Label's DFM box (25,4).
+        text_at(cv, glyphs10b, S.title.x, S.title.y, "Structure", 0, 0, 0, false,
                 false);
         const int hs = game_struct_pressed == 1003 ? 2
                        : game_struct_hover == 1003 ? 1 : 0;
@@ -7508,102 +7693,86 @@ struct Scene {
         title_button(iwin_min, S.min, ms);
         title_button(iwin_close, S.close, xs);
         if (game_struct_city) {
+            // GoldIcn (LBIcon 31) and UgradeI (LBIcon 1) are drawn 1:1; the
+            // read-outs use FontModule.Age10s (clWhite), centred vertical by the
+            // label's own TopOffset. The second value is the city *level*, not
+            // mana (TIWINDOW.dfm CityLevelLbl).
             if (iwin_gold_icon.ok) {
-                cv.blit_stretch(iwin_gold_icon, S.gold_icon.x, S.gold_icon.y,
-                                S.gold_icon.w, S.gold_icon.h);
+                cv.blit_clip(iwin_gold_icon, S.gold_icon.x, S.gold_icon.y,
+                             S.gold_icon.x, S.gold_icon.y, S.gold_icon.w,
+                             S.gold_icon.h);
             }
-            if (iwin_mana_icon.ok) {
-                cv.blit_stretch(iwin_mana_icon, S.mana_icon.x, S.mana_icon.y,
-                                S.mana_icon.w, S.mana_icon.h);
+            if (iwin_upgrade_icon.ok) {
+                cv.blit_clip(iwin_upgrade_icon, S.upgrade_icon.x,
+                             S.upgrade_icon.y, S.upgrade_icon.x,
+                             S.upgrade_icon.y, S.upgrade_icon.w,
+                             S.upgrade_icon.h);
             }
-            text_at(cv, glyphs8b, S.gold_val.x, S.gold_val.y,
-                    std::to_string(game_struct_gold), 0, 0, 0, false, false);
-            text_at(cv, glyphs8b, S.mana_val.x, S.mana_val.y,
-                    std::to_string(game_struct_mana), 0, 0, 0, false, false);
-            text_at(cv, glyphs8b, S.race.x + S.race.w / 2, S.race.y,
-                    "Race: " + game_struct_race, 0, 0, 0, true, false);
-            const int cx = S.portrait.x + S.portrait.w / 2;
-            const int cy = S.portrait.y + S.portrait.h / 2;
-            const int rr = S.portrait.w / 2;
-            for (int yy = -rr; yy <= rr; ++yy) {
-                const int span = static_cast<int>(
-                    std::sqrt(static_cast<double>(rr * rr - yy * yy)));
-                cv.fill(cx - span, cy + yy, span * 2, 1, 22, 45, 92, 255);
+            text_at(cv, glyphs10, S.gold_val.x, S.gold_val.y,
+                    std::to_string(game_struct_gold), 255, 255, 255, false,
+                    false);
+            text_at(cv, glyphs10, S.level_val.x, S.level_val.y,
+                    std::to_string(game_struct_mana), 255, 255, 255, false,
+                    false);
+            // CityRaceLbl: FontModule.Age8s (CharacterDistance 0), clBlack,
+            // centred on CityPanel.
+            text_at(cv, glyphs8, S.race.x, S.race.y,
+                    "Race: " + game_struct_race, 0, 0, 0, true, false, -1, true);
+            // RaceRelationIcon: relation face (RelFr 11..18) drawn 1:1. The
+            // decoded 51x36 face's visible circle starts at its visual box, so
+            // the destination is the DFM box (the capture puts the 37x36 face
+            // at (45,133) = window (42,131)).
+            const int rel = std::max(
+                0, std::min(static_cast<int>(kStructureRelationCount) - 1,
+                            game_struct_relation));
+            const Sprite& face = iwin_relation[rel];
+            if (face.ok) {
+                cv.blit_clip(face, S.portrait.x, S.portrait.y, S.portrait.x,
+                             S.portrait.y, S.portrait.w, S.portrait.h);
             }
-            if (game_face.ok) {
-                const int fr = rr - 7;
-                for (int dy = -fr; dy <= fr; ++dy) {
-                    for (int dx = -fr; dx <= fr; ++dx) {
-                        if (dx * dx + dy * dy > fr * fr) continue;
-                        const std::uint32_t sx = static_cast<std::uint32_t>(
-                            (dx + fr) * static_cast<int>(game_face.w) / (2 * fr));
-                        const std::uint32_t sy = static_cast<std::uint32_t>(
-                            (dy + fr) * static_cast<int>(game_face.h) / (2 * fr));
-                        const std::uint8_t* p =
-                            &game_face.rgba[(static_cast<std::size_t>(sy) *
-                                                 game_face.w + sx) * 4];
-                        if (p[3] == 0) continue;
-                        // The city panel's face sits in a blue wash (the
-                        // reference capture's tint), not the raw portrait.
-                        const int rr8 = p[0] * 2 / 3;
-                        const int gg8 = p[1] * 3 / 4;
-                        const int bb8 = std::min(255, p[2] * 4 / 5 + 55);
-                        cv.fill(cx + dx, cy + dy, 1, 1,
-                                static_cast<std::uint8_t>(rr8),
-                                static_cast<std::uint8_t>(gg8),
-                                static_cast<std::uint8_t>(bb8), 255);
-                    }
-                }
-            }
-            for (int a = 0; a < 360; a += 2) {
-                const double rad = a * 3.14159265358979 / 180.0;
-                const int px = cx + static_cast<int>(std::cos(rad) * (rr - 1));
-                const int py = cy + static_cast<int>(std::sin(rad) * (rr - 1));
-                cv.fill(px, py, 2, 2, 196, 166, 67, 255);
-            }
-            text_at(cv, glyphs8b, S.status.x + S.status.w / 2, S.status.y,
-                    "Status: " + game_struct_status, 0, 0, 0, true, false);
+            // CivilStatusLbl: FontModule.Age8s, clBlack, centred, bottom 1.
+            text_at(cv, glyphs8, S.status.x, S.status.y,
+                    "Status: " + game_struct_status, 0, 0, 0, true, false, -1,
+                    true);
         }
-        // StructNameLbl (Age10s, white, centred on NamePnl), with its shadow.
-        text_at(cv, glyphs10b, S.name.x + S.name.w / 2 + 1, S.name.y + 13,
-                game_struct_name, 0, 0, 0, true, false);
-        text_at(cv, glyphs10b, S.name.x + S.name.w / 2, S.name.y + 12,
-                game_struct_name, 255, 255, 255, true, false);
-        // CityBorderPnl: the race's BCS city view clipped to its 80x194 box,
-        // then CeltDeco's arch (id 8) and border tile (id 9).
+        // StructNameLbl: FontModule.Age10s (clWhite) centred on NamePnl; the
+        // glyphs carry their own black shadow.
+        text_at(cv, glyphs10, S.name_text.x, S.name_text.y, game_struct_name,
+                255, 255, 255, true, false);
+        // CityBorderPnl: the race's BCS_<race>.BMP city view clipped to its
+        // 80x194 box, then CeltDeco's arch (id 8) and the id-9 border tile.
         if (game_struct_city) {
             if (game_struct_art.ok) {
-                cv.blit_clip(game_struct_art, x0 + 134, y0 - 91,
-                             S.city_border.x, S.city_border.y, 80, 169);
-            }
-            if (iwin_celt_arch.ok) {
-                cv.blit_clip(iwin_celt_arch, x0 + 122, y0 + 21,
+                cv.blit_clip(game_struct_art, S.city_art.x, S.city_art.y,
                              S.city_border.x, S.city_border.y,
                              S.city_border.w, S.city_border.h);
             }
-            // The arch's left pillar and thin right border repeat every 58 px
-            // below the top arch (CeltDeco 8's left 20 px + the id-9 border
-            // tile).
-            for (int yy = 79; yy < 188; yy += 58) {
-                if (iwin_celt_arch.ok) {
-                    cv.blit_clip(iwin_celt_arch, x0 + 122, y0 + yy,
-                                 x0 + 122, y0 + yy, 20, 58);
-                }
+            if (iwin_celt_arch.ok) {
+                cv.blit_clip(iwin_celt_arch, S.arch.x, S.arch.y,
+                             S.city_border.x, S.city_border.y,
+                             S.city_border.w, S.city_border.h);
+            }
+            // CeltDeco 8 tops the arch at (119,19); the id-9 frame tile follows
+            // at (119,77) and (119,135). The capture's last ~17 px below that
+            // are the window's own celtic frame, so the tile stops at 193.
+            for (int yy = S.arch.y + 58; yy <= S.arch.y + 116; yy += 58) {
                 if (iwin_celt_side.ok) {
-                    cv.blit_clip(iwin_celt_side, x0 + 122, y0 + yy,
-                                 x0 + 122, y0 + yy, 76, 58);
+                    cv.blit_clip(iwin_celt_side, S.arch.x, yy,
+                                 S.city_border.x, S.city_border.y,
+                                 S.city_border.w, S.city_border.h);
                 }
             }
         }
-        // The CityPanel's active-action text is drawn last in the engine (it is
-        // the panel's own Canvas.TextOut pass, over every child/window art).
+        // ActiveCityActionMemo: Age8, clBlack, taCenter. The memo's first item
+        // is the "Producing ..." line; its glyph pixels match the capture at
+        // (12,68) exactly (the first pass was one row high).
         text_at(cv, glyphs8b, S.prod.x, S.prod.y, game_struct_production, 0, 0,
                 0, false, false, 0);
         {
             const int st = game_struct_pressed == 1004 ? 2
                            : game_struct_hover == 1004 ? 1 : 0;
             blit3_box(cv, iwin_enter[st], S.enter);
-            text_at(cv, glyphs10b, S.enter.x + S.enter.w / 2, S.enter.y + 7,
+            text_at(cv, glyphs10b, S.enter.x + S.enter.w / 2, S.enter.y + 8,
                     "Enter", 0, 0, 0, true, false);
         }
         if (game_struct_city) {
@@ -8120,6 +8289,10 @@ struct App {
     FpsMeter fps;              // the F1 frames-per-second read-out
     HANDLE frame_timer = nullptr;  // the 30 fps waitable timer (null = WM_TIMER)
     bool headless = false;
+    // --structure-panel (or --rgb555): write the PNG through the engine's
+    // 16-bit RGB555 back-surface quantisation, as every reference capture was
+    // taken from the original game's 16-bit display.
+    bool rgb555 = false;
     std::string render_png;
     int render_frame = 90;     // frame to render head-less (logo fully faded in)
     bool screen_gtype = false;  // start on the Game Type screen (TMultiWindow)
@@ -8174,7 +8347,12 @@ struct App {
     bool structure_panel = false;
     std::string structure_name, structure_race, structure_status;
     int structure_gold = -1, structure_mana = -1;
+    int structure_relation = kStructureRelationDefault;
     int structure_race_index = -1;  // force the BCS_<race> city view
+    // --structure-tile X Y: open the structure selectable at that tile (used to
+    // prove a large building answers on every tile its sprite occupies, not only
+    // on its home hex). -1 = unused.
+    int structure_tile_x = -1, structure_tile_y = -1;
     int crop_x = 0, crop_y = 0, crop_w = 0, crop_h = 0;  // 0 = no crop
     bool music = true;
     // --- the music player (a port of Sound.TSongPlayer, see play_music_thread)
@@ -9033,6 +9211,8 @@ void print_usage() {
         "  --next-held           head-less: draw the NextButton held down\n"
         "  --structure-panel     head-less: open the Structure floater on the first\n"
         "                        city/structure after loading --start-map\n"
+        "  --structure-tile X Y  head-less with --structure-panel: open the structure\n"
+        "                        selectable at tile (X,Y) instead of the first one\n"
         "  --structure-name S    override the floater's city/structure name\n"
         "  --structure-race S    override its race label\n"
         "  --structure-race-index N  load RACES\\R*.ILB index N for the city view\n"
@@ -9192,9 +9372,18 @@ int run_headless() {
                     const aow::MapLevel& lv = g.scene.game_state_map.levels[l];
                     for (std::uint32_t y = 0; y < lv.height && !opened; ++y) {
                         for (std::uint32_t x = 0; x < lv.width; ++x) {
+                            // Only a structure *stored* on this tile counts, so
+                            // the hook keeps selecting the first city by its
+                            // home hex - a large building would otherwise be
+                            // found early through one of its footprint tiles.
+                            int home_x = 0, home_y = 0;
                             const aow::MapHs* hs = g.scene.structure_on_hex(
-                                static_cast<int>(x), static_cast<int>(y));
-                            if (hs == nullptr) continue;
+                                static_cast<int>(x), static_cast<int>(y),
+                                &home_x, &home_y);
+                            if (hs == nullptr || home_x != static_cast<int>(x) ||
+                                home_y != static_cast<int>(y)) {
+                                continue;
+                            }
                             if (city_only && hs->class_id != aow::kCityClassId) {
                                 continue;
                             }
@@ -9208,8 +9397,17 @@ int run_headless() {
                     }
                 }
             };
-            find_and_open(true);
-            if (!opened) find_and_open(false);
+            if (g.structure_tile_x >= 0 && g.structure_tile_y >= 0) {
+                opened = g.scene.open_structure(g.structure_tile_x,
+                                                g.structure_tile_y);
+                if (opened) {
+                    std::printf("structure_tile=%d,%d\n", g.structure_tile_x,
+                                g.structure_tile_y);
+                }
+            } else {
+                find_and_open(true);
+                if (!opened) find_and_open(false);
+            }
             if (opened) {
                 if (!g.structure_name.empty()) {
                     g.scene.game_struct_name = g.structure_name;
@@ -9222,6 +9420,7 @@ int run_headless() {
                 }
                 if (g.structure_gold >= 0) g.scene.game_struct_gold = g.structure_gold;
                 if (g.structure_mana >= 0) g.scene.game_struct_mana = g.structure_mana;
+                g.scene.game_struct_relation = g.structure_relation;
                 if (g.structure_race_index >= 0) {
                     g.scene.game_struct_race_index = g.structure_race_index;
                     g.scene.load_structure_art(g.structure_race_index);
@@ -9356,7 +9555,7 @@ int run_headless() {
                           : full;
     std::string err;
     if (!aow::write_png_rgba(g.render_png, cv.width(), cv.height(),
-                             cv.to_rgba(), err)) {
+                             cv.to_rgba(g.rgb555), err)) {
         std::fprintf(stderr, "menu: %s\n", err.c_str());
         return 1;
     }
@@ -9602,13 +9801,29 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
             next();
             g.turn_frame_override = std::atoi(v.c_str());
         }
-        else if (a == "--structure-panel") { g.structure_panel = true; }
+        else if (a == "--structure-panel") {
+            g.structure_panel = true;
+            g.rgb555 = true;   // the reference captures are RGB555 screenshots
+        }
+        else if (a == "--rgb555") { g.rgb555 = true; }
+        else if (a == "--structure-tile") {
+            next();
+            g.structure_tile_x = std::atoi(v.c_str());
+            next();
+            g.structure_tile_y = std::atoi(v.c_str());
+        }
         else if (a == "--structure-name") { next(); g.structure_name = v; }
         else if (a == "--structure-race") { next(); g.structure_race = v; }
         else if (a == "--structure-race-index") { next(); g.structure_race_index = std::atoi(v.c_str()); }
         else if (a == "--structure-status") { next(); g.structure_status = v; }
         else if (a == "--structure-gold") { next(); g.structure_gold = std::atoi(v.c_str()); }
-        else if (a == "--structure-mana") { next(); g.structure_mana = std::atoi(v.c_str()); }
+        else if (a == "--structure-mana" || a == "--structure-level") {
+            // CityLevelLbl's value (the DFM has no mana label here); the old
+            // flag name is kept for the existing scripts.
+            next();
+            g.structure_mana = std::atoi(v.c_str());
+        }
+        else if (a == "--structure-relation") { next(); g.structure_relation = std::atoi(v.c_str()); }
         else if (a == "--next-held") { g.next_held = true; }
         else if (a == "--font-variant") {
             next();

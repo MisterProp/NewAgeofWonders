@@ -142,6 +142,13 @@ struct MapResource {
 bool load_map_resources(const std::string& path,
                         std::vector<MapResource>& out, std::string& error);
 
+// Loads the tactical-combat resource table from `Release\comb_res.pfs`. The map
+// fields of a `TCMaps\*.HSM` reference these records by their rw tag-1 id; the
+// record's image sequence list names the `Images\TCombat\...` ILB to draw.
+// Returns false and sets `error` on failure.
+bool load_combat_resources(const std::string& path,
+                           std::vector<MapResource>& out, std::string& error);
+
 // Looks up a resource id; returns nullptr when absent. Race resources
 // (`is_race`) are skipped - their ids live in a separate namespace.
 const MapResource* find_map_resource(const std::vector<MapResource>& list,

@@ -293,6 +293,19 @@ bool hex_neighbour(int x, int y, int dir, int& nx, int& ny);
 // of its footprint, not only the hex the object is stored on.
 void hn_walk_hex(int x, int y, int index, int& hx, int& hy);
 
+// True when the placed map object `hs` (stored on `(object_x, object_y)`)
+// covers `(hex_x, hex_y)`. A multi-hex object is stored on one hex but
+// `TMultiHexMO.UpdateMapFields@5560af6c` registers it on every entry of its
+// resource's `TTerrainList` that has an opinion, walking the engine's HN spiral
+// (`hn_walk_hex`) from the object's own hex. That is what makes a large
+// building selectable on all the tiles its sprite occupies: a size-4
+// `City.TCityResource` (CITY4.ILB) covers entries 0/1/2/6 = its home hex, N,
+// NE and NW - the four tiles a capital sits on. A resource with no
+// `TTerrainList` (or only "no opinion" entries) covers just its own hex.
+bool object_covers_hex(const MapHs& hs,
+                       const std::vector<MapResource>& resources,
+                       int object_x, int object_y, int hex_x, int hex_y);
+
 // ---------------------------------------------------------------------------
 // Terrain resolution.
 // ---------------------------------------------------------------------------

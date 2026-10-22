@@ -1,0 +1,12 @@
+lines=7457 hits=11
+AoWE.TAoWHSMap.TriggerEndTurnEvent@23EDC2EF at 55776474
+AoWE.TAoWHSMap.GenerateNewTurnOrder@23EDC2EF at 557782fc
+AoWE.TAoWHSMap.EndTurn@23EDC2EF at 5577838c
+AoWE.TAoWHSMap.CancelEndTurn@23EDC2EF at 557783c8
+AoWE.TAoWHSMap.UpdateTurnTimeBeep@23EDC2EF at 55778c40
+AoWE.TAoWHSMap.ResetTurnTimer@23EDC2EF at 55778cb8
+AoWE.TAoWHSMap.GetTurnTimeLeft@23EDC2EF at 55778ce0
+AoWE.TAoWHSMap.GetTurnTimerEnabled@23EDC2EF at 55778d18
+AoWE.TAoWHSMap.EnableTurnTimer@23EDC2EF at 55778d30
+AoWE.TAoWHSMap.DisableTurnTimer@23EDC2EF at 55778d54
+AoWE.TAoWHSMap.ZeroTurnTimer@23EDC2EF at 55778d78

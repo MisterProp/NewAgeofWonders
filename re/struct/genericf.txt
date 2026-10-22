@@ -1,0 +1,145 @@
+== Int/GenericF.ILB
+  0 MainFloaterSetR.BMP
+  1 MainFloaterSetR.BMP
+  2 MainFloaterSetR.BMP
+  3 MainFloaterSetR.BMP
+  4 MainFloaterSetR.BMP
+  5 MainFloaterSetR.BMP
+  6 MainFloaterSetR.BMP
+  7 MainFloaterSetR.BMP
+  8 MapWindow.BMP
+  9 MapWindow.BMP
+ 10 MapWindow.BMP
+ 11 MapWindow.BMP
+ 12 MapWindow.BMP
+ 13 MapWindow.BMP
+ 14 MapWindow.BMP
+ 15 MapWindow.BMP
+ 16 FaceDlgF.BMP
+ 17 FaceDlgF.BMP
+ 18 FaceDlgF.BMP
+ 19 FaceDlgF.BMP
+ 20 FaceDlgF.BMP
+ 21 FaceDlgF.BMP
+ 22 FaceDlgF.BMP
+ 23 FaceDlgF.BMP
+ 24 TTipFr.BMP
+ 25 TTipFr.BMP
+ 26 TTipFr.BMP
+ 27 TTipFr.BMP
+ 28 TTipFr.BMP
+ 29 TTipFr.BMP
+ 30 TTipFr.BMP
+ 31 TTipFr.BMP
+ 32 DialogFr.BMP
+ 33 DialogFr.BMP
+ 34 DialogFr.BMP
+ 35 DialogFr.BMP
+ 36 DialogFr.BMP
+ 37 DialogFr.BMP
+ 38 DialogFr.BMP
+ 39 DialogFr.BMP
+ 40 FrThin.BMP
+ 41 FrThin.BMP
+ 42 FrThin.BMP
+ 43 FrThin.BMP
+ 44 2
+ 45 2
+ 46 FrThin.BMP
+ 47 2
+ 48 2
+ 49 FrThin.BMP
+ 50 FrThin.BMP
+ 51 FrThin.BMP
+ 52 FrameLight.BMP
+ 53 FrameLight.BMP
+ 54 FrameLight.BMP
+ 55 FrameLight.BMP
+ 56 FrameLight.BMP
+ 57 FrameLight.BMP
+ 58 FrameLight.BMP
+ 59 FrameLight.BMP
+ 60 FrGoldSq.BMP
+ 61 FrGoldSq.BMP
+ 62 FrGoldSq.BMP
+ 63 FrGoldSq.BMP
+ 64 FrGoldSq.BMP
+ 65 FrGoldSq.BMP
+ 66 FrGoldSq.BMP
+ 67 FrGoldSq.BMP
+ 68 ScenFr.BMP
+ 69 ScenFr.BMP
+ 70 ScenFr.BMP
+ 71 ScenFr.BMP
+ 72 .
+ 73 .
+ 74 ScenFr.BMP
+ 75 .
+ 76 .
+ 77 ScenFr.BMP
+ 78 ScenFr.BMP
+ 79 ScenFr.BMP
+ 80 STGrFr.BMP
+ 81 STGrFr.BMP
+ 82 STGrFr.BMP
+ 83 STGrFr.BMP
+ 84 STGrFr.BMP
+ 85 STGrFr.BMP
+ 86 STGrFr.BMP
+ 87 STGrFr.BMP
+ 88 ScrollFr.BMP
+ 89 ScrollFr.BMP
+ 90 ScrollFr.BMP
+ 91 ScrollFr.BMP
+ 92 ScrollFr.BMP
+ 93 ScrollFr.BMP
+ 94 ScrollFr.BMP
+ 95 ScrollFr.BMP
+ 96 NGFrOut.BMP
+ 97 NGFrOut.BMP
+ 98 NGFrOut.BMP
+ 99 NGFrOut.BMP
+100 2
+101 NGFrOut.BMP
+102 NGFrOut.BMP
+103 NGFrOut.BMP
+104 NGFrOut.BMP
+105 NGFrThin.BMP
+106 NGFrThin.BMP
+107 NGFrThin.BMP
+108 NGFrThin.BMP
+109 2
+110 2
+111 2
+112 NGFrThin.BMP
+113 2
+114 2
+115 2
+116 NGFrThin.BMP
+117 NGFrThin.BMP
+118 NGFrThin.BMP
+119 FaceDlgI.BMP
+120 FrThinD.BMP
+121 FrThinD.BMP
+122 FrThinD.BMP
+123 FrThinD.BMP
+124 FrThinD.BMP
+125 FrThinD.BMP
+126 FrThinD.BMP
+127 FrThinD.BMP
+128 FrGoldD.BMP
+129 FrGoldD.BMP
+130 FrGoldD.BMP
+131 FrGoldD.BMP
+132 FrGoldD.BMP
+133 FrGoldD.BMP
+134 FrGoldD.BMP
+135 FrGoldD.BMP
+136 FrGoldDD.BMP
+137 FrGoldDD.BMP
+138 FrGoldDD.BMP
+139 FrGoldDD.BMP
+140 FrGoldDD.BMP
+141 FrGoldDD.BMP
+142 FrGoldDD.BMP
+143 FrGoldDD.BMP

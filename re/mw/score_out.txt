@@ -1,0 +1,9 @@
+best origin +134+37
+mean=14.20 w10=69.2 w20=84.6 w30=91.4 w45=94.7
+origin 134,37 mean=14.20 w10=69.2 w20=84.6 w30=91.4 w45=94.7
+title       +8,+2 mean 12.28
+band1       -1,+2 mean 1.09
+drive/path  -1,+2 mean 11.04
+list        -1,+2 mean 7.71
+info        -1,+2 mean 14.09
+buttons     -1,+2 mean 7.28

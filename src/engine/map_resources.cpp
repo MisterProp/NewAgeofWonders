@@ -8,6 +8,7 @@
 
 #include "aow/eobject.hpp"
 #include "aow/endian.hpp"
+#include "aow/pfs.hpp"
 
 namespace aow {
 namespace {
@@ -58,6 +59,139 @@ struct PlayerStructureResourceInfo {
 namespace {
 const PlayerStructureResourceInfo* psr_info(std::uint32_t class_id);
 }
+
+// Loads the tactical-combat resource table from Release\comb_res.pfs.
+//
+// Evidence: AoWTCPCK.dpl registers the combat resource classes
+//   CombatHex.TCombatHexagonResource        0x220501
+//   CombatRoad.TCombatRoadResource          0x220503
+//   CombatILTer.TCombatILTerrainResource    0x220137
+//   CombatTerrain.TCombatTerrainResource    0x220167
+//   SingleCombatHex.TSingleCombatHexagonResource 0x22051f
+//   ... plus CityWall/House/MainStructure/FleeLoc/Obstacle resources.
+// Every record is the same `TMapObjectResource` graph as Release.hss:
+//   tag 1  resource id (the id a map field stores)
+//   tag 2  TEResource type
+//   tag 3  TEResource index
+//   tag 7  TTerrainList (u32 count + u16 terrain|overlay<<8 entries)
+//   tag 8  inline cell-image ILB
+//   tag 9/10 TImageSequenceList (the sprite library + xoff/yoff)
+// The base-hex records (e.g. H_GR/H_SN) are TCombatHexagonResource and carry
+// the same fields; the first record is the default grass resource (id 0).
+bool load_combat_resources(const std::string& path,
+                           std::vector<MapResource>& out, std::string& error) {
+    out.clear();
+    PfsFile pfs;
+    if (!pfs.load(path, error)) return false;
+    const std::vector<std::uint8_t>& file = pfs.bytes();
+    if (file.empty()) {
+        error = "empty combat resource table: " + path;
+        return false;
+    }
+    const std::size_t n = file.size();
+
+    for (const PfsRecord& rec : pfs.records()) {
+        std::size_t pos = rec.file_offset;
+        if (pos + 4 > n) continue;
+        const std::uint32_t first = read_u32(file.data() + pos);
+        const bool has_class = (first & 0x00FF0000u) == 0x00220000u;
+        const std::size_t table_pos = has_class ? pos + 4 : pos;
+        EObjectTable t;
+        if (!read_eobject_table(file.data(), n, table_pos, t)) continue;
+        const std::size_t base = t.base;
+        auto field = [&](std::uint32_t tag) -> std::size_t {
+            return eobject_find(t, tag);
+        };
+
+        MapResource r;
+        r.class_id = has_class ? first : 0;
+        if (field(1) != static_cast<std::size_t>(-1)) {
+            const std::size_t o = field(1);
+            if (base + o + 4 <= n) r.id = read_u32(file.data() + base + o);
+        }
+        if (field(2) != static_cast<std::size_t>(-1)) {
+            const std::size_t o = field(2);
+            if (base + o + 4 <= n) r.res_type = read_u32(file.data() + base + o);
+        }
+        if (field(3) != static_cast<std::size_t>(-1)) {
+            const std::size_t o = field(3);
+            if (base + o + 4 <= n) r.res_index = read_u32(file.data() + base + o);
+        }
+
+        // TTerrainList: u32 count, then u16 (terrain | overlay << 8). The combat
+        // hexagon's terrain code drives its transition overlays.
+        const std::size_t t7 = field(7);
+        if (t7 != static_cast<std::size_t>(-1)) {
+            const std::size_t o = base + t7;
+            if (o + 6 <= n) {
+                const std::uint32_t count = read_u32(file.data() + o);
+                if (count >= 1) {
+                    const std::uint16_t v = read_u16(file.data() + o + 4);
+                    r.terrain = v & 0xFF;
+                    r.overlay = (v >> 8) & 0xFF;
+                    r.has_terrain = true;
+                }
+            }
+        }
+
+        // tag 8: an inline 32x32 cell image (optional; not the sprite).
+        const std::size_t t8 = field(8);
+        if (t8 != static_cast<std::size_t>(-1)) {
+            const std::size_t o = base + t8;
+            if (o + 0x18 <= n && file[o] == 0x04 && file[o + 1] == 'I' &&
+                file[o + 2] == 'L' && file[o + 3] == 'B') {
+                const std::uint32_t total = read_u32(file.data() + o + 0x14);
+                if (total >= 0x18 && o + total <= n) {
+                    r.ilb_data.assign(file.begin() + static_cast<std::ptrdiff_t>(o),
+                                      file.begin() + static_cast<std::ptrdiff_t>(o + total));
+                }
+            }
+        }
+
+        // The sprite sequence list: tag 9/10 on every resource object.
+        std::size_t seq_off = field(9);
+        if (seq_off == static_cast<std::size_t>(-1)) seq_off = field(10);
+        if (seq_off != static_cast<std::size_t>(-1)) {
+            const std::size_t o = base + seq_off;
+            if (o + 4 <= n) {
+                const std::uint32_t count = read_u32(file.data() + o);
+                if (count <= 4096) {
+                    std::string serr;
+                    if (parse_image_sequence_list(file.data() + o, n - o,
+                                                  r.sequences, serr)) {
+                        const ImageSequence* body = body_sequence(r);
+                        if (body != nullptr) {
+                            r.has_seq = true;
+                            r.seq_lib = body->library;
+                            r.seq_frame = static_cast<std::size_t>(
+                                body->base_frame < 0 ? 0 : body->base_frame);
+                            r.seq_dx = body->xoff;
+                            r.seq_dy = body->yoff;
+                        }
+                        for (const ImageSequence& s : r.sequences) {
+                            if (!s.library.empty()) r.ilbs.push_back(s.library);
+                        }
+                    }
+                }
+            }
+        }
+        if (!r.ilbs.empty()) r.ilb = r.ilbs.front();
+        else if (!r.seq_lib.empty()) r.ilb = r.seq_lib;
+
+        // Two entry lists can share the id 0 default record; keep the first.
+        bool dup = false;
+        for (const MapResource& e : out) {
+            if (e.id == r.id && e.class_id == r.class_id) { dup = true; break; }
+        }
+        if (!dup || out.empty()) out.push_back(std::move(r));
+    }
+    if (out.empty()) {
+        error = "no combat resources in " + path;
+        return false;
+    }
+    return true;
+}
+
 
 bool load_map_resources(const std::string& path, std::vector<MapResource>& out,
                         std::string& error) {

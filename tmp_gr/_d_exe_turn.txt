@@ -1,0 +1,136 @@
+00455100  a0 e5 fa ff 8b         mov al, byte ptr [0x8bfffae5]
+00455105  16                     push ss
+00455106  a1 bc a5 45 00         mov eax, dword ptr [0x45a5bc]
+0045510b  8b 00                  mov eax, dword ptr [eax]
+0045510d  8b 40 48               mov eax, dword ptr [eax + 0x48]
+00455110  8b 08                  mov ecx, dword ptr [eax]
+00455112  ff 51 28               call dword ptr [ecx + 0x28]
+00455115  a1 bc a5 45 00         mov eax, dword ptr [0x45a5bc]
+0045511a  8b 00                  mov eax, dword ptr [eax]
+0045511c  8b 40 44               mov eax, dword ptr [eax + 0x44]
+0045511f  8b 50 7c               mov edx, dword ptr [eax + 0x7c]
+00455122  83 ea 18               sub edx, 0x18
+00455125  a1 bc a5 45 00         mov eax, dword ptr [0x45a5bc]
+0045512a  8b 00                  mov eax, dword ptr [eax]
+0045512c  8b 40 48               mov eax, dword ptr [eax + 0x48]
+0045512f  e8 38 cd fa ff         call 0x401e6c
+00455134  a1 bc a5 45 00         mov eax, dword ptr [0x45a5bc]
+00455139  8b 00                  mov eax, dword ptr [eax]
+0045513b  8b 40 44               mov eax, dword ptr [eax + 0x44]
+0045513e  8b 90 80 00 00 00      mov edx, dword ptr [eax + 0x80]
+00455144  83 ea 18               sub edx, 0x18
+00455147  a1 bc a5 45 00         mov eax, dword ptr [0x45a5bc]
+0045514c  8b 00                  mov eax, dword ptr [eax]
+0045514e  8b 40 48               mov eax, dword ptr [eax + 0x48]
+00455151  e8 1e cd fa ff         call 0x401e74
+00455156  8b 06                  mov eax, dword ptr [esi]
+00455158  8b 10                  mov edx, dword ptr [eax]
+0045515a  ff 92 b0 00 00 00      call dword ptr [edx + 0xb0]
+00455160  a1 b0 a0 45 00         mov eax, dword ptr [0x45a0b0]
+00455165  8b 00                  mov eax, dword ptr [eax]
+00455167  8b 40 44               mov eax, dword ptr [eax + 0x44]
+0045516a  33 d2                  xor edx, edx
+0045516c  8b 08                  mov ecx, dword ptr [eax]
+0045516e  ff 51 6c               call dword ptr [ecx + 0x6c]
+00455171  a1 30 a1 45 00         mov eax, dword ptr [0x45a130]
+00455176  8b 00                  mov eax, dword ptr [eax]
+00455178  33 d2                  xor edx, edx
+0045517a  e8 f9 98 ff ff         call 0x44ea78
+0045517f  a1 30 a1 45 00         mov eax, dword ptr [0x45a130]
+00455184  8b 00                  mov eax, dword ptr [eax]
+00455186  33 d2                  xor edx, edx
+00455188  e8 8b ad ff ff         call 0x44ff18
+0045518d  a1 cc a0 45 00         mov eax, dword ptr [0x45a0cc]
+00455192  8b 00                  mov eax, dword ptr [eax]
+00455194  e8 6f 23 00 00         call 0x457508
+00455199  a1 fc a4 45 00         mov eax, dword ptr [0x45a4fc]
+0045519e  8b 00                  mov eax, dword ptr [eax]
+004551a0  e8 cb df fc ff         call 0x423170
+004551a5  8b 06                  mov eax, dword ptr [esi]
+004551a7  f6 40 3c 04            test byte ptr [eax + 0x3c], 4
+004551ab  0f 84 b8 00 00 00      je 0x455269
+004551b1  a1 cc a0 45 00         mov eax, dword ptr [0x45a0cc]
+004551b6  8b 00                  mov eax, dword ptr [eax]
+004551b8  8b 78 5c               mov edi, dword ptr [eax + 0x5c]
+004551bb  8b 06                  mov eax, dword ptr [esi]
+004551bd  8a 98 a5 00 00 00      mov bl, byte ptr [eax + 0xa5]
+004551c3  80 fb ff               cmp bl, 0xff
+004551c6  74 69                  je 0x455231
+004551c8  0f be d3               movsx edx, bl
+004551cb  8b 06                  mov eax, dword ptr [esi]
+004551cd  8b 80 40 01 00 00      mov eax, dword ptr [eax + 0x140]
+004551d3  e8 8c d2 fa ff         call 0x402464
+004551d8  0f be 80 a5 00 00 00   movsx eax, byte ptr [eax + 0xa5]
+004551df  89 87 1c 01 00 00      mov dword ptr [edi + 0x11c], eax
+004551e5  83 bf 1c 01 00 00 ff   cmp dword ptr [edi + 0x11c], -1
+004551ec  75 0a                  jne 0x4551f8
+004551ee  c7 87 1c 01 00 00 0c 00 00 00 mov dword ptr [edi + 0x11c], 0xc
+004551f8  8b 87 1c 01 00 00      mov eax, dword ptr [edi + 0x11c]
+004551fe  89 87 18 01 00 00      mov dword ptr [edi + 0x118], eax
+00455204  8b d0                  mov edx, eax
+00455206  c1 e0 03               shl eax, 3
+00455209  2b c2                  sub eax, edx
+0045520b  89 87 40 01 00 00      mov dword ptr [edi + 0x140], eax
+00455211  8b 06                  mov eax, dword ptr [esi]
+00455213  80 b8 39 02 00 00 01   cmp byte ptr [eax + 0x239], 1
+0045521a  0f 94 c2               sete dl
+0045521d  a1 cc a0 45 00         mov eax, dword ptr [0x45a0cc]
+00455222  8b 00                  mov eax, dword ptr [eax]
+00455224  8b 80 98 00 00 00      mov eax, dword ptr [eax + 0x98]
+0045522a  8b 08                  mov ecx, dword ptr [eax]
+0045522c  ff 51 6c               call dword ptr [ecx + 0x6c]
+0045522f  eb 38                  jmp 0x455269
+00455231  b8 0c 00 00 00         mov eax, 0xc
+00455236  89 87 18 01 00 00      mov dword ptr [edi + 0x118], eax
+0045523c  89 87 1c 01 00 00      mov dword ptr [edi + 0x11c], eax
+00455242  8b 87 18 01 00 00      mov eax, dword ptr [edi + 0x118]
+00455248  8b d0                  mov edx, eax
+0045524a  c1 e0 03               shl eax, 3
+0045524d  2b c2                  sub eax, edx
+0045524f  89 87 40 01 00 00      mov dword ptr [edi + 0x140], eax
+00455255  a1 cc a0 45 00         mov eax, dword ptr [0x45a0cc]
+0045525a  8b 00                  mov eax, dword ptr [eax]
+0045525c  8b 80 98 00 00 00      mov eax, dword ptr [eax + 0x98]
+00455262  33 d2                  xor edx, edx
+00455264  8b 08                  mov ecx, dword ptr [eax]
+00455266  ff 51 6c               call dword ptr [ecx + 0x6c]
+00455269  a1 cc a0 45 00         mov eax, dword ptr [0x45a0cc]
+0045526e  8b 00                  mov eax, dword ptr [eax]
+00455270  66 c7 80 3c 01 00 00 00 00 mov word ptr [eax + 0x13c], 0
+00455279  a1 cc a0 45 00         mov eax, dword ptr [0x45a0cc]
+0045527e  8b 00                  mov eax, dword ptr [eax]
+00455280  8b 40 78               mov eax, dword ptr [eax + 0x78]
+00455283  ba 0e 00 00 00         mov edx, 0xe
+00455288  8b 08                  mov ecx, dword ptr [eax]
+0045528a  ff 91 a0 00 00 00      call dword ptr [ecx + 0xa0]
+00455290  a1 cc a0 45 00         mov eax, dword ptr [0x45a0cc]
+00455295  8b 00                  mov eax, dword ptr [eax]
+00455297  66 c7 80 40 01 00 00 00 00 mov word ptr [eax + 0x140], 0
+004552a0  a1 78 a4 45 00         mov eax, dword ptr [0x45a478]
+004552a5  8b 00                  mov eax, dword ptr [eax]
+004552a7  8b 88 a0 00 00 00      mov ecx, dword ptr [eax + 0xa0]
+004552ad  a1 78 a4 45 00         mov eax, dword ptr [0x45a478]
+004552b2  8b 00                  mov eax, dword ptr [eax]
+004552b4  8b 90 9c 00 00 00      mov edx, dword ptr [eax + 0x9c]
+004552ba  a1 78 a4 45 00         mov eax, dword ptr [0x45a478]
+004552bf  8b 00                  mov eax, dword ptr [eax]
+004552c1  e8 a6 5d fb ff         call 0x40b06c
+004552c6  33 c0                  xor eax, eax
+004552c8  5a                     pop edx
+004552c9  59                     pop ecx
+004552ca  59                     pop ecx
+004552cb  64 89 10               mov dword ptr fs:[eax], edx
+004552ce  68 e8 52 45 00         push 0x4552e8
+004552d3  8d 45 e8               lea eax, [ebp - 0x18]
+004552d6  ba 03 00 00 00         mov edx, 3
+004552db  e8 00 be fa ff         call 0x4010e0
+004552e0  c3                     ret 
+004552e1  e9 ba bd fa ff         jmp 0x4010a0
+004552e6  eb eb                  jmp 0x4552d3
+004552e8  5f                     pop edi
+004552e9  5e                     pop esi
+004552ea  5b                     pop ebx
+004552eb  8b e5                  mov esp, ebp
+004552ed  5d                     pop ebp
+004552ee  c3                     ret 
+004552ef  00 ff                  add bh, bh

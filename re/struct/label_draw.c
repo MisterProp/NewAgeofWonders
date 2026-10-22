@@ -1,0 +1,34 @@
+
+void AoWLabel_TAOWLabel_Draw_23EDC2EF(int param_1,undefined4 *param_2)
+
+{
+  int iVar1;
+  undefined4 *puVar2;
+  undefined1 *puStack_50;
+  undefined4 uStack_4c;
+  undefined4 local_48 [15];
+  
+                    /* 0x11f94  280  AoWLabel.TAOWLabel.Draw@23EDC2EF */
+  puVar2 = local_48;
+  for (iVar1 = 0xf; iVar1 != 0; iVar1 = iVar1 + -1) {
+    *puVar2 = *param_2;
+    param_2 = param_2 + 1;
+    puVar2 = puVar2 + 1;
+  }
+  if ((*(char *)(param_1 + 0x2c) == '\x01') && (*(char *)(param_1 + 0x69) == '\x01')) {
+    uStack_4c = 0x411fc2;
+    ImageLib_TImageLibraryFont_SetColor_23EDC2EF
+              (*(undefined4 *)(param_1 + 0x88),*(undefined4 *)(param_1 + 0x24));
+    uStack_4c = *(undefined4 *)(param_1 + 0x8c);
+    puStack_50 = (undefined1 *)local_48;
+    ImageLib_TImageLibraryFont_SetText_23EDC2EF
+              (*(undefined4 *)(param_1 + 0x88),
+               *(int *)(*(int *)(param_1 + 0x108) + 0x80) + *(int *)(param_1 + 0x80),
+               *(int *)(*(int *)(param_1 + 0x108) + 0x84) + *(int *)(param_1 + 0x84));
+    if (*(short *)(param_1 + 0x32) != 0) {
+      (**(code **)(param_1 + 0x30))(*(undefined4 *)(param_1 + 0x34),param_1,&puStack_50);
+    }
+  }
+  return;
+}
+

@@ -1,0 +1,21 @@
+lines=7457 hits=20
+AoWE.TEndTurnAIPA.Destroy@23EDC2EF at 55734a38
+AoWE.TEndTurnAIPA.Priority@23EDC2EF at 55734a5c
+AoWE.TEndTurnAIPA.Process@23EDC2EF at 55734a64
+AoWE.TEndTurnTE.ClassID@23EDC2EF at 55747378
+AoWE.TEndTurnTE.ReadWrite@23EDC2EF at 55747380
+AoWE.TEndTurnTE.Execute@23EDC2EF at 557473c4
+AoWE.TPlayer.SetEndTurn@23EDC2EF at 55752d00
+AoWE.TPlayerControl.EndTurn@23EDC2EF at 5575530c
+AoWE.TTurnPlayerControl.EndTurn@23EDC2EF at 55756db8
+AoWE.TPBEMPlayerControl.EndTurnGameSavedCallBack@23EDC2EF at 557580c8
+AoWE.TPBEMPlayerControl.EndTurn@23EDC2EF at 55758290
+AoWE.TSimultaniousPlayerControl.EndTurn@23EDC2EF at 5575911c
+AoWE.TAoWHSMap.TriggerEndTurnEvent@23EDC2EF at 55776474
+AoWE.TAoWHSMap.EndTurn@23EDC2EF at 5577838c
+AoWE.TAoWHSMap.CancelEndTurn@23EDC2EF at 557783c8
+Crops.TCrop.EndTurn@23EDC2EF at 557a5cfc
+EventLog.TEndTurnEventLog.GetVisible@23EDC2EF at 557fdd58
+EventLog.TEndTurnEventLog.ClassID@23EDC2EF at 557fdd5c
+EventLog.TEndTurnEventLog.Execute@23EDC2EF at 557fdd64
+MapCtrl.TAoWMapControl.EndTurn@23EDC2EF at 55806378

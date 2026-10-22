@@ -455,6 +455,30 @@ void hn_walk_hex(int x, int y, int index, int& hx, int& hy) {
     hy = py;
 }
 
+bool object_covers_hex(const MapHs& hs,
+                       const std::vector<MapResource>& resources,
+                       int object_x, int object_y, int hex_x, int hex_y) {
+    // The object's own hex is always part of it, even when its TTerrainList
+    // entry 0 has no opinion (the engine's `UpdateMapFields` still registers
+    // the sprite itself on that field).
+    if (hex_x == object_x && hex_y == object_y) return true;
+    const MapResource* r = find_map_resource(resources, hs.resource);
+    if (r == nullptr) return false;
+    // `TMultiHexMO.UpdateMapFields@5560af6c`: walk the resource's TTerrainList
+    // entries; an entry with no opinion (both bytes 0x80..0xFF as signed chars)
+    // covers nothing, every other entry covers the hex the HN spiral reaches.
+    for (std::size_t k = 1; k < r->terrain_list.size(); ++k) {
+        const std::uint16_t e = r->terrain_list[k];
+        const int et = static_cast<std::int8_t>(e & 0xff);
+        const int eo = static_cast<std::int8_t>((e >> 8) & 0xff);
+        if (et < 0 && eo < 0) continue;
+        int hx = 0, hy = 0;
+        hn_walk_hex(object_x, object_y, static_cast<int>(k), hx, hy);
+        if (hx == hex_x && hy == hex_y) return true;
+    }
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // Terrain resolution
 // ---------------------------------------------------------------------------

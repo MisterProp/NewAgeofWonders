@@ -197,11 +197,23 @@ void object_sprite_origin(int hex_sx, int hex_sy, const MapResource* resource,
 // City1..City4 -> 1..4) and the sprite from the owning race's TRaceResource
 // image library (`RACES\R*.ILB`, indexed by the city's rw tag 0xd), slot:
 //
-//   GetCityImage(size, terrain, wallFlag)@55759ebc:
+//   GetCityImage(size, terrain, level)@55759ebc:
 //     slot = (terrain == 5) ? size + 0x3b : terrain*10 + size + 0x45;
-//     if that slot does not exist -> size + (wallFlag == 0 ? 0x32 : 0x3c) - 1;
+//     if that slot does not exist -> size + (level == 0 ? 0x32 : 0x3c) - 1;
 //     if that also does not exist -> no image (the caller then draws the
 //     resource's own block sprite).
+//
+// The last argument is the **map field's level byte**, not the city's wall
+// type: `TCity.UpdateImages` passes `*(char *)(city[1] + 0x12)`, and
+// `TMapField.GetXYL` packs `x + y*0x100 + L*0x10000` from `+0x10/+0x11/+0x12`
+// (`+0x14` is the terrain it feeds GetCityImage's `terrain` argument). So a
+// surface city (level 0) whose race library lacks the terrain slot falls back
+// to the race's **overworld** block (`size + 0x31` = slots 50..53) and an
+// underground city (level != 0) to its underground block (`size + 0x3b` =
+// slots 60..63). The city's own wall byte is `+0x4c` and only selects the
+// CityN wall sprites (`T + wallType*2`). Evidence:
+// re/exports/hsepack/HSEngine.TMapField.{GetXYL,UpdateTerrainType}.c and
+// re/exports/aowepack/{AoWE.TCity.UpdateImages,AoWE.TRaceResource.GetCityImage}.c.
 //
 // A city whose race byte is negative has no race of its own: `GetCityImage`
 // gives the caller nothing and `UpdateImages` falls back to the city resource's
@@ -215,7 +227,9 @@ void object_sprite_origin(int hex_sx, int hex_sy, const MapResource* resource,
 // 0x28 for the wasteland/earth/rock/lava/upper families (5/7/8/9/12/13), else 0.
 int city_terrain_block(int terrain);
 std::size_t city_image_slot(int size, int terrain);
-std::size_t city_image_fallback_slot(int size, int wall_flag);
+// `level` is the map field's level (0 = surface, non-zero = underground),
+// NOT the city's wall type. See the GetCityImage note above.
+std::size_t city_image_fallback_slot(int size, int level);
 // City size (`resource+0x78`, City1..City4 -> 1..4) from the resource's library
 // name. Returns 0 when the name does not identify a city resource.
 int city_resource_size(const MapResource& resource);

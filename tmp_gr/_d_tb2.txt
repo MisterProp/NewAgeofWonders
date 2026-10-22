@@ -1,0 +1,129 @@
+59704e44  55                     push ebp
+59704e45  8b ec                  mov ebp, esp
+59704e47  83 c4 bc               add esp, -0x44
+59704e4a  53                     push ebx
+59704e4b  56                     push esi
+59704e4c  57                     push edi
+59704e4d  33 c9                  xor ecx, ecx
+59704e4f  89 4d bc               mov dword ptr [ebp - 0x44], ecx
+59704e52  8b f2                  mov esi, edx
+59704e54  8d 7d c0               lea edi, [ebp - 0x40]
+59704e57  b9 0f 00 00 00         mov ecx, 0xf
+59704e5c  f3 a5                  rep movsd dword ptr es:[edi], dword ptr [esi]
+59704e5e  89 45 fc               mov dword ptr [ebp - 4], eax
+59704e61  33 c0                  xor eax, eax
+59704e63  55                     push ebp
+59704e64  68 de 4f 70 59         push 0x59704fde
+59704e69  64 ff 30               push dword ptr fs:[eax]
+59704e6c  64 89 20               mov dword ptr fs:[eax], esp
+59704e6f  33 c0                  xor eax, eax
+59704e71  55                     push ebp
+59704e72  68 99 4f 70 59         push 0x59704f99
+59704e77  64 ff 30               push dword ptr fs:[eax]
+59704e7a  64 89 20               mov dword ptr fs:[eax], esp
+59704e7d  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704e80  80 78 75 01            cmp byte ptr [eax + 0x75], 1
+59704e84  0f 85 05 01 00 00      jne 0x59704f8f
+59704e8a  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704e8d  80 78 2c 01            cmp byte ptr [eax + 0x2c], 1
+59704e91  0f 85 f8 00 00 00      jne 0x59704f8f
+59704e97  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704e9a  66 83 78 3e 00         cmp word ptr [eax + 0x3e], 0
+59704e9f  74 0f                  je 0x59704eb0
+59704ea1  8b 5d fc               mov ebx, dword ptr [ebp - 4]
+59704ea4  8d 4d c0               lea ecx, [ebp - 0x40]
+59704ea7  8b 55 fc               mov edx, dword ptr [ebp - 4]
+59704eaa  8b 43 40               mov eax, dword ptr [ebx + 0x40]
+59704ead  ff 53 3c               call dword ptr [ebx + 0x3c]
+59704eb0  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704eb3  80 b8 20 01 00 00 00   cmp byte ptr [eax + 0x120], 0
+59704eba  75 6a                  jne 0x59704f26
+59704ebc  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704ebf  80 b8 3c 01 00 00 01   cmp byte ptr [eax + 0x13c], 1
+59704ec6  75 5e                  jne 0x59704f26
+59704ec8  8d 45 c0               lea eax, [ebp - 0x40]
+59704ecb  50                     push eax
+59704ecc  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704ecf  8b 90 28 01 00 00      mov edx, dword ptr [eax + 0x128]
+59704ed5  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704ed8  8b 80 18 01 00 00      mov eax, dword ptr [eax + 0x118]
+59704ede  8b c8                  mov ecx, eax
+59704ee0  c1 e0 03               shl eax, 3
+59704ee3  2b c1                  sub eax, ecx
+59704ee5  03 d0                  add edx, eax
+59704ee7  83 c2 06               add edx, 6
+59704eea  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704eed  8b 80 14 01 00 00      mov eax, dword ptr [eax + 0x114]
+59704ef3  e8 a4 c8 ff ff         call 0x5970179c
+59704ef8  8b 55 fc               mov edx, dword ptr [ebp - 4]
+59704efb  8b 9a 0c 01 00 00      mov ebx, dword ptr [edx + 0x10c]
+59704f01  8b 8b 88 00 00 00      mov ecx, dword ptr [ebx + 0x88]
+59704f07  8b 55 fc               mov edx, dword ptr [ebp - 4]
+59704f0a  03 8a 88 00 00 00      add ecx, dword ptr [edx + 0x88]
+59704f10  8b 93 84 00 00 00      mov edx, dword ptr [ebx + 0x84]
+59704f16  8b 5d fc               mov ebx, dword ptr [ebp - 4]
+59704f19  03 93 84 00 00 00      add edx, dword ptr [ebx + 0x84]
+59704f1f  e8 58 c8 ff ff         call 0x5970177c
+59704f24  eb 50                  jmp 0x59704f76
+59704f26  8d 45 c0               lea eax, [ebp - 0x40]
+59704f29  50                     push eax
+59704f2a  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704f2d  8b 90 28 01 00 00      mov edx, dword ptr [eax + 0x128]
+59704f33  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704f36  03 90 40 01 00 00      add edx, dword ptr [eax + 0x140]
+59704f3c  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704f3f  8b 80 14 01 00 00      mov eax, dword ptr [eax + 0x114]
+59704f45  e8 52 c8 ff ff         call 0x5970179c
+59704f4a  8b 55 fc               mov edx, dword ptr [ebp - 4]
+59704f4d  8b 9a 0c 01 00 00      mov ebx, dword ptr [edx + 0x10c]
+59704f53  8b 8b 88 00 00 00      mov ecx, dword ptr [ebx + 0x88]
+59704f59  8b 55 fc               mov edx, dword ptr [ebp - 4]
+59704f5c  03 8a 88 00 00 00      add ecx, dword ptr [edx + 0x88]
+59704f62  8b 93 84 00 00 00      mov edx, dword ptr [ebx + 0x84]
+59704f68  8b 5d fc               mov ebx, dword ptr [ebp - 4]
+59704f6b  03 93 84 00 00 00      add edx, dword ptr [ebx + 0x84]
+59704f71  e8 06 c8 ff ff         call 0x5970177c
+59704f76  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704f79  66 83 78 36 00         cmp word ptr [eax + 0x36], 0
+59704f7e  74 0f                  je 0x59704f8f
+59704f80  8b 5d fc               mov ebx, dword ptr [ebp - 4]
+59704f83  8d 4d c0               lea ecx, [ebp - 0x40]
+59704f86  8b 55 fc               mov edx, dword ptr [ebp - 4]
+59704f89  8b 43 38               mov eax, dword ptr [ebx + 0x38]
+59704f8c  ff 53 34               call dword ptr [ebx + 0x34]
+59704f8f  33 c0                  xor eax, eax
+59704f91  5a                     pop edx
+59704f92  59                     pop ecx
+59704f93  59                     pop ecx
+59704f94  64 89 10               mov dword ptr fs:[eax], edx
+59704f97  eb 2f                  jmp 0x59704fc8
+59704f99  e9 a2 c0 ff ff         jmp 0x59701040
+59704f9e  6a 00                  push 0
+59704fa0  8b 45 fc               mov eax, dword ptr [ebp - 4]
+59704fa3  8b 48 08               mov ecx, dword ptr [eax + 8]
+59704fa6  8d 45 bc               lea eax, [ebp - 0x44]
+59704fa9  ba f4 4f 70 59         mov edx, 0x59704ff4
+59704fae  e8 c5 c0 ff ff         call 0x59701078
+59704fb3  8b 45 bc               mov eax, dword ptr [ebp - 0x44]
+59704fb6  50                     push eax
+59704fb7  68 00 50 70 59         push 0x59705000
+59704fbc  6a 00                  push 0
+59704fbe  e8 e1 c2 ff ff         call 0x597012a4
+59704fc3  e8 88 c0 ff ff         call 0x59701050
+59704fc8  33 c0                  xor eax, eax
+59704fca  5a                     pop edx
+59704fcb  59                     pop ecx
+59704fcc  59                     pop ecx
+59704fcd  64 89 10               mov dword ptr fs:[eax], edx
+59704fd0  68 e5 4f 70 59         push 0x59704fe5
+59704fd5  8d 45 bc               lea eax, [ebp - 0x44]
+59704fd8  e8 93 c0 ff ff         call 0x59701070
+59704fdd  c3                     ret 
+59704fde  e9 65 c0 ff ff         jmp 0x59701048
+59704fe3  eb f0                  jmp 0x59704fd5
+59704fe5  5f                     pop edi
+59704fe6  5e                     pop esi
+59704fe7  5b                     pop ebx
+59704fe8  8b e5                  mov esp, ebp
+59704fea  5d                     pop ebp
+59704feb  c3                     ret 

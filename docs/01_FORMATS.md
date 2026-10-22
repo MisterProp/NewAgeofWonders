@@ -1088,9 +1088,18 @@ map can be viewed without the command line:
   three layers at `HXtoHP + resource dXmainP/dYmainP + sprite base+shift`: back
   wall (`+0x68`), body (`+0x70`), front wall (`+0x6c`). `TCity.UpdateImages`
   picks the body from the owner race's `TRaceResource` image library
-  (`GetCityImage(size, terrain, wallFlag)`, slot `terrain*10 + size + 0x45`, or
-  `size + 0x3b` for terrain 5, else `size + 0x32/0x3c - 1`) and the walls from the
-  city resource's own `CityN.ILB` block (`T + wallType*2`). `TCity.ReadWrite`
+  (`GetCityImage(size, terrain, level)`: slot `terrain*10 + size + 0x45`, or
+  `size + 0x3b` for terrain 5, else `size + (level == 0 ? 0x32 : 0x3c) - 1`) and
+  the walls from the city resource's own `CityN.ILB` block (`T + wallType*2`).
+  GetCityImage's last argument is the **map field's level byte**
+  (`TMapField+0x12`; `TMapField.GetXYL` packs `x + y*0x100 + L*0x10000` from
+  `+0x10/+0x11/+0x12` and `UpdateTerrainType` reads the terrain from `+0x14`),
+  *not* the city's wall type (`TCity+0x4c`). So level 0 (surface) falls back to
+  the race library's overworld block (slots 50..53) and a non-zero level
+  (underground) to its underground block (slots 60..63); the
+  `Scenario\Custom\Barondir Bay.HSM` Human town at (12,20) is on the surface and
+  its Human library ships only the underground block, so it correctly ends up
+  drawing `CITY4.ILB` slot 0 `C_human.bmp`. `TCity.ReadWrite`
   serialises the race at **rw tag 0xd** (`+0x45`) and the wall type at **rw tag
   0xf** (`+0x4c`). A city whose race tag is **0xff** (the editor's "Random" city
   race, e.g. every city of `Scenario\Custom\test.hsm`) has no race of its own:

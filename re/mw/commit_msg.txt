@@ -1,0 +1,15 @@
+Scenario picker: match the shipped Select a Map dialog 1:1
+
+- Fix ILB TImageNode parsing for mixed UI libraries, so UnitIcons 7/8
+  and TitleScreen 10 resolve to their glow+art layers.
+- Draw the real layered icons (glow additive, art keyed), GenericI close
+  and UpDirBtn art, Text2Lb17/PopUpSet list textures, FrThinD panels and
+  the TextOld1 info strip.
+- Tile 9-slice and 3-piece skins as TAOWPanel/TAOWEdit/TAOWButton do,
+  compose both celtic bands (flat CeltDeco 55/56/57 plus the tiled
+  27x27 knot), and apply Age10 CharacterDistance with exact text insets.
+- Add pixmatch --render-origin for crop-based comparisons.
+
+Benchmark against bin/ScenarioMenuRef.png at crop origin (134,37):
+91.4% of pixels within 30/channel (was 20.8%), 94.7% within 45,
+mean per-channel difference 10.11 (was 54.11). Build and smoke tests pass.

@@ -1,0 +1,15 @@
+0x59704a68  TurnButton..TAOWTurnButton@82FC0F65
+0x59705244  TurnButton.Finalization@51F89FF7
+0x59705214  TurnButton.Register@51F89FF7
+0x59705018  TurnButton.TAOWTurnButton.CheckMouseDown@23EDC2EF
+0x59705188  TurnButton.TAOWTurnButton.CheckMouseMove@23EDC2EF
+0x59705100  TurnButton.TAOWTurnButton.CheckMouseUp@23EDC2EF
+0x59704c3c  TurnButton.TAOWTurnButton.Create@23EDC2EF
+0x59704e44  TurnButton.TAOWTurnButton.Draw@23EDC2EF
+0x59704cc0  TurnButton.TAOWTurnButton.SetILB@23EDC2EF
+0x59704c88  TurnButton.TAOWTurnButton.SetSize@23EDC2EF
+0x59704cd4  TurnButton.TAOWTurnButton.Update@23EDC2EF
+0x59704c74  TurnButton.TAOWTurnButton.Validate@23EDC2EF
+0x59704b18  TurnButton.TAOWTurnButton@BEDB3E8C
+0x59704a00  TurnButton.TButtonType@E22CF8CE
+0x59705274  TurnButton.TurnButton@00000000

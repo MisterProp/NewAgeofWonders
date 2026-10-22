@@ -1,0 +1,6 @@
+﻿Unit1FramePreDraw            nameVa=0x00404e90 (CODE) idx=0x0018 addr=0x0040674c len=17
+CheckEnd                     nameVa=0x00404e57 (CODE) idx=0x000f addr=0x004062a0 len=8
+PGuardChange                 nameVa=0x00404eeb (CODE) idx=0x0013 addr=0x00406848 len=12
+TBNextButtonClick            nameVa=0x004570c0 (CODE) idx=0x0018 addr=0x004573e8 len=17
+TurnButtonChange             nameVa=0x00457135 (CODE) idx=0x0017 addr=0x004574ac len=16
+TurnButtonAnimDone           nameVa=0x00457052 (CODE) idx=0x0019 addr=0x004572f4 len=18

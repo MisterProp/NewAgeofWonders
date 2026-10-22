@@ -1,0 +1,9 @@
+=== turnbutton
+  AOWTools.dpl          31 hits
+  AoW.exe.orig          23 hits
+  AoWCompat.exe         23 hits
+=== tbturnbt
+  AoW.exe                1 hits
+  AoW.exe.orig           1 hits
+  AoWCompat.exe          1 hits
+  aow_menu.exe           1 hits

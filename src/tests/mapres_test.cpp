@@ -27,6 +27,7 @@
 #include "aow/map_resources.hpp"
 #include "aow/map_types.hpp"
 #include "aow/mapviz.hpp"
+#include "aow/movement.hpp"
 
 namespace fs = std::filesystem;
 
@@ -114,6 +115,55 @@ int main(int argc, char** argv) {
         check(frame_of(0x007b134f, f) && f == 0,
               "WATERHEX.ILB maps to frame 0");
 
+        // --- Crops (Crops.TCrop / Crops.TCropResource) -----------------------
+        // Release.hss has exactly one crop resource, id 41 (0x29). It carries
+        // its Crops.bmp library INLINE (rw tag 8) and its TMultiHexMOR shift is
+        // (-15,-9); the library's image ids are sparse: 1..4 (grass/desert/
+        // snow/steppe), 12 (upper/underground) and the Undead block 31..35,41.
+        const aow::MapResource* crop_res = aow::find_map_resource(res, 41);
+        check(crop_res != nullptr &&
+                  crop_res->class_id == aow::kCropResourceClassId,
+              "resource id 41 is Crops.TCropResource (0x2036b)");
+        check(crop_res != nullptr && crop_res->has_shift &&
+                  crop_res->dx_main == -15 && crop_res->dy_main == -9,
+              "the crop resource anchors at HXtoHP + (-15,-9)");
+        check(crop_res != nullptr && !crop_res->ilb_data.empty(),
+              "the crop resource carries its image library inline");
+        if (crop_res != nullptr && !crop_res->ilb_data.empty()) {
+            aow::IlbFile crop_ilb;
+            std::string ierr;
+            check(crop_ilb.load_memory(crop_res->ilb_data.data(),
+                                       crop_res->ilb_data.size(), ierr),
+                  "the inline crop library parses (" + ierr + ")");
+            auto has_id = [&](std::uint32_t id) {
+                for (const aow::IlbEntry& e : crop_ilb.entries()) {
+                    if (e.index == id) return true;
+                }
+                return false;
+            };
+            check(!has_id(0), "Crops.bmp has no slot 0 (why crops used to vanish)");
+            check(has_id(1) && has_id(2) && has_id(3) && has_id(4) &&
+                      has_id(12),
+                  "Crops.bmp has the per-terrain ids 1..4 and 12");
+            check(has_id(31) && has_id(32) && has_id(33) && has_id(34) &&
+                      has_id(35) && has_id(41),
+                  "Crops.bmp has the Undead block 31..35 and 41");
+        }
+        // Crops.TCrop.GetTerrainTypeImage@0x557a5f14: the frame is the hex's
+        // terrain number, +0x1e when the owner's GetRace() is 0x0b (Undead).
+        check(aow::crop_image_index(1, 5) == 1,
+              "a grass crop owned by a Halfling uses frame 1");
+        check(aow::crop_image_index(1, 0x0b) == 0x1f,
+              "a grass crop owned by the Undead uses frame 31");
+        check(aow::crop_image_index(5, 0x0b) == 0x23,
+              "a wasteland crop owned by the Undead uses frame 35");
+        check(aow::crop_image_index(12, 5) == 12,
+              "an upper/underground crop uses frame 12");
+        check(aow::crop_image_index(12, 0x0b) == 42,
+              "the Undead upper/underground id is 42 (no image -> crop freed)");
+        check(aow::crop_image_index(-1, 5) == -1,
+              "an unknown terrain selects no crop image");
+
         // A run's length must not exceed its library's entry count: the
         // H_gr.BMP block is exactly H_Gr.ILB's 12 entries.
         std::size_t gr_ids = 0;
@@ -142,10 +192,17 @@ int main(int argc, char** argv) {
               "GetCityImage surface slot = terrain*10 + size + 0x45");
         check(aow::city_image_slot(3, 5) == 3 + 0x3b,
               "GetCityImage terrain 5 slot = size + 0x3b");
+        // GetCityImage's last argument is the *map field level* (TMapField+0x12,
+        // TMapField.GetXYL's high byte), not the city's wall type: level 0 =
+        // surface -> the race library's overworld block, non-zero = underground
+        // -> its underground block.
         check(aow::city_image_fallback_slot(2, 0) == 2 + 0x32 - 1,
-              "GetCityImage unwalled fallback = size + 0x31");
+              "GetCityImage surface (level 0) fallback = size + 0x31");
         check(aow::city_image_fallback_slot(2, 1) == 2 + 0x3c - 1,
-              "GetCityImage walled fallback = size + 0x3b");
+              "GetCityImage underground (level 1) fallback = size + 0x3b");
+        check(aow::city_image_fallback_slot(2, 1) !=
+                  aow::city_image_fallback_slot(2, 0),
+              "GetCityImage picks the underground block on a non-zero level");
         check(aow::city_terrain_block(1) == 0 && aow::city_terrain_block(3) == 0x14 &&
                   aow::city_terrain_block(8) == 0x28,
               "city block: surface 0, snow 0x14, wasteland/earth/rock/lava 0x28");
@@ -281,13 +338,32 @@ int main(int argc, char** argv) {
                 check(false, "render Tutorial L0 for the city check (" + err + ")");
             } else {
                 std::ifstream in(ccity);
-                std::string line;
+                std::string line, gob_city, hal_city;
                 std::size_t bodies = 0, race_bodies = 0, walls = 0, pads = 0;
+                std::size_t crop_rows = 0;
+                bool crop_grass = false;
                 std::getline(in, line);  // header
                 while (std::getline(in, line)) {
+                    if (line.rfind("city,32,21,", 0) == 0) {
+                        gob_city += line + "\n";
+                    }
+                    if (line.rfind("city,16,25,", 0) == 0) {
+                        hal_city += line + "\n";
+                    }
                     if (line.rfind("object,", 0) == 0 &&
                         line.find("PAD") != std::string::npos) {
                         ++pads;
+                    }
+                    if (line.rfind("crop,", 0) == 0) {
+                        ++crop_rows;
+                        // (16,24) is one of the three crop tiles beside the
+                        // Halfling city; the hex is grass, so GetTerrainTypeImage
+                        // selects Crops.bmp id 1 (a 43x36 decoded sprite).
+                        if (line.rfind(
+                                "crop,16,24,41,Crops.bmp,1,crops.bmp,43,36,1",
+                                0) == 0) {
+                            crop_grass = true;
+                        }
                     }
                     if (line.rfind("city,", 0) != 0) continue;
                     if (line.find("RACES\\") != std::string::npos) {
@@ -301,9 +377,28 @@ int main(int argc, char** argv) {
                 check(bodies == 2 && race_bodies == 2,
                       "both Tutorial cities draw a race-specific body "
                       "(RACES\\R*.ILB)");
+                // Both cities are on level 0 (the surface), so the race body
+                // must come from the *overworld* block (slots 50..53) even for
+                // the walled Goblin town. Slots 60..63 are the underground
+                // block (GetCityImage's level argument, TMapField+0x12).
+                check(gob_city.find("RACES\\RGOBLIN.ILB,50,c_goblin.bmp") !=
+                          std::string::npos,
+                      "Tutorial (32,21): a walled surface Goblin city draws the "
+                      "overworld body (slot 50)");
+                check(gob_city.find("RACES\\RGOBLIN.ILB,60,") ==
+                          std::string::npos,
+                      "Tutorial (32,21): no underground body on the surface");
+                check(hal_city.find("RACES\\RHALFLNG.ILB,52,c_hlflng.bmp") !=
+                          std::string::npos,
+                      "Tutorial (16,25): the unwalled surface Halfling city "
+                      "draws the overworld body (slot 52)");
                 check(walls >= 2,
                       "the walled goblin city draws its O_wall layers");
                 check(pads >= 2, "both Tutorial cities draw a Pad (hill)");
+                check(crop_rows == 7,
+                      "Tutorial L0 draws all 7 Crops.TCrop tiles");
+                check(crop_grass,
+                      "the grass crop at (16,24) resolves Crops.bmp frame 1");
             }
         }
 
@@ -314,8 +409,13 @@ int main(int argc, char** argv) {
         // Human (`aow_tools gamestate`: 1 Lizard, 2 Azrac, 3 Human, 4
         // Frostling), so it flies `RACES\RHUMAN.ILB`. Its body must therefore be
         // the Human city art (`RHUMAN.ILB` slot 63 = size 4, walled) and not the
-        // city resource's `C_random` "?" placeholder, while the three unowned
-        // race-less cities of the same map keep the placeholder.
+        // The city is on the surface (level 0), so GetCityImage's fallback asks
+        // RHUMAN for size + 0x31 = slot 53 - which the Human library does not
+        // ship (its only city block is the underground 60..63) - and
+        // UpdateImages then draws the *city resource's* own `C_human.BMP` body
+        // (`CITY4.ILB` slot 0). The body must therefore NOT be slot 63 (the
+        // underground art) and not the `C_random` "?" placeholder, while the
+        // three unowned race-less cities of the same map keep the placeholder.
         {
             aow::Map bm;
             const std::string bmp_path =
@@ -323,6 +423,41 @@ int main(int argc, char** argv) {
             if (!aow::load_map(bmp_path, bm, err)) {
                 check(false, "load Barondir Bay.HSM (" + err + ")");
             } else {
+                // A large building is stored on its home hex but covers every
+                // hex of its resource's TTerrainList (TMultiHexMO.UpdateMapFields):
+                // the size-4 city at (12,20) covers (12,20), (12,19), (13,19)
+                // and (11,19), while a size-1 city covers only its own hex.
+                const aow::MapLevel& lv = bm.levels[0];
+                auto city_at = [&](std::uint32_t x,
+                                   std::uint32_t y) -> const aow::MapHs* {
+                    for (const aow::MapHs& hs :
+                         lv.tiles[static_cast<std::size_t>(y) * lv.width + x].objects) {
+                        if (hs.class_id == aow::kCityClassId) return &hs;
+                    }
+                    return nullptr;
+                };
+                const aow::MapHs* big = city_at(12, 20);
+                const aow::MapResource* bigr =
+                    big == nullptr ? nullptr
+                                   : aow::find_map_resource(res, big->resource);
+                check(big != nullptr && bigr != nullptr &&
+                          aow::city_resource_size(*bigr) == 4,
+                      "Barondir Bay (12,20) is the size-4 capital");
+                if (big != nullptr && bigr != nullptr) {
+                    check(aow::object_covers_hex(*big, res, 12, 20, 12, 20) &&
+                              aow::object_covers_hex(*big, res, 12, 20, 12, 19) &&
+                              aow::object_covers_hex(*big, res, 12, 20, 13, 19) &&
+                              aow::object_covers_hex(*big, res, 12, 20, 11, 19),
+                          "the size-4 capital covers all four of its tiles");
+                    check(!aow::object_covers_hex(*big, res, 12, 20, 14, 20),
+                          "the size-4 capital does not cover a tile outside it");
+                }
+                const aow::MapHs* small = city_at(11, 12);
+                if (small != nullptr) {
+                    check(aow::object_covers_hex(*small, res, 11, 12, 11, 12) &&
+                              !aow::object_covers_hex(*small, res, 11, 12, 11, 13),
+                          "a size-1 city covers only its own hex");
+                }
                 const std::string bcsv =
                     (fs::temp_directory_path() / "aow_city_owner.csv").string();
                 aow::MapVizOptions bopt;
@@ -349,10 +484,14 @@ int main(int argc, char** argv) {
                     }
                     std::error_code ebc;
                     fs::remove(bcsv, ebc);
-                    check(owner_city.find("RACES\\RHUMAN.ILB,63,c_human.bmp") !=
+                    check(owner_city.find("CITY4.ILB,0,c_human.bmp") !=
                               std::string::npos,
-                          "Barondir Bay (12,20): a race-less Human-owned city "
-                          "draws the Human body under its Human flag");
+                          "Barondir Bay (12,20): a race-less Human-owned "
+                          "surface city draws the overworld Human body");
+                    check(owner_city.find("RACES\\RHUMAN.ILB,63,") ==
+                              std::string::npos,
+                          "Barondir Bay (12,20): no underground race body on "
+                          "the surface");
                     check(owner_city.find("c_random.bmp") == std::string::npos,
                           "Barondir Bay (12,20): no C_random placeholder");
                     check(unowned_city.find(
@@ -362,6 +501,69 @@ int main(int argc, char** argv) {
                 }
             }
         }
+        // --- The other direction: an underground city (level 1) must use the
+        // race library's underground block (slots 60..63), even when it is
+        // unwalled. Dwarf1.CSM's level 1 carries a walled Goblin city at
+        // (32,19) and an unwalled Goblin city at (79,22), both on level 1.
+        {
+            aow::Map dm;
+            const std::string dpath =
+                (fs::path(root) / "Scenario/Campaign/Dwarf1.CSM").string();
+            if (!aow::load_map(dpath, dm, err)) {
+                check(false, "load Dwarf1.CSM for the city level check (" + err +
+                                 ")");
+            } else if (dm.levels.size() < 2) {
+                check(false,
+                      "Dwarf1.CSM has a level 1 for the city level check");
+            } else {
+                const std::string dcsv =
+                    (fs::temp_directory_path() / "aow_city_level1.csv").string();
+                aow::MapVizOptions dopt;
+                dopt.level = 1;
+                dopt.max_dim = 200;
+                dopt.debug_csv = dcsv;
+                std::vector<std::uint8_t> drgba;
+                std::uint32_t dw = 0, dh = 0;
+                if (!aow::render_map_rgba(dm, res, root, dopt, drgba, dw, dh,
+                                          err)) {
+                    check(false, "render Dwarf1 L1 for the city level check (" +
+                                     err + ")");
+                } else {
+                    std::ifstream in(dcsv);
+                    std::string line, walled, unwalled;
+                    std::getline(in, line);  // header
+                    while (std::getline(in, line)) {
+                        if (line.rfind("city,32,19,", 0) == 0) {
+                            walled += line + "\n";
+                        }
+                        if (line.rfind("city,79,22,", 0) == 0) {
+                            unwalled += line + "\n";
+                        }
+                    }
+                    std::error_code edc;
+                    fs::remove(dcsv, edc);
+                    check(walled.find(
+                              "RACES\\RGOBLIN.ILB,63,c_goblin.bmp") !=
+                              std::string::npos,
+                          "Dwarf1 L1 (32,19): a walled underground city draws "
+                          "the underground body (slot 63)");
+                    check(walled.find("CITY4.ILB,45,u_wall.bmp") !=
+                              std::string::npos,
+                          "Dwarf1 L1 (32,19): an underground city draws U_wall "
+                          "layers");
+                    check(unwalled.find(
+                              "RACES\\RGOBLIN.ILB,60,c_goblin.bmp") !=
+                              std::string::npos,
+                          "Dwarf1 L1 (79,22): an unwalled underground city "
+                          "draws the underground body (slot 60)");
+                    check(unwalled.find("RACES\\RGOBLIN.ILB,50,") ==
+                              std::string::npos,
+                          "Dwarf1 L1 (79,22): no overworld body underground");
+                }
+            }
+        }
+
+
 
         // --- Phase 0/2: the diagnostic CSV must show no terrain hex drawing a
         // transition overlay (`t_*` / `zt_*`) instead of a base hexagon.

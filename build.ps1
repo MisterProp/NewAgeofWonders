@@ -9,8 +9,10 @@
     ./build.ps1 -Run       # build then run: aow_tools.exe ilb ..\Int\Icons.ILB
     ./build.ps1 -Test      # also build+run the PFS rule-fidelity tests
     ./build.ps1 -Viewer    # also install aow_view.exe + AoW.exe next to the game (..\)
+    ./build.ps1 -Recorder  # build only port/bin/GameRecorder.exe (GIF recorder)
+
 #>
-param([switch]$Run, [switch]$Test, [switch]$Viewer)
+param([switch]$Run, [switch]$Test, [switch]$Viewer, [switch]$Recorder)
 
 $ErrorActionPreference = 'Stop'
 $Here   = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -57,6 +59,33 @@ function Find-Compiler {
 
 $cxx = Find-Compiler
 Write-Host "compiler: $cxx"
+# GameRecorder (port/bin/GameRecorder.exe): a small Win32 GIF recorder for the
+# game window - pick the window and the frame rate, Start / Pause / Stop, then
+# save the .gif.  One source file, no port engine code and no extra runtime
+# DLLs (-static), so it also runs when copied next to the game.
+# Build only this tool with:  ./build.ps1 -Recorder
+function Build-GameRecorder {
+    $recout = Join-Path $BinDir 'GameRecorder.exe'
+    $recsrc = Join-Path $Src 'game\gamerecorder.cpp'
+    if ((Split-Path $cxx -Leaf) -like 'cl*') {
+        & $cxx /nologo /std:c++17 /EHsc /W4 $recsrc /Fe:$recout `
+            /link /SUBSYSTEM:WINDOWS comdlg32.lib gdi32.lib user32.lib `
+            shell32.lib ole32.lib
+    } else {
+        & $cxx -std=c++17 -Wall -Wextra -Wpedantic -O2 -mwindows -static `
+            $recsrc -o $recout -lcomdlg32 -lgdi32 -luser32 -lshell32 -lole32
+    }
+    if ($LASTEXITCODE -ne 0) { throw "GameRecorder build failed ($LASTEXITCODE)" }
+    Write-Host "built $recout"
+}
+
+# -Recorder builds only the GIF recorder and stops.
+if ($Recorder) {
+    Build-GameRecorder
+    exit 0
+}
+
+
 
 # The port's game executable carries the game's own icon.  Compile a Win32
 # resource from Age of Wonders.ico (the very icon the original AoW.exe embeds)
@@ -345,6 +374,9 @@ if (-not (Test-ExeHasIconResource $mout)) {
     throw "menu build produced an AoW.exe without the game icon ($mout) - was aow_res.o left out of the link?"
 }
 Write-Host "built $mout"
+
+# GIF recorder: port/bin/GameRecorder.exe (see Build-GameRecorder above).
+Build-GameRecorder
 
 if ($Viewer) {
     Copy-Item $vout (Join-Path $gameRoot 'aow_view.exe') -Force
@@ -1544,7 +1576,7 @@ if ($Test) {
     $stargs = ('--root "{0}" --start-map "Tutorial.hsm" --render "{1}" ' +
                '--structure-panel --structure-name Venice --structure-race Human ' +
                '--structure-race-index 0 --structure-gold 38 --structure-mana 2 ' +
-               '--structure-status Cheerful --crop 440 216 199 217 ' +
+               '--structure-status Cheerful --crop 437 214 199 217 ' +
                '--no-music --no-cursor') -f $mroot, $stpng
     $stproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
         -ArgumentList $stargs -Wait -PassThru -NoNewWindow `
@@ -1567,6 +1599,44 @@ if ($Test) {
     }
     Remove-Item $stpng, $stlog -Force
     Write-Host 'structure panel smoke test: ok'
+    # A large building is selectable on every tile its sprite covers, not only
+    # on its centre (docs/25_STRUCTURE_PANEL.md section 5). Barondir Bay's size-4
+    # capital is the single City.TCity at (12,20); its resource's TTerrainList
+    # entries 0/1/2/6 cover (12,20), (12,19), (13,19) and (11,19). Every covered
+    # tile must open the same city (game_struct_hx/hy stays its home hex), while
+    # a tile outside the footprint (14,20) must not.
+    $sttilepng = Join-Path $BinDir 'structure_tile.png'
+    $sttilelog = Join-Path $BinDir 'structure_tile.txt'
+    $sttileerr = Join-Path $BinDir 'structure_tile.err'
+    foreach ($tile in @('12 19', '13 19', '11 19')) {
+        Remove-Item $sttilepng, $sttilelog, $sttileerr -Force -ErrorAction SilentlyContinue
+        $sttileargs = ('--root "{0}" --start-map "Barondir Bay.HSM" ' +
+                       '--scen-human 0 --structure-panel --structure-tile {1} ' +
+                       '--render "{2}" --no-music --no-cursor') -f $mroot, $tile, $sttilepng
+        $sttileproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $sttileargs -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $sttilelog -RedirectStandardError $sttileerr
+        $sttileline = (Get-Content $sttilelog -Raw) + (Get-Content $sttileerr -Raw)
+        if ($sttileline -notmatch [regex]::Escape("structure_tile=$($tile -replace ' ', ',')")) {
+            throw "structure footprint regression at tile ${tile}: $sttileline"
+        }
+        if ($sttileline -notmatch [regex]::Escape('structure_panel=12,20 city=1')) {
+            throw "structure footprint opened the wrong object at tile ${tile}: $sttileline"
+        }
+    }
+    Remove-Item $sttilepng, $sttilelog, $sttileerr -Force -ErrorAction SilentlyContinue
+    $stoutargs = ('--root "{0}" --start-map "Barondir Bay.HSM" --scen-human 0 ' +
+                  '--structure-panel --structure-tile 14 20 --render "{1}" ' +
+                  '--no-music --no-cursor') -f $mroot, $sttilepng
+    $stoutproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $stoutargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $sttilelog -RedirectStandardError $sttileerr
+    $stoutline = (Get-Content $sttilelog -Raw) + (Get-Content $sttileerr -Raw)
+    if ($stoutline -notmatch 'no structure to open') {
+        throw "structure footprint selected the empty tile (14,20): $stoutline"
+    }
+    Remove-Item $sttilepng, $sttilelog, $sttileerr -Force -ErrorAction SilentlyContinue
+    Write-Host 'structure footprint smoke test: ok'
     # The selected structure's blink is `bin/Screen Selection.gif`, not a smooth
     # sine: 13 map frames, opaque except the two consecutive frames 6-7 (offsets
     # 5-6 after the click) where the body drops to 50%. Barondir Bay's first city

@@ -1,0 +1,372 @@
+
+void FUN_0043c43c(int param_1,undefined1 param_2)
+
+{
+  int *piVar1;
+  undefined1 *puVar2;
+  char cVar3;
+  int iVar4;
+  int *piVar5;
+  undefined4 uVar6;
+  uint uVar7;
+  undefined4 *in_FS_OFFSET;
+  uint *puVar8;
+  uint *puVar9;
+  undefined *puVar10;
+  undefined4 *puVar11;
+  undefined4 uStack_44;
+  undefined1 *puStack_40;
+  undefined1 *puStack_3c;
+  undefined4 local_30;
+  uint local_2c;
+  undefined1 local_28;
+  uint local_24;
+  uint local_20;
+  undefined1 local_1c;
+  undefined4 local_18;
+  undefined1 local_14;
+  uint local_10;
+  undefined4 local_c;
+  undefined1 local_5;
+  
+  puStack_3c = &stack0xfffffffc;
+  local_c = 0;
+  local_10 = 0;
+  local_24 = 0;
+  local_30 = 0;
+  puStack_40 = &LAB_0043d124;
+  uStack_44 = *in_FS_OFFSET;
+  *in_FS_OFFSET = &uStack_44;
+  puVar2 = &stack0xfffffffc;
+  local_5 = param_2;
+  if (*(char *)(param_1 + 0x2cc) != '\x01') {
+    FUN_0043bb14(param_1,1);
+    puVar2 = puStack_3c;
+  }
+  puStack_3c = puVar2;
+  *(undefined1 *)(param_1 + 0x2c0) = local_5;
+  (**(code **)(**(int **)(param_1 + 0x104) + 0x6c))(*(int **)(param_1 + 0x104),0);
+  (**(code **)(**(int **)(param_1 + 0x48) + 0x6c))(*(int **)(param_1 + 0x48),0);
+  (**(code **)(**(int **)(param_1 + 0x1fc) + 0x6c))(*(int **)(param_1 + 0x1fc),0);
+  AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1d8),0x15);
+  AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x1e8),&DAT_0043d13c);
+  AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x1f0),&DAT_0043d13c);
+  AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x270),0);
+  (**(code **)(**(int **)(param_1 + 300) + 0x6c))(*(int **)(param_1 + 300),0);
+  (**(code **)(**(int **)(param_1 + 0x150) + 0x6c))(*(int **)(param_1 + 0x150),0);
+  switch(*(undefined1 *)(param_1 + 0x2c0)) {
+  case 1:
+    (**(code **)(**(int **)(param_1 + 300) + 0x6c))(*(int **)(param_1 + 300),1);
+    System_LoadResString_02614E1B(AoWE_ProduceMerchandiseRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 300),local_c);
+    uVar7 = (**(code **)(**(int **)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x84))();
+    (**(code **)(**(int **)(param_1 + 0x150) + 0x6c))(*(int **)(param_1 + 0x150),uVar7 ^ 1);
+    System_LoadResString_02614E1B(AoWE_QueueRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x150),local_c);
+    System_LoadResString_02614E1B(AoWE_CityTradeRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    piVar5 = *(int **)(*(int *)(param_1 + 0x110) + 0x118);
+    (**(code **)(*piVar5 + 0x2c))(piVar5,local_c);
+    (**(code **)(**(int **)(param_1 + 0x104) + 0x6c))(*(int **)(param_1 + 0x104),1);
+    AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1d8),0x14);
+    System_LoadResString_02614E1B(AoWE_ProduceMerchandiseRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x108),local_c);
+    break;
+  case 2:
+    (**(code **)(**(int **)(param_1 + 300) + 0x6c))(*(int **)(param_1 + 300),1);
+    System_LoadResString_02614E1B(AoWE_UpgradeRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 300),local_c);
+    uVar7 = (**(code **)(**(int **)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x84))();
+    (**(code **)(**(int **)(param_1 + 0x150) + 0x6c))(*(int **)(param_1 + 0x150),uVar7 ^ 1);
+    System_LoadResString_02614E1B(AoWE_QueueRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x150),local_c);
+    System_LoadResString_02614E1B(AoWE_CityUpgradeRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    piVar5 = *(int **)(*(int *)(param_1 + 0x110) + 0x118);
+    (**(code **)(*piVar5 + 0x2c))(piVar5,local_c);
+    (**(code **)(**(int **)(param_1 + 0x104) + 0x6c))(*(int **)(param_1 + 0x104),1);
+    AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1d8),0x17);
+    uVar6 = City_TCity_UpgradeCost_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+    SysUtils_IntToStr_0F6FDFF6(uVar6,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x1e8),local_c);
+    uVar6 = City_TCity_UpgradeTime_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+    SysUtils_IntToStr_0F6FDFF6(uVar6,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x1f0),local_c);
+    System_LoadResString_02614E1B(AoWE_UpgradeRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x108),local_c);
+    puVar11 = &local_c;
+    AoWE_TranslateRStr_435799AA
+              (*(undefined4 *)
+                (AoWE_RaceNamesPluralRStr_B11890CE_exref +
+                *(char *)(*(int *)(param_1 + 0x2b0) + 0x45) * 4),&local_10);
+    local_20 = local_10;
+    local_1c = 0xb;
+    local_18 = 5;
+    local_14 = 0;
+    puVar9 = &local_20;
+    System_LoadResString_02614E1B(AoWE_XRelationPlusYRStr_04ECFCC5_exref,&local_c);
+    AoWE_TranslateRStr_435799AA(local_c,&local_24);
+    AoWE_Format_D8F48273(local_24,puVar9,1,puVar11);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x270),local_c);
+    break;
+  case 3:
+    (**(code **)(**(int **)(param_1 + 300) + 0x6c))(*(int **)(param_1 + 300),1);
+    System_LoadResString_02614E1B(AoWE_FortifyRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 300),local_c);
+    uVar7 = (**(code **)(**(int **)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x84))();
+    (**(code **)(**(int **)(param_1 + 0x150) + 0x6c))(*(int **)(param_1 + 0x150),uVar7 ^ 1);
+    System_LoadResString_02614E1B(AoWE_QueueRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x150),local_c);
+    System_LoadResString_02614E1B(AoWE_CityFortifyRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    piVar5 = *(int **)(*(int *)(param_1 + 0x110) + 0x118);
+    (**(code **)(*piVar5 + 0x2c))(piVar5,local_c);
+    (**(code **)(**(int **)(param_1 + 0x104) + 0x6c))(*(int **)(param_1 + 0x104),1);
+    if (*(char *)(*(int *)(param_1 + 0x2b0) + 0x4c) == '\0') {
+      AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1d8),0x15);
+    }
+    else {
+      AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1d8),0x16);
+    }
+    iVar4 = City_TCity_FortifyCost_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+    if (iVar4 < 1) {
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x1e8),&DAT_0043d13c);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x1f0),&DAT_0043d13c);
+    }
+    else {
+      uVar6 = City_TCity_FortifyCost_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+      SysUtils_IntToStr_0F6FDFF6(uVar6,&local_c);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x1e8),local_c);
+      uVar6 = City_TCity_FortifyTime_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+      SysUtils_IntToStr_0F6FDFF6(uVar6,&local_c);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x1f0),local_c);
+    }
+    System_LoadResString_02614E1B(AoWE_FortifyRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x108),local_c);
+    puVar11 = &local_c;
+    AoWE_TranslateRStr_435799AA
+              (*(undefined4 *)
+                (AoWE_RaceNamesRStr_B11890CE_exref + *(char *)(*(int *)(param_1 + 0x2b0) + 0x45) * 4
+                ),&local_10);
+    local_20 = local_10;
+    local_1c = 0xb;
+    local_18 = 5;
+    local_14 = 0;
+    puVar9 = &local_20;
+    System_LoadResString_02614E1B(AoWE_XRelationPlusYRStr_04ECFCC5_exref,&local_c);
+    AoWE_TranslateRStr_435799AA(local_c,&local_24);
+    AoWE_Format_D8F48273(local_24,puVar9,1,puVar11);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x270),local_c);
+    break;
+  case 4:
+    (**(code **)(**(int **)(param_1 + 0x1fc) + 0x6c))(*(int **)(param_1 + 0x1fc),1);
+    FUN_0043c008(param_1,0);
+    break;
+  case 5:
+    (**(code **)(**(int **)(param_1 + 300) + 0x6c))(*(int **)(param_1 + 300),1);
+    System_LoadResString_02614E1B(AoWE_LootRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 300),local_c);
+    System_LoadResString_02614E1B(AoWE_CityLootRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    piVar5 = *(int **)(*(int *)(param_1 + 0x110) + 0x118);
+    (**(code **)(*piVar5 + 0x2c))(piVar5,local_c);
+    (**(code **)(**(int **)(param_1 + 0x104) + 0x6c))(*(int **)(param_1 + 0x104),1);
+    AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1d8),0x19);
+    System_LoadResString_02614E1B(AoWE_LootRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x108),local_c);
+    puVar11 = &local_c;
+    AoWE_TranslateRStr_435799AA
+              (*(undefined4 *)
+                (AoWE_RaceNamesRStr_B11890CE_exref + *(char *)(*(int *)(param_1 + 0x2b0) + 0x45) * 4
+                ),&local_10);
+    local_20 = local_10;
+    local_1c = 0xb;
+    local_18 = 0xffffffe2;
+    local_14 = 0;
+    puVar9 = &local_20;
+    System_LoadResString_02614E1B(AoWE_XRelationMinusYRStr_04ECFCC5_exref,&local_c);
+    AoWE_TranslateRStr_435799AA(local_c,&local_24);
+    AoWE_Format_D8F48273(local_24,puVar9,1,puVar11);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x270),local_c);
+    break;
+  case 6:
+    (**(code **)(**(int **)(param_1 + 300) + 0x6c))(*(int **)(param_1 + 300),1);
+    System_LoadResString_02614E1B(AoWE_RazeRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    System__LStrCat_51F89FF7(&local_c,&DAT_0043d148);
+    AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 300),local_c);
+    System_LoadResString_02614E1B(AoWE_CityRazeRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    piVar5 = *(int **)(*(int *)(param_1 + 0x110) + 0x118);
+    (**(code **)(*piVar5 + 0x2c))(piVar5,local_c);
+    (**(code **)(**(int **)(param_1 + 0x104) + 0x6c))(*(int **)(param_1 + 0x104),1);
+    AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1d8),0x1a);
+    System_LoadResString_02614E1B(AoWE_RazeRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x108),local_c);
+    puVar11 = &local_c;
+    AoWE_TranslateRStr_435799AA
+              (*(undefined4 *)
+                (AoWE_RaceNamesRStr_B11890CE_exref + *(char *)(*(int *)(param_1 + 0x2b0) + 0x45) * 4
+                ),&local_10);
+    local_20 = local_10;
+    local_1c = 0xb;
+    local_18 = 0xffffffe2;
+    local_14 = 0;
+    puVar9 = &local_20;
+    System_LoadResString_02614E1B(AoWE_XRelationMinusYRStr_04ECFCC5_exref,&local_c);
+    AoWE_TranslateRStr_435799AA(local_c,&local_24);
+    AoWE_Format_D8F48273(local_24,puVar9,1,puVar11);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x270),local_c);
+    break;
+  case 7:
+  case 8:
+    piVar5 = *(int **)(*(int *)(param_1 + 0x2b0) + 0x50);
+    piVar5 = (int *)(**(code **)(*piVar5 + 0x9c))(piVar5,*(undefined4 *)(param_1 + 0x2c4));
+    (**(code **)(**(int **)(param_1 + 0x48) + 0x6c))(*(int **)(param_1 + 0x48),1);
+    cVar3 = (**(code **)(*piVar5 + 0xc0))();
+    SysUtils_IntToStr_0F6FDFF6((int)cVar3,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x68),local_c);
+    cVar3 = (**(code **)(*piVar5 + 0xc4))();
+    SysUtils_IntToStr_0F6FDFF6((int)cVar3,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x6c),local_c);
+    cVar3 = (**(code **)(*piVar5 + 0xcc))();
+    SysUtils_IntToStr_0F6FDFF6((int)cVar3,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x78),local_c);
+    cVar3 = (**(code **)(*piVar5 + 200))();
+    SysUtils_IntToStr_0F6FDFF6((int)cVar3,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x74),local_c);
+    cVar3 = (**(code **)(*piVar5 + 0xd0))();
+    SysUtils_IntToStr_0F6FDFF6((int)cVar3,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x7c),local_c);
+    cVar3 = (**(code **)(*piVar5 + 0xd4))();
+    SysUtils_IntToStr_0F6FDFF6((int)cVar3,&local_c);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x70),local_c);
+    uVar6 = (**(code **)(*piVar5 + 0xe8))();
+    uVar6 = FUN_004541b0(*(undefined4 *)PTR_DAT_0045a420,uVar6);
+    AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x58),uVar6);
+    puVar11 = &local_c;
+    uVar7 = (**(code **)(*piVar5 + 0xfc))();
+    AoWE_TranslateRStr_435799AA
+              (*(undefined4 *)(AoWE_TAlignmentRStr_08846F84_exref + (uVar7 & 0x7f) * 4),&local_10);
+    local_2c = local_10;
+    local_28 = 0xb;
+    puVar9 = &local_2c;
+    System_LoadResString_02614E1B(AoWE_AlignmentXRStr_04ECFCC5_exref,&local_c);
+    AoWE_TranslateRStr_435799AA(local_c,&local_24);
+    AoWE_Format_D8F48273(local_24,puVar9,0,puVar11);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x8c),local_c);
+    puVar9 = &local_10;
+    cVar3 = (**(code **)(*piVar5 + 0xa0))();
+    SysUtils_IntToStr_0F6FDFF6((int)cVar3,&local_24);
+    local_2c = local_24;
+    local_28 = 0xb;
+    puVar8 = &local_2c;
+    System_LoadResString_02614E1B(AoWE_LevelXRStr_04ECFCC5_exref,&local_10);
+    AoWE_TranslateRStr_435799AA(local_10,&local_30);
+    AoWE_Format_D8F48273(local_30,puVar8,0,puVar9);
+    puVar10 = &DAT_0043d154;
+    puVar9 = &local_24;
+    uVar7 = local_10;
+    local_2c = (**(code **)(*piVar5 + 0x9c))();
+    local_2c = local_2c & 0xff;
+    local_28 = 0;
+    puVar8 = &local_2c;
+    System_LoadResString_02614E1B(AoWE_UpkeepXRStr_04ECFCC5_exref,&local_24);
+    AoWE_TranslateRStr_435799AA(local_24,&local_30);
+    AoWE_Format_D8F48273(local_30,puVar8,0,puVar9,puVar10,uVar7);
+    uVar7 = local_24;
+    System__LStrCatN_51F89FF7(&local_c,3);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x90),local_c);
+    if (*(char *)(*(int *)AoWE_AoWEngine_7E705837_exref + 0x6c) != '\0') {
+      uVar6 = AoWE_TUnitResource_UnitResourceIndex_23EDC2EF(piVar5[0x10]);
+      uVar6 = AoWE_GetUnitIndexAIPriority_808F9568
+                        (uVar6,CONCAT31((int3)((uint)*(int *)(param_1 + 0x2b0) >> 8),
+                                        *(undefined1 *)(*(int *)(param_1 + 0x2b0) + 0x30)),0,uVar7);
+      SysUtils_IntToStr_0F6FDFF6(uVar6,&local_10);
+      System__LStrCat3_51F89FF7(&local_c,"AI Prio:",local_10);
+      (**(code **)(**(int **)AoWE_AoWHSMap_6B957A58_exref + 0x110))
+                (*(int **)AoWE_AoWHSMap_6B957A58_exref,local_c);
+    }
+    (**(code **)(**(int **)(*(int *)(param_1 + 0x4c) + 0x114) + 0x40))();
+    AoWE_TAbilityOwner_ListAbilities_23EDC2EF
+              (piVar5,*(undefined4 *)(*(int *)(param_1 + 0x4c) + 0x114));
+    if (*(char *)(param_1 + 0x2c0) == '\b') {
+      (**(code **)(**(int **)(param_1 + 300) + 0x6c))(*(int **)(param_1 + 300),1);
+      System_LoadResString_02614E1B(AoWE_ProduceRStr_04ECFCC5_exref,&local_10);
+      AoWE_TranslateRStr_435799AA(local_10,&local_c);
+      AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 300),local_c);
+      uVar7 = (**(code **)(**(int **)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x84))();
+      (**(code **)(**(int **)(param_1 + 0x150) + 0x6c))(*(int **)(param_1 + 0x150),uVar7 ^ 1);
+      System_LoadResString_02614E1B(AoWE_QueueRStr_04ECFCC5_exref,&local_10);
+      AoWE_TranslateRStr_435799AA(local_10,&local_c);
+      AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x150),local_c);
+      (**(code **)(*piVar5 + 0xf8))(piVar5,&local_10,*piVar5,&local_c);
+      local_2c = local_10;
+      local_28 = 0xb;
+      System_LoadResString_02614E1B(AoWE_ProduceXRStr_8276FCC3_exref,&local_c);
+      AoWE_TranslateRStr_435799AA(local_c,&local_24);
+      AoWE_Format_D8F48273(local_24,&local_2c,0);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0xa8),local_c);
+      piVar1 = *(int **)(*(int *)(param_1 + 0x2b0) + 0x50);
+      uVar6 = (**(code **)(*piVar1 + 0xc4))(piVar1,*(undefined4 *)(param_1 + 0x2c4));
+      SysUtils_IntToStr_0F6FDFF6(uVar6,&local_c);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0xa4),local_c);
+      piVar1 = *(int **)(*(int *)(param_1 + 0x2b0) + 0x50);
+      uVar6 = (**(code **)(*piVar1 + 0xd4))(piVar1,*(undefined4 *)(param_1 + 0x2c4));
+      SysUtils_IntToStr_0F6FDFF6(uVar6,&local_c);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0xb0),local_c);
+    }
+    else {
+      (**(code **)(**(int **)(param_1 + 300) + 0x6c))(*(int **)(param_1 + 300),1);
+      System_LoadResString_02614E1B(AoWE_InstallRStr_04ECFCC5_exref,&local_10);
+      AoWE_TranslateRStr_435799AA(local_10,&local_c);
+      AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 300),local_c);
+      uVar7 = (**(code **)(**(int **)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x84))();
+      (**(code **)(**(int **)(param_1 + 0x150) + 0x6c))(*(int **)(param_1 + 0x150),uVar7 ^ 1);
+      System_LoadResString_02614E1B(AoWE_QueueRStr_04ECFCC5_exref,&local_10);
+      AoWE_TranslateRStr_435799AA(local_10,&local_c);
+      AoWButton_TAOWBaseButton_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x150),local_c);
+      (**(code **)(*piVar5 + 0xf8))(piVar5,&local_10,*piVar5,&local_c);
+      local_2c = local_10;
+      local_28 = 0xb;
+      System_LoadResString_02614E1B(AoWE_InstallXRStr_8276FCC3_exref,&local_c);
+      AoWE_TranslateRStr_435799AA(local_c,&local_24);
+      AoWE_Format_D8F48273(local_24,&local_2c,0);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0xa8),local_c);
+      piVar1 = *(int **)(*(int *)(param_1 + 0x2b0) + 0x50);
+      uVar6 = (**(code **)(*piVar1 + 0xe4))(piVar1,*(undefined4 *)(param_1 + 0x2c4));
+      SysUtils_IntToStr_0F6FDFF6(uVar6,&local_c);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0xa4),local_c);
+      piVar1 = *(int **)(*(int *)(param_1 + 0x2b0) + 0x50);
+      uVar6 = (**(code **)(*piVar1 + 0xec))(piVar1,*(undefined4 *)(param_1 + 0x2c4));
+      SysUtils_IntToStr_0F6FDFF6(uVar6,&local_c);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0xb0),local_c);
+    }
+    (**(code **)(*piVar5 + 0x2c))();
+  }
+  (**(code **)(**(int **)(param_1 + 0x2a8) + 0x6c))(*(int **)(param_1 + 0x2a8),0);
+  (**(code **)(**(int **)(param_1 + 0x2a4) + 0x6c))(*(int **)(param_1 + 0x2a4),0);
+  puVar2 = puStack_3c;
+  *in_FS_OFFSET = uStack_44;
+  puStack_3c = &LAB_0043d12b;
+  puStack_40 = (undefined1 *)0x43d10e;
+  System__LStrClr_40929B27(&local_30,uStack_44,puVar2);
+  puStack_40 = (undefined1 *)0x43d116;
+  System__LStrClr_40929B27(&local_24);
+  puStack_40 = (undefined1 *)0x43d123;
+  System__LStrArrayClr_51F89FF7(&local_10,2);
+  return;
+}
+

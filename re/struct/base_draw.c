@@ -1,0 +1,208 @@
+
+void AoWBaseWin_TAOWBaseWindow_DrawSurface_23EDC2EF(int *param_1,int *param_2)
+
+{
+  char cVar1;
+  undefined1 uVar2;
+  int iVar3;
+  int *piVar4;
+  int iVar5;
+  undefined4 uVar6;
+  int iVar7;
+  int *in_FS_OFFSET;
+  int *piStack_84;
+  undefined1 *puStack_80;
+  undefined1 *puStack_7c;
+  undefined1 local_6c [16];
+  undefined1 local_5c [60];
+  int local_20;
+  bool local_19;
+  int local_18;
+  int local_14;
+  int local_10;
+  int *local_c;
+  int *local_8;
+  
+                    /* 0x5a18  113  AoWBaseWin.TAOWBaseWindow.DrawSurface@23EDC2EF */
+  if (*(char *)((int)param_1 + 0x69) == '\x01') {
+    local_14 = param_1[0x20];
+    local_18 = param_1[0x21];
+    local_c = param_2;
+    local_8 = param_1;
+    if (*(char *)((int)param_1 + 0x18d) == '\0') {
+      puStack_7c = (undefined1 *)0x405abc;
+      iVar3 = (**(code **)(*param_2 + 0x2c))(param_2,local_5c);
+    }
+    else {
+      puStack_7c = (undefined1 *)0x405a63;
+      cVar1 = AoWWinControl_TAOWWindowControl_VerifyBackSurface_23EDC2EF(param_1,param_2);
+      if ((cVar1 == '\0') && (*(char *)((int)local_8 + 0xd2) != '\0')) {
+        uVar2 = 1;
+      }
+      else {
+        uVar2 = 0;
+      }
+      *(undefined1 *)((int)local_8 + 0xd2) = uVar2;
+      local_8[0x20] = 0;
+      local_8[0x21] = 0;
+      puStack_7c = (undefined1 *)0x405aa9;
+      iVar3 = (**(code **)(*(int *)local_8[0x5c] + 0x2c))((int *)local_8[0x5c],local_5c);
+    }
+    local_19 = iVar3 == 0;
+    if (local_19) {
+      if (*(char *)((int)local_8 + 0xd2) == '\0') {
+        *(undefined1 *)(local_8 + 99) = 0;
+      }
+      if (*(char *)((int)local_8 + 0xd2) == '\0') {
+        puStack_7c = (undefined1 *)0x405af9;
+        (**(code **)(*local_8 + 100))(local_8,local_5c);
+      }
+      if (*(char *)((int)local_8 + 0x18d) == '\0') {
+        if (-1 < *(int *)(local_8[0x65] + 8) + -1) {
+          local_10 = 0;
+          local_20 = *(int *)(local_8[0x65] + 8);
+          do {
+            puStack_7c = (undefined1 *)0x405ec1;
+            piVar4 = (int *)Classes_TList_Get_23EDC2EF(local_8[0x65],local_10);
+            if ((*(char *)((int)local_8 + 0xd2) == '\0') || (*(char *)((int)piVar4 + 0xd2) == '\0'))
+            {
+              puStack_7c = (undefined1 *)0x405ee2;
+              (**(code **)(*piVar4 + 100))(piVar4,local_5c);
+              *(undefined1 *)((int)piVar4 + 0xd2) = 1;
+            }
+            local_10 = local_10 + 1;
+            local_20 = local_20 + -1;
+          } while (local_20 != 0);
+        }
+        if (*(short *)((int)local_8 + 0x32) != 0) {
+          puStack_7c = (undefined1 *)0x405f0a;
+          (*(code *)local_8[0xc])(local_8[0xd],local_8,local_5c);
+        }
+        if (local_19 != false) {
+          puStack_7c = (undefined1 *)0x405f18;
+          (**(code **)(*local_c + 0x30))();
+        }
+        if (*(short *)((int)local_8 + 0xfe) != 0) {
+          puStack_7c = (undefined1 *)local_8[0x20];
+          puStack_80 = (undefined1 *)local_8[0x21];
+          piStack_84 = (int *)0x405f4e;
+          (*(code *)local_8[0x3f])(local_8[0x40],local_8,local_c);
+        }
+      }
+      else {
+        if (-1 < *(int *)(local_8[0x65] + 8) + -1) {
+          local_10 = 0;
+          local_20 = *(int *)(local_8[0x65] + 8);
+          do {
+            puStack_7c = (undefined1 *)0x405b3a;
+            piVar4 = (int *)Classes_TList_Get_23EDC2EF(local_8[0x65],local_10);
+            if ((*(char *)((int)local_8 + 0xd2) == '\0') || (*(char *)((int)piVar4 + 0xd2) == '\0'))
+            {
+              puStack_7c = (undefined1 *)0x405b5f;
+              (**(code **)(*piVar4 + 100))(piVar4,local_5c);
+              puStack_7c = (undefined1 *)0x405b6d;
+              (**(code **)(*(int *)local_8[0x5c] + 0x30))();
+              if ((char)local_8[99] == '\x01') {
+                puStack_7c = (undefined1 *)(piVar4[0x21] + piVar4[0x1f]);
+                puStack_80 = local_6c;
+                piStack_84 = (int *)0x405ba1;
+                Classes_Rect_9923E97E(piVar4[0x20],piVar4[0x21],piVar4[0x20] + piVar4[0x1e]);
+                if (*(char *)((int)local_8 + 0x155) == '\0') {
+                  puStack_7c = (undefined1 *)(piVar4[0x20] + local_14);
+                  puStack_80 = (undefined1 *)(piVar4[0x21] + local_18);
+                  piStack_84 = (int *)0x405bd5;
+                  (**(code **)(*(int *)local_8[0x5c] + 0x18))((int *)local_8[0x5c],local_c,local_6c)
+                  ;
+                }
+                else {
+                  puStack_7c = (undefined1 *)(piVar4[0x20] + local_14);
+                  puStack_80 = (undefined1 *)(piVar4[0x21] + local_18);
+                  piStack_84 = (int *)0x405bf3;
+                  uVar6 = (**(code **)(*local_c + 0x10))();
+                  piStack_84 = (int *)0x405c05;
+                  piStack_84 = (int *)GFXE_Color2PixelInfo_950BAA1A(local_8[0x5a],uVar6,0);
+                  (**(code **)(*(int *)local_8[0x5c] + 0x20))((int *)local_8[0x5c],local_c,local_6c)
+                  ;
+                }
+              }
+              if (local_19 != false) {
+                puStack_7c = (undefined1 *)(piVar4[0x20] + local_14 + piVar4[0x1e]);
+                puStack_80 = (undefined1 *)(piVar4[0x21] + local_18 + piVar4[0x1f]);
+                piStack_84 = local_c;
+                AOWWinManager_TAOWWinManager_RedrawRect_23EDC2EF
+                          (local_8[0x69],piVar4[0x20] + local_14,piVar4[0x21] + local_18);
+                *(undefined1 *)((int)piVar4 + 0xd3) = *(undefined1 *)((int)piVar4 + 0xd2);
+                *(undefined1 *)((int)piVar4 + 0xd2) = 1;
+                iVar7 = local_10 + 1;
+                iVar3 = *(int *)(local_8[0x65] + 8) + -1;
+                if (iVar7 <= iVar3) {
+                  iVar3 = (iVar3 - iVar7) + 1;
+                  do {
+                    puStack_7c = (undefined1 *)0x405c94;
+                    iVar5 = Classes_TList_Get_23EDC2EF(local_8[0x65],iVar7);
+                    if (((*(char *)(iVar5 + 0xd2) == '\x01') &&
+                        (((piVar4[0x20] + -1 < *(int *)(iVar5 + 0x80) &&
+                          (*(int *)(iVar5 + 0x80) < piVar4[0x20] + piVar4[0x1e])) ||
+                         ((*(int *)(iVar5 + 0x80) + -1 < piVar4[0x20] &&
+                          (piVar4[0x20] < *(int *)(iVar5 + 0x80) + *(int *)(iVar5 + 0x78))))))) &&
+                       (((piVar4[0x21] + -1 < *(int *)(iVar5 + 0x84) &&
+                         (*(int *)(iVar5 + 0x84) < piVar4[0x21] + piVar4[0x1f])) ||
+                        ((*(int *)(iVar5 + 0x84) + -1 < piVar4[0x21] &&
+                         (piVar4[0x21] < *(int *)(iVar5 + 0x84) + *(int *)(iVar5 + 0x7c))))))) {
+                      *(undefined1 *)(iVar5 + 0xd2) = 0;
+                    }
+                    iVar7 = iVar7 + 1;
+                    iVar3 = iVar3 + -1;
+                  } while (iVar3 != 0);
+                }
+              }
+              puStack_7c = (undefined1 *)0x405d49;
+              iVar3 = (**(code **)(*(int *)local_8[0x5c] + 0x2c))((int *)local_8[0x5c],local_5c);
+              local_19 = iVar3 == 0;
+            }
+            local_10 = local_10 + 1;
+            local_20 = local_20 + -1;
+          } while (local_20 != 0);
+        }
+        if (local_19 != false) {
+          puStack_7c = (undefined1 *)0x405d6f;
+          (**(code **)(*(int *)local_8[0x5c] + 0x30))();
+        }
+        local_8[0x20] = local_14;
+        local_8[0x21] = local_18;
+        puStack_7c = (undefined1 *)local_8[0x1f];
+        puStack_80 = local_6c;
+        piStack_84 = (int *)0x405da1;
+        Classes_Rect_9923E97E(0,0,local_8[0x1e]);
+        if ((char)local_8[99] == '\0') {
+          puStack_80 = &LAB_00405e85;
+          piStack_84 = (int *)*in_FS_OFFSET;
+          *in_FS_OFFSET = (int)&piStack_84;
+          if (*(char *)((int)local_8 + 0x155) == '\0') {
+            iVar3 = local_8[0x21];
+            puStack_7c = &stack0xfffffffc;
+            (**(code **)(*(int *)local_8[0x5c] + 0x18))
+                      ((int *)local_8[0x5c],local_c,local_6c,iVar3,local_8[0x20]);
+          }
+          else {
+            iVar7 = local_8[0x20];
+            iVar3 = local_8[0x21];
+            puStack_7c = &stack0xfffffffc;
+            uVar6 = (**(code **)(*local_c + 0x10))();
+            uVar6 = GFXE_Color2PixelInfo_950BAA1A(local_8[0x5a],uVar6,0,iVar3,iVar7);
+            (**(code **)(*(int *)local_8[0x5c] + 0x20))((int *)local_8[0x5c],local_c,local_6c,uVar6)
+            ;
+          }
+          *(undefined1 *)(local_8 + 99) = 1;
+          if (*(short *)((int)local_8 + 0xfe) != 0) {
+            (*(code *)local_8[0x3f])(local_8[0x40],local_8,local_c,local_8[0x21],local_8[0x20]);
+          }
+          *in_FS_OFFSET = iVar3;
+        }
+      }
+      *(undefined1 *)((int)local_8 + 0xd2) = 1;
+    }
+  }
+  return;
+}
+

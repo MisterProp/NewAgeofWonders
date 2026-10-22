@@ -1,0 +1,11 @@
+=== TAOWTurnButton
+  AOWTools.dpl          13 hits  size=79360
+  AoW.exe.orig           3 hits  size=2127872
+  AoWCompat.exe          3 hits  size=2127872
+=== AoWTurnButton
+=== TBNextButtonClick
+  AoW.exe.orig           2 hits  size=2127872
+  AoWCompat.exe          2 hits  size=2127872
+=== TurnButtonChange
+  AoW.exe.orig           4 hits  size=2127872
+  AoWCompat.exe          4 hits  size=2127872

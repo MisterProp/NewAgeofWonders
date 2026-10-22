@@ -1,0 +1,24 @@
+
+void AoWLabel_TAOWLabel_SetSize_23EDC2EF(int param_1)
+
+{
+  undefined4 uVar1;
+  
+                    /* 0x11edc  283  AoWLabel.TAOWLabel.SetSize@23EDC2EF */
+  *(undefined1 *)(param_1 + 0x2c) = 0;
+  if (*(int *)(param_1 + 0x88) != 0) {
+    uVar1 = ImageLib_TImageLibraryFont_GetTextWidth_23EDC2EF
+                      (*(int *)(param_1 + 0x88),*(undefined4 *)(param_1 + 0x8c));
+    *(undefined4 *)(param_1 + 0x78) = uVar1;
+    uVar1 = ImageLib_TImageLibraryFont_GetTextHeight_23EDC2EF
+                      (*(undefined4 *)(param_1 + 0x88),*(undefined4 *)(param_1 + 0x8c));
+    *(undefined4 *)(param_1 + 0x7c) = uVar1;
+    *(undefined1 *)(param_1 + 0x2c) = 1;
+    *(undefined1 *)(param_1 + 0xd2) = 0;
+    return;
+  }
+  *(undefined4 *)(param_1 + 0x78) = 0;
+  *(undefined4 *)(param_1 + 0x7c) = 0;
+  return;
+}
+

@@ -279,7 +279,11 @@ gaps.
   `City.TCity.UpdateImages@557ac494` fills them:
   * the body is **race-specific**: `TRaceResource.GetCityImage@55759ebc` returns
     the race library's slot `terrain == 5 ? size + 0x3b : terrain*10 + size + 0x45`,
-    else the fallback `size + (wallFlag == 0 ? 0x32 : 0x3c) - 1`, else nothing;
+    else the fallback `size + (level == 0 ? 0x32 : 0x3c) - 1`, else nothing.
+    `level` is the **map field's level byte** (`TMapField+0x12` - the high byte
+    `TMapField.GetXYL` packs out of `+0x10/+0x11/+0x12`), not the city's wall
+    type: level 0 selects the race's overworld block (50..53), the underground
+    level its underground block (60..63);
   * the walls come from the city *resource's own* library (`CityN.ILB`), block
     offset `T + wallType*2`; `T` is 0 (surface), `0x14` (snow) or `0x28`
     (wasteland/earth/rock/lava/upper);
@@ -317,13 +321,15 @@ gaps.
   Tutorial L0 integration: the walled Goblin town at (32,21) and the Halfling city
   at (16,25) both draw a `RACES\R*.ILB` body and each sits on a `Pad` object) plus
   11 for the race-less/owner rule (`city_body_race`'s eight cases and a `Barondir
-  Bay.HSM` L0 render: the walled Human-owned town at (12,20) draws
-  `RACES\RHUMAN.ILB` slot 63 `c_human.bmp` and no `c_random.bmp`, the unowned
-  race-less village at (29,20) still draws `CITY1.ILB` slot 1 `c_random.bmp`).
-  **Still open `[TODO(RE)]`:** the exact `TMapField+0x12` "wallFlag" byte (the port
-  uses the city's wall type), the pad frame (always the grass mound here; the
-  engine picks it through the sequence) and the razed / under-construction
-  overlays (`TCityOverlayHS.Show`).
+  Bay.HSM` L0 render: the walled Human-owned town at (12,20) is on the surface,
+  the Human library ships only the underground block, so it draws `CITY4.ILB`
+  slot 0 `c_human.bmp` and no `c_random.bmp`, while the unowned race-less
+  village at (29,20) still draws `CITY1.ILB` slot 1 `c_random.bmp`). A further
+  integration check pins both level blocks: Tutorial L0's walled Goblin town
+  draws `RGOBLIN` slot 50 (overworld) and Dwarf1.CSM L1's unwalled Goblin city
+  draws slot 60 (underground). **Still open `[TODO(RE)]`:** the pad frame
+  (always the grass mound here; the engine picks it through the sequence) and
+  the razed / under-construction overlays (`TCityOverlayHS.Show`).
 * **Phase 4f — a structure's body is the effect's *chain*, not the list's first
   name (done, RE; this is why PORTS were missing).** A map-object resource's
   image-sequence list (rw tags 9/10) may **open with an additive-effect
@@ -521,8 +527,17 @@ transition overlay.
   are composited with a blend mode in the engine; a plain opaque blit left a
   dark square. `is_transient_effect()` skips them.
 
-**Tests:** Tutorial level 0 resolves 319 of 362 objects (was ~120); the golden
-render (`re/golden/Tutorial_L0.png`) now shows trees/rocks/crops.
+* **Crops are not slot-0 objects.** `Crops.TCrop` asks its library for the
+  hex's terrain id (`TCrop.GetTerrainTypeImage`, +0x1e for an Undead owner), and
+  the inline `Crops.bmp` has no slot 0 at all - so the generic slot-0 object path
+  drew nothing. The complete 1:1 recovery (sparse ids, anchor, owner race) is
+  `docs/24_CROPS.md`; `tools/crops_bench.py` matches the original at 0.97/255
+  over a pure crop-field patch.
+
+**Tests:** Tutorial level 0 resolves 319 of 362 objects (was ~120); a fresh
+golden render (`re/golden/Tutorial_L0.png`) shows trees/rocks/crops (the crop
+layer was fixed after the golden was first written - regenerate it to see the
+fields).
 **Acceptance:** the map is no longer bare, mountains match the terrain type,
 and no opaque effect squares remain. Remaining: `Rd_gr.BMP` (roads, 39) has no
 library on disk.

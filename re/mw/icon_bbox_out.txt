@@ -1,0 +1,12 @@
+well0 ref bright bbox (30, 282, 137, 312)
+well0 ref mean brightness 47.6
+well0 cur bright bbox (30, 282, 137, 312)
+well0 cur mean brightness 47.5
+well1 ref bright bbox (147, 286, 239, 308)
+well1 ref mean brightness 54.8
+well1 cur bright bbox (173, 290, 239, 312)
+well1 cur mean brightness 59.6
+well2 ref bright bbox (254, 282, 349, 312)
+well2 ref mean brightness 50.9
+well2 cur bright bbox (278, 282, 349, 312)
+well2 cur mean brightness 54.8

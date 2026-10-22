@@ -1,0 +1,2 @@
+lines=7457 hits=1
+AoWE.TAoWHSMap.SelectNextArmy@23EDC2EF at 55775fa0

@@ -1,0 +1,68 @@
+== Images/City1.ILB n=16 count=17
+C_Razed.BMP, C_human.BMP, C_random.BMP, O_wall.BMP, U_wall.BMP
+== Images/City2.ILB n=16 count=17
+C_Razed.BMP, C_human.BMP, C_random.BMP, O_wall.BMP, U_wall.BMP
+== Images/City3.ILB n=16 count=17
+C_Razed.BMP, C_human.BMP, C_random.BMP, O_wall.BMP, U_wall.BMP
+== Images/City4.ILB n=16 count=17
+C_Razed.BMP, C_human.BMP, C_random.BMP, O_wall.BMP, U_wall.BMP
+== Images/Faces/H_Faces.ILB n=66 count=16
+h_Elf_frost.BMP, h_Elf_ranger.BMP, h_Elf_warrior.BMP, h_Elff_femranger.BMP, h_azr_fempriest.BMP, h_azr_gladiator.BMP, h_azr_warlord.BMP, h_azr_weirdpriest.BMP, h_delf_rogue.BMP, h_delf_sorceress.BMP, h_delf_warlord.BMP, h_delf_wizard.BMP, h_dwrf_beserker.BMP, h_dwrf_femalepriest.BMP, h_dwrf_rogue.BMP, h_dwrf_warlord.BMP, h_frosf_wiz.BMP, h_frost_priest.BMP, h_frost_warrior.BMP, h_frost_wolf.BMP, h_gob_leper.BMP, h_gob_preacher.BMP, h_gob_warrior.BMP, h_gobf_shaman.BMP, h_high_gen.BMP, h_high_priest.BMP, h_high_warlord.BMP, h_highf_serene.BMP, h_hlfg_Rogue.BMP, h_hlfg_priest.BMP, h_hlfg_wizard.BMP, h_hlfgf_priestess.BMP, h_humn_assas.BMP, h_humn_darkwar.BMP, h_humn_dragonsl.BMP, h_humn_knight.BMP, h_humn_noble.BMP, h_humn_rogue.BMP, h_humn_roman.BMP, h_humn_samurai.BMP, h_humn_warlord.BMP, h_humnf_dark.BMP, h_humnf_priestess.BMP, h_humnf_warrior.BMP, h_lzrd_fat.BMP, h_lzrd_fire.BMP, h_lzrd_shaman.BMP, h_lzrd_warlord.BMP, h_main_elwyn.BMP, h_main_gabriel.BMP, h_main_inioch.BMP, h_main_julia.BMP, h_main_meandor.BMP, h_main_undelwyn.BMP, h_misc01.BMP, h_misc02.BMP, h_misc03.BMP, h_orc_black.BMP, h_orc_shaman.BMP, h_orc_warlord.BMP, h_orcf_assass.BMP, h_und_termin.BMP, h_und_warrior.BMP, h_und_wiz.BMP, h_undf1.BMP
+== Images/Faces/L_Faces.ILB n=26 count=16
+CultDefault.BMP, KeepersDefault.BMP, L-azrac01.BMP, L-darkelf01.BMP, L-darkelf02.BMP, L-dwarf01.BMP, L-dwarf02.BMP, L-elf01.BMP, L-elf02.BMP, L-frostling01.BMP, L-goblin01.BMP, L-goblin02.BMP, L-halfling01.BMP, L-halfling02.BMP, L-highman01.BMP, L-human01.BMP, L-human02.BMP, L-human03.BMP, L-human04.BMP, L-orc01.BMP, L-orc02.BMP, L-undead01.BMP, L-undead02.BMP, L_lizardman01.BMP, MelenisDeath.BMP, MelenisLife.BMP
+== Images/Faces/R_Faces.ILB n=12 count=16
+r_azrac.BMP, r_delf.BMP, r_dwarf.BMP, r_elf.BMP, r_frost.BMP, r_goblin.BMP, r_halfl.BMP, r_highm.BMP, r_human.BMP, r_lizrd.BMP, r_orc.BMP, r_undead.BMP
+== Images/Faces/UNITS.ILB n=91 count=16
+U_AirGalley.BMP, U_Airsh.BMP, U_Astra.BMP, U_BRam.BMP, U_Ballis.BMP, U_Basilisk.BMP, U_Bat.BMP, U_Behold.BMP, U_Beserk.BMP, U_Boar.BMP, U_BoneHorr.BMP, U_BoneRam.BMP, U_Buildr.BMP, U_Can.BMP, U_Catapu.BMP, U_Cent.BMP, U_Demon.BMP, U_DgnBlk.BMP, U_DgnFrt.BMP, U_DgnGld.BMP, U_DgnGrn.BMP, U_DgnSilv.BMP, U_Djinn.BMP, U_Drill.BMP, U_Druid.BMP, U_EAGLE.BMP, U_EScout.BMP, U_EagleR.BMP, U_ElemAr.BMP, U_ElemEr.BMP, U_ElemFr.BMP, U_ElemWa.BMP, U_Eleph.BMP, U_Execut.BMP, U_FBorn.BMP, U_FSprte.BMP, U_FWolfR.BMP, U_FWorm.BMP, U_Fairy2.BMP, U_FlameT.BMP, U_GWolfR.BMP, U_Giant.BMP, U_Hound.BMP, U_Incarn.BMP, U_Kobold.BMP, U_LadyOP.BMP, U_Lepre.BMP, U_Lurker.BMP, U_MPup.BMP, U_Merm.BMP, U_Mummy.BMP, U_NSprt2.BMP, U_Necro.BMP, U_NorthernGlobe.BMP, U_OWarl.BMP, U_Pingu.BMP, U_RDrgn.BMP, U_Reaper.BMP, U_SDrgn.BMP, U_SGal.BMP, U_SGly.BMP, U_SQn.BMP, U_SSerp.BMP, U_STrans.BMP, U_Salmdr.BMP, U_Satyr.BMP, U_Scorp.BMP, U_Shadow.BMP, U_Skullt.BMP, U_Slug.BMP, U_Spider.BMP, U_Syron.BMP, U_TBallis.BMP, U_TCata.BMP, U_Titan.BMP, U_Troll.BMP, U_Unicrn.BMP, U_Valk.BMP, U_WWolf.BMP, U_Wolf.BMP, U_Wraith.BMP, U_Wyv.BMP, U_WyvR.BMP, U_Yaka.BMP, U_Yeti.BMP, U_frog.BMP, u_HCharl.BMP, u_fqueen.BMP, u_gbomb.BMP, u_karagh.BMP, u_nymph8.BMP
+== Images/TCombat/City/c_Gen1.ILB n=10 count=17
+zc_Gen1.BMP
+== Images/TCombat/City/c_Swall1.ILB n=41 count=17
+,b, c_SWall1b.BMP, c_SWall1c.BMP, c_SWall1d.BMP, zc_SWall2.BMP
+== Images/TCombat/City/c_Swall2.ILB n=41 count=17
+,b, c_SWall2a.BMP, c_SWall2b.BMP, c_SWall2c.BMP, c_SWall2d.BMP
+== Images/TCombat/City/c_Swall3.ILB n=41 count=17
+,b, c_SWall3a.BMP, c_SWall3b.BMP, c_SWall3c.BMP, c_SWall3d.BMP
+== Images/TCombat/City/c_Wwall1.ILB n=40 count=17
+c_WWall1b.BMP, c_WWall1c.BMP, c_WWall1d.BMP, zc_WWall1.BMP
+== Images/TCombat/City/c_Wwall2.ILB n=40 count=17
+c_WWall2a.BMP, c_WWall2b.BMP, c_WWall2c.BMP, c_WWall2d.BMP
+== Images/TCombat/City/c_Wwall3.ILB n=40 count=17
+c_WWall3a.BMP, c_WWall3b.BMP, c_WWall3c.BMP, c_WWall3d.BMP
+== Images/TCombat/City/c_tile.ILB n=21 count=17
+zc_rubble.BMP, zc_tile.BMP
+== Images/TCombat/City/cgr_wpad.ILB n=24 count=17
+cgr_wpad.BMP, csn_wpad.BMP, cwl_wpad.BMP
+== Images/TCombat/City/zc_Azr.ILB n=20 count=17
+zc_Azr.BMP
+== Images/TCombat/City/zc_DElf.ILB n=8 count=17
+zc_DElf.BMP
+== Images/TCombat/City/zc_Dwrf.ILB n=8 count=17
+zc_Dwarf.BMP
+== Images/TCombat/City/zc_Elf.ILB n=8 count=17
+zc_Elf.BMP
+== Images/TCombat/City/zc_Evil.ILB n=23 count=17
+zc_Evil.BMP
+== Images/TCombat/City/zc_Frost.ILB n=20 count=17
+zc_Frost.BMP
+== Images/TCombat/City/zc_Gen.ILB n=24 count=17
+zc_Gen.BMP
+== Images/TCombat/City/zc_Gob.ILB n=20 count=17
+zc_Gob.BMP
+== Images/TCombat/City/zc_Half.ILB n=8 count=17
+zc_Half.BMP
+== Images/TCombat/City/zc_High.ILB n=8 count=17
+zc_High.BMP
+== Images/TCombat/City/zc_Humn.ILB n=8 count=17
+zc_Humn.BMP
+== Images/TCombat/City/zc_Liz.ILB n=20 count=17
+zc_Liz.BMP
+== Images/TCombat/City/zc_Neutr.ILB n=20 count=17
+zc_Neutr.BMP
+== Images/TCombat/City/zc_Neutr2.ILB n=20 count=17
+zc_Und2.BMP
+== Images/TCombat/City/zc_Orc.ILB n=20 count=17
+zc_Orc.BMP
+== Images/TCombat/City/zc_Und.ILB n=8 count=17
+zc_Und.BMP
+== Int/Scenes/CityWin.ILB n=41 count=16
+CityBg.BMP, CityFr.BMP, CityPillars.BMP, CityShadowL.BMP, CityShadowR.BMP, GlassFr.BMP, I-BGuild.BMP, I-BTrade.BMP, I-ExtraPower.BMP, I-Idle.BMP, I-Income.BMP, I-Loot.BMP, I-Migrate.BMP, I-Power.BMP, I-Raze.BMP, I-Syard.BMP, I-Trade.BMP, I-Upgrade.BMP, I-Walla.BMP, I-Wallb.BMP, Is-BTrade.BMP, Is-Empty.BMP, Is-Ench.BMP, Is-ExtraPower.BMP, Is-Glow.BMP, Is-Income.BMP, Is-Loot.BMP, Is-Merch.BMP, Is-Migrate.BMP, Is-Raze.BMP, Is-Upgrade.BMP, Is-Walla.BMP, Is-Wallb.BMP

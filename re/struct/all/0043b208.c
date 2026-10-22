@@ -1,0 +1,281 @@
+
+void FUN_0043b208(int param_1)
+
+{
+  undefined1 *puVar1;
+  char cVar2;
+  uint uVar3;
+  undefined4 uVar4;
+  int iVar5;
+  int *piVar6;
+  int iVar7;
+  int *in_FS_OFFSET;
+  undefined *puVar8;
+  undefined4 *puVar9;
+  undefined4 uVar10;
+  int iStack_3c;
+  undefined1 *puStack_38;
+  undefined1 *puStack_34;
+  undefined4 local_24;
+  undefined4 local_20;
+  undefined4 local_1c;
+  undefined4 local_18;
+  undefined4 local_14;
+  undefined4 local_10;
+  int local_c;
+  undefined4 local_8;
+  
+  puStack_34 = &stack0xfffffffc;
+  local_8 = 0;
+  local_c = 0;
+  local_10 = 0;
+  local_14 = 0;
+  local_18 = 0;
+  local_1c = 0;
+  local_20 = 0;
+  local_24 = 0;
+  puStack_38 = &LAB_0043bac8;
+  iStack_3c = *in_FS_OFFSET;
+  *in_FS_OFFSET = (int)&iStack_3c;
+  (**(code **)(**(int **)(param_1 + 0x2b0) + 0x148))(*(int **)(param_1 + 0x2b0),&local_10);
+  AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x9c),local_10);
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x164) + 0x118) + 0x40))();
+  System_LoadResString_02614E1B(AoWE_PopulationRStr_04ECFCC5_exref,&local_14);
+  AoWE_TranslateRStr_435799AA(local_14,&local_10);
+  System__LStrCat_51F89FF7(&local_10,&DAT_0043bae0);
+  piVar6 = *(int **)(*(int *)(param_1 + 0x164) + 0x118);
+  (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+  AoWE_TranslateRStr_435799AA
+            (*(undefined4 *)
+              (AoWE_RaceNamesPluralRStr_B11890CE_exref +
+              *(char *)(*(int *)(param_1 + 0x2b0) + 0x45) * 4),&local_14);
+  System__LStrCat3_51F89FF7(&local_10,&DAT_0043baec,local_14);
+  piVar6 = *(int **)(*(int *)(param_1 + 0x164) + 0x118);
+  (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+  System_LoadResString_02614E1B(AoWE_StatusRStr_04ECFCC5_exref,&local_14);
+  AoWE_TranslateRStr_435799AA(local_14,&local_10);
+  System__LStrCat_51F89FF7(&local_10,&DAT_0043bae0);
+  piVar6 = *(int **)(*(int *)(param_1 + 0x164) + 0x118);
+  (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+  uVar3 = City_TCity_GetCivilStatus_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+  AoWE_TranslateRStr_435799AA
+            (*(undefined4 *)(City_TCivilStatusRStr_3B2E5A50_exref + (uVar3 & 0x7f) * 4),&local_14);
+  System__LStrCat3_51F89FF7(&local_10,&DAT_0043baec,local_14);
+  piVar6 = *(int **)(*(int *)(param_1 + 0x164) + 0x118);
+  (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x160) + 0x118) + 0x40))();
+  City_TCity_ListCivilStatusInfo_23EDC2EF
+            (*(undefined4 *)(param_1 + 0x2b0),*(undefined4 *)(*(int *)(param_1 + 0x160) + 0x118));
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x174) + 0x118) + 0x40))();
+  System_LoadResString_02614E1B(AoWE_IncomeRStr_04ECFCC5_exref,&local_14);
+  AoWE_TranslateRStr_435799AA(local_14,&local_10);
+  piVar6 = *(int **)(*(int *)(param_1 + 0x174) + 0x118);
+  (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+  SysUtils_IntToStr_0F6FDFF6(*(undefined1 *)(*(int *)(param_1 + 0x2b0) + 0x3c),&local_14);
+  local_1c = local_14;
+  local_18 = CONCAT31(local_18._1_3_,0xb);
+  puVar9 = &local_1c;
+  System_LoadResString_02614E1B(AoWE_XGoldRStr_04ECFCC5_exref,&local_24);
+  AoWE_TranslateRStr_435799AA(local_24,&local_10);
+  System__LStrCat3_51F89FF7(&local_20,&DAT_0043baec,local_10);
+  AoWE_Format_D8F48273(local_20,puVar9,0);
+  piVar6 = *(int **)(*(int *)(param_1 + 0x174) + 0x118);
+  (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x170) + 0x118) + 0x40))();
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x288) + 0x118) + 0x40))();
+  City_TCity_ListIncomeInfo_23EDC2EF
+            (*(undefined4 *)(param_1 + 0x2b0),*(undefined4 *)(*(int *)(param_1 + 0x170) + 0x118),
+             *(undefined4 *)(*(int *)(param_1 + 0x288) + 0x118));
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x184) + 0x118) + 0x40))();
+  System_LoadResString_02614E1B(AoWE_EnhancementsRStr_04ECFCC5_exref,&local_14);
+  AoWE_TranslateRStr_435799AA(local_14,&local_10);
+  piVar6 = *(int **)(*(int *)(param_1 + 0x184) + 0x118);
+  (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x180) + 0x118) + 0x40))();
+  City_TCity_ListEnhancementsInfo_23EDC2EF
+            (*(undefined4 *)(param_1 + 0x2b0),*(undefined4 *)(*(int *)(param_1 + 0x180) + 0x118));
+  if (*(int *)(param_1 + 0x2d0) != 0) {
+    System_TObject_Free_23EDC2EF();
+    *(undefined4 *)(param_1 + 0x2d0) = 0;
+  }
+  uVar4 = City_TCity_CreateMigrationSelection_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+  *(undefined4 *)(param_1 + 0x2d0) = uVar4;
+  AoWE_TranslateRStr_435799AA
+            (*(undefined4 *)
+              (AoWE_RaceNamesPluralRStr_B11890CE_exref +
+              *(char *)(*(int *)(param_1 + 0x2b0) + 0x45) * 4),&local_10);
+  AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x254),local_10);
+  uVar4 = AoWE_TRaceList_GetRace_23EDC2EF
+                    (*(undefined4 *)(*(int *)AoWE_AoWHSMap_6B957A58_exref + 0x144),
+                     (int)*(char *)(*(int *)(param_1 + 0x2b0) + 0x45));
+  uVar3 = AoWE_TRace_GetPlayerRelation_23EDC2EF
+                    (uVar4,CONCAT31((int3)((uint)*(int *)(param_1 + 0x2b0) >> 8),
+                                    *(undefined1 *)(*(int *)(param_1 + 0x2b0) + 0x30)));
+  AoWE_TranslateRStr_435799AA
+            (*(undefined4 *)(AoWE_TStatusRStr_8E1B04C3_exref + (uVar3 & 0x7f) * 4),&local_10);
+  AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x25c),local_10);
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x230) + 0x114) + 0x40))();
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x238) + 0x114) + 0x40))();
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x234) + 0x114) + 0x40))();
+  if (*(int **)(param_1 + 0x2d0) != (int *)0x0) {
+    iVar5 = (**(code **)(**(int **)(param_1 + 0x2d0) + 0x54))();
+    if (-1 < iVar5 + -1) {
+      iVar7 = 0;
+      local_c = iVar5;
+      do {
+        uVar4 = City_TMigrationList_GetItems_23EDC2EF(*(undefined4 *)(param_1 + 0x2d0),iVar7);
+        iVar5 = City_TMigrationList_GetItems_23EDC2EF(*(undefined4 *)(param_1 + 0x2d0),iVar7);
+        AoWE_TranslateRStr_435799AA
+                  (*(undefined4 *)
+                    (AoWE_RaceNamesPluralRStr_B11890CE_exref + *(char *)(iVar5 + 8) * 4),&local_10);
+        piVar6 = *(int **)(*(int *)(param_1 + 0x230) + 0x114);
+        (**(code **)(*piVar6 + 0x38))(piVar6,local_10,uVar4);
+        iVar5 = City_TMigrationList_GetItems_23EDC2EF(*(undefined4 *)(param_1 + 0x2d0),iVar7);
+        SysUtils_IntToStr_0F6FDFF6(*(undefined4 *)(iVar5 + 0xc),&local_10);
+        piVar6 = *(int **)(*(int *)(param_1 + 0x238) + 0x114);
+        (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+        iVar5 = City_TMigrationList_GetItems_23EDC2EF(*(undefined4 *)(param_1 + 0x2d0),iVar7);
+        AoWE_TranslateRStr_435799AA
+                  (*(undefined4 *)
+                    (AoWE_TStatusRStr_8E1B04C3_exref + (uint)*(byte *)(iVar5 + 0x10) * 4),&local_10)
+        ;
+        piVar6 = *(int **)(*(int *)(param_1 + 0x234) + 0x114);
+        (**(code **)(*piVar6 + 0x34))(piVar6,local_10);
+        iVar7 = iVar7 + 1;
+        local_c = local_c + -1;
+      } while (local_c != 0);
+    }
+  }
+  FUN_0043be78(param_1);
+  (**(code **)(**(int **)(*(int *)(param_1 + 0x130) + 0x114) + 0x40))();
+  iVar5 = (**(code **)(**(int **)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14) + 0x54))();
+  if (-1 < iVar5 + -1) {
+    iVar7 = 0;
+    local_c = iVar5;
+    do {
+      SysUtils_IntToStr_0F6FDFF6(iVar7 + 1,&local_14);
+      puVar8 = &DAT_0043baf8;
+      uVar4 = local_14;
+      piVar6 = (int *)AoWE_TProductionQueue_GetItem_23EDC2EF
+                                (*(undefined4 *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14),
+                                 iVar7);
+      (**(code **)(*piVar6 + 0x4c))(piVar6,&local_20,*piVar6,puVar8,uVar4);
+      uVar4 = local_20;
+      System__LStrCatN_51F89FF7(&local_10,3);
+      piVar6 = *(int **)(*(int *)(param_1 + 0x130) + 0x114);
+      iVar5 = *piVar6;
+      (**(code **)(iVar5 + 0x34))(piVar6,local_10,iVar5,uVar4);
+      iVar7 = iVar7 + 1;
+      local_c = local_c + -1;
+    } while (local_c != 0);
+  }
+  iVar5 = (**(code **)(**(int **)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14) + 0x54))();
+  if (iVar5 < 5) {
+    do {
+      SysUtils_IntToStr_0F6FDFF6(iVar5 + 1,&local_14);
+      puVar8 = &DAT_0043baf8;
+      uVar10 = local_14;
+      System_LoadResString_02614E1B(AoWE_EmptyQueueRStr_04ECFCC5_exref,&local_24);
+      AoWE_TranslateRStr_435799AA(local_24,&local_20);
+      uVar4 = local_20;
+      System__LStrCatN_51F89FF7(&local_10,3);
+      piVar6 = *(int **)(*(int *)(param_1 + 0x130) + 0x114);
+      iVar7 = *piVar6;
+      (**(code **)(iVar7 + 0x34))(piVar6,local_10,iVar7,uVar4,puVar8,uVar10);
+      iVar5 = iVar5 + 1;
+    } while (iVar5 != 5);
+  }
+  iVar5 = (**(code **)(**(int **)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14) + 0x54))();
+  if (iVar5 <= *(int *)(*(int *)(param_1 + 0x130) + 0x120)) {
+    iVar5 = (**(code **)(**(int **)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14) + 0x54))();
+    AoWListBox_TAOWListBox_SetIndex_23EDC2EF(*(undefined4 *)(param_1 + 0x130),iVar5 + -1);
+    *(undefined4 *)(param_1 + 0x2c8) = *(undefined4 *)(*(int *)(param_1 + 0x130) + 0x120);
+  }
+  (**(code **)(**(int **)(param_1 + 0x19c) + 0xac))
+            (*(int **)(param_1 + 0x19c),
+             *(undefined1 *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x18));
+  cVar2 = City_TCity_GetActiveAction_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+  if (cVar2 == '\0') {
+    iVar5 = (**(code **)(**(int **)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14) + 0x54))();
+    if (iVar5 == 0) {
+      System_LoadResString_02614E1B(AoWE_ProducingMerchandiseRStr_04ECFCC5_exref,&local_14);
+      AoWE_TranslateRStr_435799AA(local_14,&local_10);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x13c),local_10);
+      System_LoadResString_02614E1B(AoWE_DefaultRStr_04ECFCC5_exref,&local_14);
+      AoWE_TranslateRStr_435799AA(local_14,&local_20);
+      SysUtils_LowerCase_435799AA(local_20,&local_14);
+      puVar8 = &DAT_0043bb10;
+      uVar4 = local_14;
+      System__LStrCatN_51F89FF7(&local_10,3);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x140),local_10);
+      iVar5 = **(int **)(param_1 + 0x140);
+      (**(code **)(iVar5 + 0x70))(*(int **)(param_1 + 0x140),0x678376,iVar5,puVar8,uVar4);
+      (**(code **)(**(int **)(param_1 + 0x14c) + 0x6c))(*(int **)(param_1 + 0x14c),0);
+      uVar4 = City_TCity_GetActiveAction_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+      uVar4 = FUN_0043d290(param_1,uVar4);
+      AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1a8),uVar4);
+    }
+    else {
+      System__LStrClr_40929B27(&local_8);
+      uVar4 = AoWE_TProductionQueue_GetItem_23EDC2EF
+                        (*(undefined4 *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14),0);
+      AoWE_TProductionItem_GetNameProgressive_23EDC2EF(uVar4,&local_10);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x13c),local_10);
+      piVar6 = *(int **)(*(int *)(param_1 + 0x2b0) + 0x50);
+      uVar4 = AoWE_TProductionQueue_GetItem_23EDC2EF(piVar6[5],0);
+      (**(code **)(*piVar6 + 0xb0))(piVar6,uVar4,&local_8);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x140),local_8);
+      (**(code **)(**(int **)(param_1 + 0x140) + 0x70))(*(int **)(param_1 + 0x140),0xff);
+      (**(code **)(**(int **)(param_1 + 0x14c) + 0x6c))(*(int **)(param_1 + 0x14c),0);
+      iVar5 = AoWE_TProductionQueue_GetItem_23EDC2EF
+                        (*(undefined4 *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14),0);
+      uVar4 = City_ProductionIDToCityAction_CFDECB0A(*(undefined4 *)(iVar5 + 8));
+      uVar4 = FUN_0043d290(param_1,uVar4);
+      AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1a8),uVar4);
+    }
+  }
+  else {
+    uVar4 = AoWE_TProductionQueue_GetItem_23EDC2EF
+                      (*(undefined4 *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x14),0);
+    AoWE_TProductionItem_GetNameProgressive_23EDC2EF(uVar4,&local_10);
+    AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x13c),local_10);
+    if (*(char *)(*(int *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x24) + 0x10) == -1) {
+      (**(code **)(**(int **)(param_1 + 0x140) + 0x6c))(*(int **)(param_1 + 0x140),0);
+      (**(code **)(**(int **)(param_1 + 0x14c) + 0x6c))(*(int **)(param_1 + 0x14c),0);
+    }
+    else {
+      AoWE_FmtTurnsLeftStr_0F6FDFF6
+                ((int)*(char *)(*(int *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x24) + 0x10),
+                 &local_10);
+      AoWLabel_TAOWLabel_SetGText_23EDC2EF(*(undefined4 *)(param_1 + 0x140),local_10);
+      (**(code **)(**(int **)(param_1 + 0x140) + 0x6c))(*(int **)(param_1 + 0x140),1);
+      (**(code **)(**(int **)(param_1 + 0x140) + 0x70))(*(int **)(param_1 + 0x140),0x678376);
+      iVar5 = *(int *)(param_1 + 0x14c);
+      *(undefined4 *)(iVar5 + 0x114) = 0;
+      *(int *)(iVar5 + 0x118) =
+           (int)*(char *)(*(int *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x24) + 0x1c);
+      iVar7 = *(int *)(*(int *)(*(int *)(param_1 + 0x2b0) + 0x50) + 0x24);
+      AOWGauge_TAoWGauge_SetPos_23EDC2EF
+                (iVar5,(int)*(char *)(iVar7 + 0x1c) - (int)*(char *)(iVar7 + 0x10));
+      (**(code **)(**(int **)(param_1 + 0x14c) + 0x6c))(*(int **)(param_1 + 0x14c),1);
+    }
+    uVar4 = City_TCity_GetActiveAction_23EDC2EF(*(undefined4 *)(param_1 + 0x2b0));
+    uVar4 = FUN_0043d290(param_1,uVar4);
+    AoWImage_TAOWImage_SetCurrent_23EDC2EF(*(undefined4 *)(param_1 + 0x1a8),uVar4);
+  }
+  if ((*(char *)(param_1 + 0x2cc) == '\x01') && (*(char *)(param_1 + 0x2c0) != '\0')) {
+    FUN_0043c43c(param_1,*(undefined1 *)(param_1 + 0x2c0));
+  }
+  puVar1 = puStack_38;
+  *(undefined1 *)(*(int *)(param_1 + 0x44) + 0xa4) = 0;
+  *in_FS_OFFSET = (int)&local_10;
+  puStack_38 = &LAB_0043bacf;
+  iStack_3c = 0x43bab2;
+  System__LStrArrayClr_51F89FF7(&local_24,2,puVar1);
+  iStack_3c = 0x43babf;
+  System__LStrArrayClr_51F89FF7(&local_14,2);
+  iStack_3c = 0x43bac7;
+  System__LStrClr_40929B27(&local_8);
+  return;
+}
+

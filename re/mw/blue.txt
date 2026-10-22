@@ -1,0 +1,2 @@
+fresh3 crop blue bbox (65, 295, 81, 311)
+fresh5 crop blue bbox (77, 301, 93, 314)

@@ -1,0 +1,12 @@
+=== lastplayer
+  AOWTools.dpl           1 hits
+  AoW.exe.orig           2 hits
+  AoWCompat.exe          2 hits
+=== onanimdone
+  AOWTools.dpl           2 hits
+  AoW.exe.orig           7 hits
+  AoWCompat.exe          7 hits
+=== curplayer
+  AOWTools.dpl           1 hits
+  AoW.exe.orig           2 hits
+  AoWCompat.exe          2 hits

@@ -1,0 +1,47 @@
+..\AOWTools.dpl  class=TAOWTurnButton base=0x59700000
+name at file 0x003f05 va 0x59704b05 (CODE)
+name at file 0x003f1a va 0x59704b1a (CODE)
+name at file 0x0118a0 va 0x597144a0 (.edata)
+name at file 0x011901 va 0x59714501 (.edata)
+name at file 0x011933 va 0x59714533 (.edata)
+name at file 0x011965 va 0x59714565 (.edata)
+name at file 0x011995 va 0x59714595 (.edata)
+name at file 0x0119bf va 0x597145bf (.edata)
+name at file 0x0119e7 va 0x597145e7 (.edata)
+name at file 0x011a11 va 0x59714611 (.edata)
+name at file 0x011a3c va 0x5971463c (.edata)
+name at file 0x011a66 va 0x59714666 (.edata)
+name at file 0x011a92 va 0x59714692 (.edata)
+  ptr to 0x59704b04 at file 0x003e48 va 0x59704a48 (CODE)
+      +-040  0x7079546e
+      +-03c  0x00000165
+      +-038  0x00010000
+      +-034  0x49fc0000
+      +-030  0x62065970
+      +-02c  0x78655474
+      +-028  0x74620674
+      +-024  0x6e6f6349
+      +-020  0x59704a68
+      +-01c  0x00000000
+      +-018  0x00000000
+      +-014  0x00000000
+      +-010  0x59704b18
+      +-00c  0x00000000
+      +-008  0x00000000
+      +-004  0x00000000
+      ++000  0x59704b04 <==
+      ++004  0x00000144
+      ++008  0x5970de6c
+      ++00c  0x59701384
+      ++010  0x59701028
+      ++014  0x59701000
+      ++018  0x59701008
+      ++01c  0x5970161c
+      ++020  0x59701344
+      ++024  0x59701354
+      ++028  0x5970133c
+      ++02c  0x5970135c
+      ++030  0x5970134c
+      ++034  0x59701364
+      ++038  0x5970137c
+      ++03c  0x59701374

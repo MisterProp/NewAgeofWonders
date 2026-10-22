@@ -1,0 +1,4 @@
+..\AoW.exe.orig  class=TAOWTurnButton base=0x00400000
+name at file 0x0699f2 va 0x0046bdf2 (.idata)
+name at file 0x1cbc13 va 0x005cfa13 (.rsrc)
+name at file 0x1ced84 va 0x005d2b84 (.rsrc)
