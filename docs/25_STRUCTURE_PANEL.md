@@ -83,9 +83,55 @@ The routine starts with `ResetPanels`, then `ShowBase`, then:
 * `app+0xb0 = city` - the selected structure global.
 * `CityPanel.Visible = 1`; `IncomePnl`/`RazePnl` etc. are hidden first.
 * `StructNameLbl.Text = city.GetName` (`TCity.GetName@557ac918` returns
-  `+0x48`, the rw **tag 0xc** name id; the Dict name table is external).
-* `CityRaceLbl.Text = "Race: " + race_name[city+0x45]`
-  (resource string, table indexed by the signed race byte).
+  `+0x48`, the city's AnsiString). `TCity.ReadWrite@557acbcc` streams `+0x48`
+  at rw **tag 0xc** through `rwString` - one length byte, `0xff` => a `u32`
+  length follows, then the bytes (`TEReadStorageStream.rwString@555111a8` ->
+  `FUN_5550f81c`; the writer is `Engine.TEWriteStorageStream.rwString` ->
+  `FUN_5550f7a8`, which omits an empty string and makes the reader `LStrClr`
+  the field). **The name really is in the map**: Bloody Marauders' Human
+  capital stores `07 "Venice "` at its TCity record (its first city is
+  `"Ricordia"`, and `"Confinia Minor"` proves multi-word names survive), and all
+  2406 cities of the 72 shipped maps carry one. The port therefore reads tag 0xc
+  with `eobject_short_string` (a u32 length misreads the first four name bytes
+  and made every city show "City"). A city whose tag is absent has no name in
+  the original either (the label is blank; `TCity.Create`'s `AoWE.NonameRStr` =
+  resource string 64638 "Noname" only ever applies to a city the editor has not
+  named yet).
+* `CityRaceLbl.Text = "Race: %s"` - `AoWE.RaceX` (AoWEPACK resourcestring
+  **64846**) formatted with `AoWE.RaceNamesRStr[city+0x45]`. The routine loads
+  the table element first and then the format string:
+  `MOVSX EAX, byte [city+0x45]` / `MOV EDX,[0x0045e000]` /
+  `MOV EAX,[EDX+EAX*4]` / `TranslateRStr` / `LoadResString([0x0045e1c0])` /
+  `Format`. So the index is the **signed** city race byte (`0xff` -> -1) and
+  the name is the *shipped singular* string, not a plural and not the port's
+  own spelling. `AoWE.RaceNamesRStr` is imported from `AoWEPACK.dpl` (the exe
+  slot `0x0045e000` is the pre-fixup record `AoWE.RaceNamesRStr@B11890CE`), so
+  the strings are that package's RT_STRING entries - the singular declared
+  next to each race's plural (`AoWE.RaceNamesPluralRStr`, see
+  `aow::race_label_plural`):
+
+  | race | label | id | race | label | id |
+  |------|-------|----|------|-------|----|
+  | 0 Human | `Human` | 65255 | 6 Dwarf | `Dwarf` | 65235 |
+  | 1 Azrac | `Azrac` | 65257 | 7 Highman | `Highman` | 65237 |
+  | 2 Lizard | `Lizard` | 65259 | 8 DarkElf | `DarkElf` | 65239 |
+  | 3 Frostling | `Frostling` | 65261 | 9 Orc | `Orc` | 65241 |
+  | 4 Elf | `Elf` | 65263 | 10 Goblin | `Goblin` | 65243 |
+  | 5 Halfling | `Halfling` | 65233 | 11 Undead | `Undead` | 65245 |
+
+  `Highman`/`DarkElf` really are spelled without a space (their plurals are
+  "Highmen"/"Dark Elves"), and Elf is the one race whose plural ("Elves",
+  65232) is not adjacent to its singular in the table. The port exposes the
+  table as `aow::race_label_singular` and shows it verbatim. Before that, the
+  panel indexed a hand-written name list in a different order
+  (`Human, Elf, Dwarf, Halfling, Orc, ...`), which renamed every race from id 4
+  on - Heartwood Forest's Elves read "Orc", its Goblins "Azrac", its Orcs
+  "Lizardman". An unset race (rw tag 0xd absent, or the editor's `0xff` =
+  `C_random`) is resolved to the owner player's race, the same value
+  `city_body_race` uses for the body art; when that also yields no race (the
+  independents' roster entry carries 255) the label falls back to race 0, while
+  the original indexes the raw byte and reads out of bounds. Heartwood Forest
+  has 6 such cities.
 * `CityLevelLbl.Text = IntToStr(city+0x4d)` (the size/level byte).
 * `CityIncomeLbl.Text = IntToStr(city+0x3c)`.
 * `CivilStatusLbl.Text = "Status: " + status_name[TCity.GetStatus(city) & 0x7f]`
@@ -222,9 +268,23 @@ keys it for Age8s.
 ## 6. Verification
 
 `--structure-panel` opens the first city (or first structure) after
-`--start-map`. Because the reference capture's city name and income live in a
-scenario that is not part of the install, the hook also has
-`--structure-name/-race/-race-index/-status/-gold/-mana` overrides.
+`--start-map`; the name, race, level and production come straight from the map
+(`TCity` rw tags 0xc / 0xd / 0x10, the city race and the owning player), so a
+plain run already reads e.g. `name=[Venice ]` for Bloody Marauders and the
+first cities of Barondir Bay / Tutorial. Because the reference capture comes
+from a scenario that is not part of the install, the hook also has
+`--structure-name/-race/-race-index/-status/-gold/-mana` overrides. It prints
+`structure_panel=<x>,<y> city=<0|1> name=[<name>] race=[<label>] race_id=<n>`,
+so both the recovered name and the `CityRaceLbl` text can be asserted
+head-lessly, and `--structure-tile X Y` opens a specific tile (used to prove
+Venice answers on all four of its hexes).
+
+```
+# Heartwood Forest's first city is elven (TCity tag 0xd = 4) -> race=[Elf]
+AoW.exe --root .. --start-map "Heartwood Forest.HSM" --structure-panel `
+  --render bin/struct_heartwood.png --no-music --no-cursor
+#   structure_panel=..,.. city=1 name=[...] race=[Elf] race_id=4
+```
 
 ```
 AoW.exe --render bin/struct_final.png --start-map "Barondir Bay.HSM" `

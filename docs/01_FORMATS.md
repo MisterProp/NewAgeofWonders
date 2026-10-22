@@ -1100,7 +1100,11 @@ map can be viewed without the command line:
   `Scenario\Custom\Barondir Bay.HSM` Human town at (12,20) is on the surface and
   its Human library ships only the underground block, so it correctly ends up
   drawing `CITY4.ILB` slot 0 `C_human.bmp`. `TCity.ReadWrite`
-  serialises the race at **rw tag 0xd** (`+0x45`) and the wall type at **rw tag
+  serialises the **name** at rw **tag 0xc** (`+0x48`, a `rwString`: one length
+  byte, `0xff` => u32 length, then the bytes - `TCity.GetName@557ac918` is just
+  an `LStrAsg` of it, so the scenario stores "Venice ", "Ricordia", ...),
+  the race at **rw tag 0xd** (`+0x45`), the size/level byte at **rw tag 0x10**
+  (`+0x4d`) and the wall type at **rw tag
   0xf** (`+0x4c`). A city whose race tag is **0xff** (the editor's "Random" city
   race, e.g. every city of `Scenario\Custom\test.hsm`) has no race of its own:
   `GetCityImage` yields nothing and `UpdateImages` draws the city resource's own

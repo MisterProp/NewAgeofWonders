@@ -27,6 +27,7 @@ port/
     23_TACTICAL_MAPS.md <- TCMaps\*.HSM, comb_res.pfs and AoWTBViewer
     24_CROPS.md          <- Crops.TCrop: the terrain-selected farm-field tiles
     25_STRUCTURE_PANEL.md <- the TIWindow Structure floater (click a building)
+    26_CITY_SCREEN.md   <- TCityScreen: the city unit-production panel (Enter)
   tools/                 <- Python (stdlib only) + Ghidra scripts
   re/                    <- reverse-engineering output (gitignored, regenerated)
   assets/                <- extracted game assets (gitignored)

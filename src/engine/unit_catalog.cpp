@@ -113,6 +113,35 @@ std::string race_label_plural(std::uint8_t race_id) {
     }
 }
 
+// The shipped singular race names - `AoWE.RaceNamesRStr[race]`, the string the
+// Structure floater's CityRaceLbl formats with "Race: %s" (see the header). The
+// resourcestring ids are AoWEPACK.dpl's RT_STRING table (tools/pe_rsrc_strings.py
+// and the surrounding blocks show the singular/plural pairs):
+//
+//   65255 Human / 65256 Humans      65257 Azrac / 65258 Azracs
+//   65259 Lizard / 65260 Lizards    65261 Frostling / 65262 Frostlings
+//   65263 Elf / 65232 Elves         65233 Halfling / 65234 Halflings
+//   65235 Dwarf / 65236 Dwarves     65237 Highman / 65238 Highmen
+//   65239 DarkElf / 65240 Dark Elves 65241 Orc / 65242 Orcs
+//   65243 Goblin / 65244 Goblins    65245 Undead / 65246 Undead(plural)
+std::string race_label_singular(std::uint8_t race_id) {
+    switch (race_id) {
+        case 0: return "Human";
+        case 1: return "Azrac";
+        case 2: return "Lizard";
+        case 3: return "Frostling";
+        case 4: return "Elf";
+        case 5: return "Halfling";
+        case 6: return "Dwarf";
+        case 7: return "Highman";
+        case 8: return "DarkElf";
+        case 9: return "Orc";
+        case 10: return "Goblin";
+        case 11: return "Undead";
+        default: return "race" + std::to_string(race_id);
+    }
+}
+
 const UnitGraphics* UnitCatalog::find_gfx(std::uint32_t gfx_index) const {
     for (const UnitGraphics& g : graphics) {
         if (g.res_index == gfx_index) return &g;

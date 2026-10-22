@@ -146,4 +146,25 @@ std::string race_label(std::uint8_t race_id);
 // 65246 "Undead" - dumped with tools/pe_rsrc_strings.py.
 std::string race_label_plural(std::uint8_t race_id);
 
+// The race's *singular* label - the name the Structure floater's CityRaceLbl
+// shows. `AoWE.RaceX` (resourcestring 64846) is "Race: %s" and its argument is
+// `AoWE.RaceNamesRStr[city+0x45]`: the CITY panel at AoW.exe 0x443318 reads the
+// city's race byte with *signed* semantics (`MOVSX EAX, byte [city+0x45]`) and
+// indexes that resourcestring-pointer array (imported from AoWEPACK.dpl at exe
+// slot 0x0045e000). The shipped strings are, by race id:
+//
+//   0 65255 "Human"     1 65257 "Azrac"     2 65259 "Lizard"
+//   3 65261 "Frostling" 4 65263 "Elf"       5 65233 "Halfling"
+//   6 65235 "Dwarf"     7 65237 "Highman"   8 65239 "DarkElf"
+//   9 65241 "Orc"      10 65243 "Goblin"   11 65245 "Undead"
+//
+// Each is the singular declared next to that race's plural (see
+// `race_label_plural`; Elf is the exception - its plural "Elves" is 65232,
+// declared elsewhere in the same table). "DarkElf" has no space and "Highman"
+// has no space in the shipped text, so they are reproduced verbatim. This is
+// NOT the same text as `race_label`, which is the port's own readable spelling
+// ("Lizardman", "Dark Elf") used where the game has no string of its own.
+// Unknown ids render as "race<N>", like `race_label`.
+std::string race_label_singular(std::uint8_t race_id);
+
 }  // namespace aow

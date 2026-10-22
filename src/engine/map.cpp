@@ -333,33 +333,31 @@ bool load_container(const std::uint8_t* R, std::size_t n, std::size_t ca,
                             sub.base + r1 + 4 <= n) {
                             hs.resource = read_u32(R + sub.base + r1);
                         }
-                        // City.TCity rw tags 0xd (race) / 0xf (wall type). See
+                        // City.TCity rw tags 0xc (name) / 0xd (race) /
+                        // 0xf (wall type) / 0x10 (size). See
                         // re/exports/aowepack/City.TCity.ReadWrite.c and
                         // map_types.hpp. Only TCity carries them.
                         if (hs.class_id == kCityClassId) {
-                            // City.TCity rw tag 0xc -> +0x48: the city name. The
-                            // property is a rwString (TCity.GetName copies the
-                            // +0x48 AnsiString), serialised as u32 length +
-                            // bytes; keep the raw dword too for evidence.
+                            // City.TCity rw tag 0xc -> +0x48: the city's name,
+                            // the very AnsiString `TCity.GetName@557ac918`
+                            // copies out (the Structure floater's
+                            // StructNameLbl). `TCity.ReadWrite@557acbcc` streams
+                            // +0x48 through **rwString** (stream vtable +0x20),
+                            // whose payload is written by
+                            // `Engine.TEWriteStorageStream.rwString` ->
+                            // FUN_5550f7a8 and read back by FUN_5550f81c: one
+                            // length byte (0xff => a u32 length follows), then
+                            // that many bytes - `eobject_short_string`, *not* a
+                            // u32 length. The writer skips an empty string
+                            // entirely and the reader LStrClr()s the field when
+                            // the tag is absent, so a city that stores no name
+                            // keeps "" (and the original shows a blank label;
+                            // `TCity.Create`'s `AoWE.NonameRStr` = "Noname" only
+                            // ever applies to a city nobody named yet).
                             const std::size_t r12 = find_off(sub, 0xc);
-                            if (r12 != static_cast<std::size_t>(-1) &&
-                                sub.base + r12 + 4 <= n) {
-                                hs.city_name_id =
-                                    static_cast<std::int32_t>(read_u32(R + sub.base + r12));
-                                const std::uint32_t sl =
-                                    read_u32(R + sub.base + r12);
-                                if (sl > 0 && sl < 200 &&
-                                    sub.base + r12 + 4 + sl <= n) {
-                                    const char* sp = reinterpret_cast<const char*>(
-                                        R + sub.base + r12 + 4);
-                                    bool text = true;
-                                    for (std::uint32_t k = 0; k < sl; ++k) {
-                                        const unsigned char ch =
-                                            static_cast<unsigned char>(sp[k]);
-                                        if (ch < 0x20 || ch == 0x7f) text = false;
-                                    }
-                                    if (text) hs.city_name.assign(sp, sl);
-                                }
+                            if (r12 != static_cast<std::size_t>(-1)) {
+                                hs.city_name =
+                                    read_short_string(R, n, sub.base + r12);
                             }
                             const std::size_t r13 = find_off(sub, 0xd);
                             if (r13 != static_cast<std::size_t>(-1) &&

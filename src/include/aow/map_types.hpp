@@ -190,12 +190,14 @@ struct MapHs {
     // shipped map writes rw tag 0xff). Bit 0 also suppresses the flag.
     std::uint8_t city_flags = 0;
     // `City.TCity` (class 0x20108) only: rw **tag 0xc** -> +0x48 is the city's
-    // name id. `City.TCity.GetName@557ac918` hands +0x48 to the Localize/Dict
-    // name table (AoW.exe import thunk 0x55701158), so the string is not stored
-    // in the map; `-1` means "no name tag" (the engine then uses its default).
-    std::int32_t city_name_id = -1;
-    // The decoded TCity rw tag 0xc AnsiString (the map stores "Venice" etc as a
-    // length-prefixed string; TCity.GetName copies +0x48 through LStrAsg).
+    // name, an AnsiString. `TCity.ReadWrite@557acbcc` streams it through
+    // `TEReadStorageStream.rwString` (one length byte, 0xff => a u32 length,
+    // then the bytes) and `City.TCity.GetName@557ac918` simply copies +0x48 -
+    // the string the Structure floater's StructNameLbl shows (TIWindow.ShowInfo
+    // -> the city panel at 0x443318), so the name really is in the map. Empty
+    // means the tag was absent (`rwString` omits empty strings and the reader
+    // clears the field); the original then shows a blank label. Every shipped
+    // map names its cities ("Venice" in Bloody Marauders).
     std::string city_name;
     // `City.TCity` (class 0x20108) only: `City.TCity.ReadWrite@557acbcc` rw
     // **tag 0x10** writes +0x4d, the city's size/level byte (1..4).

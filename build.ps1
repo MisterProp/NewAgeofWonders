@@ -1568,8 +1568,10 @@ if ($Test) {
     Write-Host 'game flow smoke test: ok'
     # The Structure floater (TIWindow) - clicking a building opens the 200x216
     # panel; --structure-panel opens the first city so a head-less render proves
-    # every DFM box / library entry without a human click. The value overrides
-    # reproduce the reference capture's externally-stored city name / income.
+    # every DFM box / library entry without a human click. The city name, race
+    # and level come from the map (TCity rw tags 0xc/0xd/0x10); the overrides
+    # below only reproduce the reference capture, which was taken in a scenario
+    # that is not part of the install.
     $stpng = Join-Path $BinDir 'structure_panel.png'
     $stlog = Join-Path $BinDir 'structure_panel.txt'
     Remove-Item $stpng, $stlog -Force -ErrorAction SilentlyContinue
@@ -1599,6 +1601,93 @@ if ($Test) {
     }
     Remove-Item $stpng, $stlog -Force
     Write-Host 'structure panel smoke test: ok'
+    # TIWindow.MainBtnClick's city branch opens TCityScreen (the modal 640x432
+    # unit-production panel). --city-screen walks that same Open/ShowCity path:
+    # the first city's map values (TCity rw tags 0xc/0xd/0x10) fill the activity
+    # panels, while --city-level/--city-wall reproduce the captured reference
+    # (a scenario that is not part of the install).  The screenshot itself is
+    # the original 640x480 frame cropped 2 px right / 8 px bottom, so the bench
+    # compares the port's (0,0,638,472) crop.
+    $ctypng = Join-Path $BinDir 'city_screen.png'
+    $ctylog = Join-Path $BinDir 'city_screen.txt'
+    Remove-Item $ctypng, $ctylog -Force -ErrorAction SilentlyContinue
+    $ctyargs = ('--root "{0}" --start-map "Barondir Bay.HSM" --scen-human 0 ' +
+                '--city-screen --structure-name Venice --structure-race-index 0 ' +
+                '--structure-status Cheerful --structure-gold 38 --city-level 2 ' +
+                '--city-wall "Stone Wall" --render "{1}" --no-music --no-cursor') -f $mroot, $ctypng
+    $ctyproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $ctyargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $ctylog
+    if ($ctyproc.ExitCode -ne 0) {
+        throw "city screen smoke test failed ($($ctyproc.ExitCode))"
+    }
+    $ctyline = Get-Content $ctylog -Raw
+    if ($ctyline -notmatch 'city_screen=11,12 city=1 name=\[Gobba\]') {
+        throw "city screen regression: $ctyline"
+    }
+    if (-not (Test-Path $ctypng)) { throw 'city screen produced no PNG' }
+    $ctyref = Join-Path $BinDir 'UnitCreationRef.png'
+    if (Test-Path $ctyref) {
+        $cbench = python tools/city_bench.py $ctyref $ctypng
+        if ($LASTEXITCODE -ne 0) {
+            throw "city screen pixel benchmark failed: $cbench"
+        }
+        $cbenchs = $cbench -join "`n"
+        if ($cbenchs -notmatch 'mean\|d\| = ([\d.]+)') {
+            throw "city screen benchmark output: $cbenchs"
+        }
+        $cmean = [double]$Matches[1]
+        if ($cmean -gt 0.05) {
+            throw "city screen differs from UnitCreationRef.png (mean $cmean)"
+        }
+        Write-Host ($cbench | Select-Object -First 1)
+    }
+    # Exit (CityBtn3) closes the modal screen. The head-less click driver runs
+    # after the --city-screen hook, so it lands on the city's own hit test.
+    Remove-Item $ctypng, $ctylog -Force -ErrorAction SilentlyContinue
+    $ctyargs2 = ('--root "{0}" --start-map "Barondir Bay.HSM" --scen-human 0 ' +
+                 '--city-screen --game-click 551 405 --render "{1}" ' +
+                 '--no-music --no-cursor') -f $mroot, $ctypng
+    $ctyproc2 = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $ctyargs2 -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $ctylog
+    $ctyline2 = Get-Content $ctylog -Raw
+    if ($ctyline2 -notmatch 'game_click=city 551,405 id=2004' -or
+        $ctyline2 -notmatch 'city_screen=closed') {
+        throw "city screen exit click regression: $ctyline2"
+    }
+    Remove-Item $ctypng, $ctylog -Force
+    Write-Host 'city screen smoke test: ok'
+    # CityRaceLbl reads the *shipped* singular race name for the city's own race
+    # byte: "Race: %s" (AoWE.RaceX) with `AoWE.RaceNamesRStr[city+0x45]`, i.e.
+    # human/azrac/lizard/frostling/elf/halfling/dwarf/highman/darkelf/orc/goblin/
+    # undead (docs/25_STRUCTURE_PANEL.md section 2). Heartwood Forest exercises
+    # the ids that a hand-written name table got wrong: its Elves (tag 0xd = 4)
+    # read "Orc", its Goblins (10) "Azrac" and its Orcs (9) "Lizardman" before.
+    $stracepng = Join-Path $BinDir 'structure_race.png'
+    $stracelog = Join-Path $BinDir 'structure_race.txt'
+    $straceerr = Join-Path $BinDir 'structure_race.err'
+    $heartwood = @{
+        '27 28' = 'race=[Elf] race_id=4'       # Heartwood, the elven capital
+        '17 23' = 'race=[Goblin] race_id=10'   # Claywood
+        '73 25' = 'race=[Orc] race_id=9'       # Ambrudor
+        '20 16' = 'race=[Dwarf] race_id=6'     # Vinisheer
+    }
+    foreach ($tile in $heartwood.Keys) {
+        Remove-Item $stracepng, $stracelog, $straceerr -Force -ErrorAction SilentlyContinue
+        $straceargs = ('--root "{0}" --start-map "Heartwood Forest.HSM" ' +
+                       '--structure-panel --structure-tile {1} --render "{2}" ' +
+                       '--no-music --no-cursor') -f $mroot, $tile, $stracepng
+        $straceproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $straceargs -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $stracelog -RedirectStandardError $straceerr
+        $straceline = (Get-Content $stracelog -Raw) + (Get-Content $straceerr -Raw)
+        if ($straceline -notmatch [regex]::Escape($heartwood[$tile])) {
+            throw "structure race label regression at tile ${tile}: $straceline"
+        }
+    }
+    Remove-Item $stracepng, $stracelog, $straceerr -Force
+    Write-Host 'structure race label smoke test: ok'
     # A large building is selectable on every tile its sprite covers, not only
     # on its centre (docs/25_STRUCTURE_PANEL.md section 5). Barondir Bay's size-4
     # capital is the single City.TCity at (12,20); its resource's TTerrainList
@@ -1637,6 +1726,35 @@ if ($Test) {
     }
     Remove-Item $sttilepng, $sttilelog, $sttileerr -Force -ErrorAction SilentlyContinue
     Write-Host 'structure footprint smoke test: ok'
+    # The floater's StructNameLbl is the map's own city name: `TCity.GetName`
+    # hands back +0x48, which `TCity.ReadWrite` stores at rw tag 0xc as a
+    # rwString (one length byte). Bloody Marauders' Human capital at (32,45)
+    # stores "Venice ", so a real left click on its hex - screen (236,184) with
+    # the opening camera, HXtoHP(32,45) = (1032,1440) minus cam (808,1268) plus
+    # the 12 px map-window frame - must open the floater with that name instead
+    # of the class label "City".
+    $stclkpng = Join-Path $BinDir 'structure_click.png'
+    $stclklog = Join-Path $BinDir 'structure_click.txt'
+    $stclkerr = Join-Path $BinDir 'structure_click.err'
+    Remove-Item $stclkpng, $stclklog, $stclkerr -Force -ErrorAction SilentlyContinue
+    $stclkargs = ('--root "{0}" --start-map "Bloody Marauders.hsm" ' +
+                  '--scen-human 0 --game-click 236 184 --render "{1}" ' +
+                  '--no-music --no-cursor') -f $mroot, $stclkpng
+    $stclkproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $stclkargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $stclklog -RedirectStandardError $stclkerr
+    $stclkline = (Get-Content $stclklog -Raw) + (Get-Content $stclkerr -Raw)
+    if ($stclkproc.ExitCode -ne 0) {
+        throw "city name smoke test failed ($($stclkproc.ExitCode)): $stclkline"
+    }
+    if ($stclkline -notmatch [regex]::Escape('game_msg=selected structure (32,45)')) {
+        throw "city name smoke test clicked the wrong hex: $stclkline"
+    }
+    if ($stclkline -notmatch [regex]::Escape('game_msg=selected structure (32,45) name=[Venice ]')) {
+        throw "city name regression (TCity rw tag 0xc): $stclkline"
+    }
+    Remove-Item $stclkpng, $stclklog, $stclkerr -Force -ErrorAction SilentlyContinue
+    Write-Host 'city name smoke test: ok'
     # The selected structure's blink is `bin/Screen Selection.gif`, not a smooth
     # sine: 13 map frames, opaque except the two consecutive frames 6-7 (offsets
     # 5-6 after the click) where the body drops to 50%. Barondir Bay's first city

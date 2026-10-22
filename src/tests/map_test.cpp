@@ -10,10 +10,12 @@
 //   aow_map_tests [game-root]        (default: ..)
 //
 // Exits 0 when every check passes. stdlib only.
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -247,6 +249,74 @@ int main(int argc, char** argv) {
             }
         } else {
             check(false, "load Tutorial.hsm for the unit check (" + err + ")");
+        }
+    }
+
+    // City names (docs/25_STRUCTURE_PANEL.md). `City.TCity.ReadWrite@557acbcc`
+    // streams +0x48 - the string `TCity.GetName@557ac918` hands to the Structure
+    // floater's StructNameLbl - at **rw tag 0xc** through rwString: one length
+    // byte (0xff => a u32 length), then the bytes. Reading it as a u32 length
+    // (the first four name bytes!) is what made every city show "City".
+    {
+        std::size_t cities = 0, nameless = 0, nonprintable = 0;
+        std::set<std::string> names;
+        for (const fs::path& f : files) {
+            aow::Map m;
+            std::string err;
+            if (!aow::load_map(f.string(), m, err)) continue;
+            for (const aow::MapLevel& lv : m.levels) {
+                for (const aow::MapTile& t : lv.tiles) {
+                    for (const aow::MapHs& hs : t.objects) {
+                        if (hs.class_id != aow::kCityClassId) continue;
+                        ++cities;
+                        if (hs.city_name.empty()) {
+                            ++nameless;
+                            continue;
+                        }
+                        names.insert(hs.city_name);
+                        for (unsigned char c : hs.city_name) {
+                            if (c < 0x20) ++nonprintable;
+                        }
+                    }
+                }
+            }
+        }
+        check(cities > 2000, "scenario maps carry >2000 City.TCity objects");
+        check(nameless == 0,
+              "every placed city carries its rw tag 0xc name");
+        check(nonprintable == 0, "city names carry no control bytes (rwString)");
+        check(names.count("Venice ") == 1,
+              "Bloody Marauders' Human capital is named 'Venice '");
+    }
+    {
+        // The exact record of Bloody Marauders' Human capital.
+        aow::Map m;
+        std::string err;
+        const std::string p =
+            (fs::path(root) / "Scenario/Custom/Bloody Marauders.hsm").string();
+        if (aow::load_map(p, m, err)) {
+            std::vector<std::string> found;
+            for (const aow::MapLevel& lv : m.levels) {
+                for (const aow::MapTile& t : lv.tiles) {
+                    for (const aow::MapHs& hs : t.objects) {
+                        if (hs.class_id != aow::kCityClassId) continue;
+                        found.push_back(hs.city_name);
+                    }
+                }
+            }
+            check(!found.empty() && found.front() == "Ricordia",
+                  "Bloody Marauders' first city is 'Ricordia' (rw tag 0xc)");
+            // TCity rw tag 0xc is the name verbatim: the capital's string is
+            // "Venice " (a trailing space - the map's own bytes, and the label
+            // shows whatever TCity.GetName returns).
+            check(std::find(found.begin(), found.end(), "Venice ") !=
+                      found.end(),
+                  "Bloody Marauders carries 'Venice ' (rw tag 0xc)");
+            check(std::find(found.begin(), found.end(), "Confinia Minor") !=
+                      found.end(),
+                  "multi-word city names survive ('Confinia Minor')");
+        } else {
+            check(false, "load Bloody Marauders.hsm (" + err + ")");
         }
     }
 

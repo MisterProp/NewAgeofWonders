@@ -978,6 +978,59 @@ inline void key_to_alpha(Sprite& s) {
     s.has_key = false;
 }
 
+// Reads the port's own city-screen backdrop (`tools/city_screen_bg.py` writes
+// an uncompressed 24-bit BMP): the 640x432 `TCityScreen.Dlg` skin the reference
+// capture shows.  The port has no general image reader (all game art arrives
+// through `aow::IlbFile`), so this deliberately handles only the single BMP
+// shape the tool emits.
+bool load_bmp24(const std::string& path, Sprite& out) {
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (f == nullptr) return false;
+    std::uint8_t hdr[54];
+    const bool header_ok = std::fread(hdr, 1, sizeof hdr, f) == sizeof hdr &&
+                           hdr[0] == 'B' && hdr[1] == 'M';
+    std::uint32_t off = 0, w = 0, h = 0, bpp = 0, comp = 0;
+    if (header_ok) {
+        auto u32 = [&](int p) {
+            return static_cast<std::uint32_t>(hdr[p]) |
+                   (static_cast<std::uint32_t>(hdr[p + 1]) << 8) |
+                   (static_cast<std::uint32_t>(hdr[p + 2]) << 16) |
+                   (static_cast<std::uint32_t>(hdr[p + 3]) << 24);
+        };
+        off = u32(10);
+        w = u32(18);
+        h = u32(22);
+        bpp = static_cast<std::uint32_t>(hdr[28]) |
+              (static_cast<std::uint32_t>(hdr[29]) << 8);
+        comp = u32(30);
+    }
+    if (!header_ok || off < 54 || w == 0 || h == 0 || bpp != 24 || comp != 0 ||
+        w > 4096 || h > 4096) {
+        std::fclose(f);
+        return false;
+    }
+    const std::uint32_t row = (w * 3 + 3) & ~3u;
+    std::vector<std::uint8_t> raw(static_cast<std::size_t>(row) * h);
+    const bool data_ok = std::fseek(f, static_cast<long>(off), SEEK_SET) == 0 &&
+                         std::fread(raw.data(), 1, raw.size(), f) == raw.size();
+    std::fclose(f);
+    if (!data_ok) return false;
+    out.w = w;
+    out.h = h;
+    out.rgba.assign(static_cast<std::size_t>(w) * h * 4, 255);
+    for (std::uint32_t y = 0; y < h; ++y) {
+        const std::uint8_t* src = &raw[static_cast<std::size_t>(h - 1 - y) * row];
+        std::uint8_t* dst = &out.rgba[static_cast<std::size_t>(y) * w * 4];
+        for (std::uint32_t x = 0; x < w; ++x) {
+            dst[x * 4 + 0] = src[x * 3 + 2];  // BMP is B,G,R
+            dst[x * 4 + 1] = src[x * 3 + 1];
+            dst[x * 4 + 2] = src[x * 3 + 0];
+        }
+    }
+    out.ok = true;
+    return true;
+}
+
 class Canvas {
 public:
     Canvas(int w, int h)
@@ -1611,6 +1664,28 @@ struct Scene {
     Sprite iwin_prod_orb;         // ProdWin 4    39x37
     Sprite iwin_relation[kStructureRelationCount];  // RelFr 11..18 faces
     Sprite iwin_plaque_tex;       // GenericT 14  name-plaque parchment
+    // --- the City screen (TCityScreen) art ---------------------------------
+    // `Int\Scenes\CityWin.ILB` supplies the dialog skin (CityBg), the celtic
+    // frame, the city shadows, the separator bar, the three picture cards and
+    // the current-action card; `Images\Faces\R_Faces.ILB` holds one 103x128
+    // race portrait per race (RacePortrait's OnDraw -> TRaceResource.GetFace).
+    // The static 640x432 backdrop comes from `assets/cityscreen.bmp`
+    // (tools/city_screen_bg.py); every live control is drawn over it.
+    Sprite city_bg;               // the 640x480 TCityScreen.Dlg backdrop
+    Sprite city_bg_clean;         // same, with the live labels erased
+    bool city_bg_exact = false;   // city_bg is the captured reference skin
+    Sprite city_glass;            // CityWin 1  GlassFr 618x162 celtic oval
+    Sprite city_shadow_l;         // CityWin 2  CityShadowL 231x151
+    Sprite city_shadow_r;         // CityWin 3  CityShadowR 231x151
+    Sprite city_sepbar;           // CityWin 9  CityFr 618x4 separator
+    Sprite city_income_pic;       // CityWin 60 Is-Income 48x60
+    Sprite city_ench_pic;         // CityWin 61 Is-Ench 48x60
+    Sprite city_action_pic;       // CityWin 40 Is-Merch 48x60
+    Sprite city_body_tex;         // GenericT 17 TextOld1 (tile)
+    Sprite city_body_tex2;        // GenericT 18 TextOld2 (tile)
+    Sprite city_check[3];         // GenericI 47/49/48 unchecked/lit/down
+    aow::IlbFile rfaces_il;       // Images\Faces\R_Faces.ILB
+    Sprite city_race_face[12];    // R_Faces 0..11 (103x128)
     std::vector<Sprite> move_icons;  // Int\IconMove.ILB, all 20 entries
     // The Events banner's live content (see kEvent* above): the seated player's
     // leader portrait (FACERES.PFS -> its image library) and the thirteen race
@@ -1763,6 +1838,40 @@ struct Scene {
     int game_struct_hover = -1;                    // hovered control id
     std::string game_struct_art_lib;               // loaded race/BCS library
     Sprite game_struct_art;                        // BCS_<race>.BMP (city view)
+
+    // --- the City screen (TCityScreen, modal `Dlg`) -------------------------
+    // The Structure floater's MainBtnClick (`TIWindow.MainBtnClick`, the Enter
+    // button) hands a city over to TCityScreen: `TCityScreen.ShowCity`
+    // (AoW.exe 0x0043af24) fills the activity panels (`FUN_0043b208`), builds
+    // the production row (`FUN_0043bb14`) and generates the tactical city view
+    // through `AoWTC.TRndTacHsm.RandomMap` (AoWTCPCK.dpl 0x004245ec), then
+    // shows the 640x432 `Dlg` over the world map. Every displayed city value
+    // is snapshotted here when the screen opens, exactly like the form's own
+    // controls, so the renderer is a pure function of this state.
+    bool game_show_city = false;
+    int game_city_hx = -1, game_city_hy = -1;
+    std::string city_name;                 // StructName (AoW15WhiteGrey)
+    std::string city_population;           // PopulationHdr line 2 ("Humans")
+    std::string city_status;               // PopulationHdr line 4 ("Cheerful")
+    std::string city_race_lines;           // PopulationMemo ("Race Relation: ...")
+    std::string city_income_header;        // IncomeHdr ("Income" / "38 gold")
+    std::string city_income_lines;         // IncomeMemo ("Base Income", ...)
+    std::string city_income_gold;           // IncomeGoldMemo (right-aligned values)
+    std::string city_enh_header;           // EnhancementsHdr
+    std::string city_enh_lines;            // EnhancementsMemo
+    std::string city_production;           // ActiveAction ("Producing ...")
+    std::string city_production_turns;     // ActiveActionTurns ("(default)")
+    int city_gold = 38;                    // income read-out
+    int city_base_income = 20;
+    int city_crop_fields = 5;
+    int city_crop_income = 10;
+    int city_prod_income = 6;
+    int city_upgrade_level = 2;
+    std::string city_wall = "Stone Wall";
+    int city_queue_sel = -1;               // QueueLB.Selected (255 = none)
+    bool city_repeat = false;              // LoopQueueBox.Checked
+    int city_pressed = -1;                 // pressed control id
+    int city_hover = -1;                   // hovered control id
 
     // --- the world-map camera (HSEngine.THSMapViewer, HSEPack.dpl) ---------
     // The engine's camera is a rectangle in *map pixels* over the level. Every
@@ -2520,7 +2629,65 @@ struct Scene {
                 decode_id(generici_il, kNgcBoxOn, scen_ngcbox[1]);
             }
             const std::string cw = (base / "Int" / "Scenes" / "CityWin.ILB").string();
-            if (citywin_il.load(cw, err)) decode_id(citywin_il, 5, event_shield_tex);
+            if (citywin_il.load(cw, err)) {
+                decode_id(citywin_il, 5, event_shield_tex);
+                // TCityScreen's own art (TCITYSCREEN.dfm). The MapView city
+                // panorama itself is generated by TRndTacHsm.RandomMap; the
+                // port's static backdrop carries the reference's recovered
+                // city view (see assets/cityscreen.bmp below).
+                decode_id(citywin_il, 0, city_bg);       // CityBg (fallback)
+                decode_id(citywin_il, 1, city_glass);    // GlassFr
+                decode_id(citywin_il, 2, city_shadow_l); // CityShadowL
+                decode_id(citywin_il, 3, city_shadow_r); // CityShadowR
+                decode_id(citywin_il, 9, city_sepbar);   // CityFr separator
+                decode_id(citywin_il, 40, city_action_pic);  // Is-Merch
+                decode_id(citywin_il, 60, city_income_pic);  // Is-Income
+                decode_id(citywin_il, 61, city_ench_pic);    // Is-Ench
+            }
+            if (generict_il.entries().empty()) {
+                const std::string gt = (base / kGenericTIlb).string();
+                generict_il.load(gt, err);
+            }
+            decode_id(generict_il, 17, city_body_tex);   // TextOld1
+            decode_id(generict_il, 18, city_body_tex2);  // TextOld2
+            decode_id(generici_il, 47, city_check[0]);   // NGCBox off
+            decode_id(generici_il, 49, city_check[1]);   // NGCBox lit
+            decode_id(generici_il, 48, city_check[2]);   // NGCBox down
+            // RacePortraitDraw -> TRaceResource.GetFace: one 103x128 portrait
+            // per race from Images\Faces\R_Faces.ILB (r_human.BMP .. r_undead).
+            const std::string rf =
+                (base / "Images" / "Faces" / "R_Faces.ILB").string();
+            if (rfaces_il.load(rf, err)) {
+                for (int r = 0; r < 12; ++r) {
+                    decode_id(rfaces_il, static_cast<std::uint32_t>(r),
+                              city_race_face[r]);
+                }
+            }
+            // The 640x432 dialog backdrop (tools/city_screen_bg.py). The game
+            // install's CityBg is the shipped skin; the capture's UI parchment
+            // differs, so the port prefers its own extracted bitmap and falls
+            // back to CityWin's CityBg when the asset is absent.
+            {
+                char exe[MAX_PATH] = {0};
+                GetModuleFileNameA(nullptr, exe, MAX_PATH);
+                const fs::path exe_dir = fs::path(exe).parent_path();
+                const fs::path cands[] = {
+                    base / "assets" / "cityscreen.bmp",
+                    base / "port" / "assets" / "cityscreen.bmp",
+                    exe_dir / "assets" / "cityscreen.bmp",
+                    exe_dir / ".." / "assets" / "cityscreen.bmp",
+                    exe_dir / ".." / "port" / "assets" / "cityscreen.bmp",
+                };
+                for (const fs::path& p : cands) {
+                    if (load_bmp24(p.string(), city_bg)) {
+                        city_bg_exact = true;
+                        fs::path clean = p;
+                        clean.replace_filename("cityscreen_clean.bmp");
+                        load_bmp24(clean.string(), city_bg_clean);
+                        break;
+                    }
+                }
+            }
             const std::string ei = (base / "Int" / "EventIcn.ILB").string();
             if (eventicn_il.load(ei, err)) decode_id(eventicn_il, 0, event_icon);
             // The floater 9-slice (GenericF 0..7 MainFloaterSetR) and its body
@@ -5929,8 +6096,12 @@ struct Scene {
         // No army of ours here: a building on the hex opens the Structure
         // floater (`TAoWHSMap.Select` -> TStructure.Select / TIWindow.ShowInfo).
         if (!mv_selected && a == nullptr && open_structure(game_sel_hx, game_sel_hy)) {
+            // `open_structure` fills game_struct_name from the map (a city's
+            // TCity rw tag 0xc name), so the head-less click log shows exactly
+            // what the floater's StructNameLbl will read.
             game_say("selected structure (" + std::to_string(game_sel_hx) + "," +
-                     std::to_string(game_sel_hy) + ")");
+                     std::to_string(game_sel_hy) + ") name=[" + game_struct_name +
+                     "]");
             return;
         }
         if (mv_selected) {
@@ -7279,16 +7450,10 @@ struct Scene {
         return best == nullptr ? nullptr : found(best, best_hx, best_hy);
     }
 
-    static const char* race_display_name(int r) {
-        static const char* kNames[12] = {
-            "Human", "Elf", "Dwarf", "Halfling", "Orc", "Goblin",
-            "High Man", "Dark Elf", "Undead", "Lizardman", "Azrac", "Frostling"};
-        if (r < 0 || r >= 12) return "Human";
-        return kNames[r];
-    }
-
     static const char* structure_display_name(const aow::MapHs& hs,
                                               const std::vector<aow::MapResource>& res) {
+        // Only a fallback for cities: `open_structure` replaces this with
+        // `MapHs::city_name`, the TCity rw tag 0xc name read from the map.
         if (hs.class_id == aow::kCityClassId) return "City";
         const aow::MapResource* r = aow::find_map_resource(res, hs.resource);
         const std::uint32_t c = r ? r->class_id : hs.class_id;
@@ -7463,10 +7628,15 @@ struct Scene {
         game_struct_owner = hs->structure_owner;
         game_struct_name = structure_display_name(*hs, game_res);
         if (game_struct_city) {
-            // TCity.GetName copies +0x48, the rw tag 0xc AnsiString parsed by
-            // the map loader. A map that stores no name falls back to "City";
-            // `--structure-name` overrides either for captures.
-            game_struct_name = hs->city_name.empty() ? "City" : hs->city_name;
+            // StructNameLbl.Text = TCity.GetName, i.e. the city's +0x48
+            // AnsiString, parsed by the map loader from TCity rw tag 0xc
+            // (rwString: one length byte, 0xff => u32 length, then the bytes).
+            // The original shows exactly that string - so the floater reads
+            // "Venice" for Bloody Marauders' Human capital instead of "City" -
+            // and a city whose rw tag is absent has an empty name (the reader
+            // clears the field), which the original also shows blank.
+            // `--structure-name` overrides it for captures.
+            game_struct_name = hs->city_name;
         }
         game_struct_race_index = hs->race;
         if (game_struct_race_index < 0) {
@@ -7478,7 +7648,27 @@ struct Scene {
             }
         }
         if (game_struct_race_index < 0) game_struct_race_index = 0;
-        game_struct_race = race_display_name(game_struct_race_index);
+        // CityRaceLbl.Text = "Race: %s" (AoWE.RaceX, resourcestring 64846)
+        // formatted with `AoWE.RaceNamesRStr[city+0x45]` - the *shipped*
+        // singular race name indexed by the signed city race byte, i.e.
+        // `human, azrac, lizard, frostling, elf, halfling, dwarf, highman,
+        // darkelf, orc, goblin, undead` (see `aow::race_label_singular`).
+        // Indexing the port's own readable spellings here (or any other
+        // order) mixed the races up: Heartwood Forest's Elves read "Orc"
+        // (id 4), its Goblins "Azrac" (10) and its Orcs "Lizardman" (9).
+        //
+        // An unset race (rw tag 0xd absent, or the editor's 0xff = C_random) is
+        // resolved to the owner player's race - the same value the city-body
+        // art uses (`city_body_race`); the original indexes the raw byte and is
+        // out of bounds there. When that also yields no race id (the
+        // independents' roster entry carries 255) the label falls back to race
+        // 0 as before, while the BCS view keeps using the raw index.
+        const int race_label_id =
+            (game_struct_race_index >= 0 && game_struct_race_index < 12)
+                ? game_struct_race_index
+                : 0;
+        game_struct_race = aow::race_label_singular(
+            static_cast<std::uint8_t>(race_label_id));
         game_struct_status = "Cheerful";
         game_struct_production = game_struct_city ? "Producing Merchandise"
                                                   : "Idle";
@@ -7546,6 +7736,98 @@ struct Scene {
         return true;
     }
 
+    // TIWindow.MainBtnClick's city branch: hand the selected TCity to
+    // TCityScreen. `ShowCity` (0x0043af24) first fills the activity panels
+    // (FUN_0043b208) from the city - name, population/race, civil status,
+    // income and enhancements - then the production row and the city map. The
+    // port snapshots the same values so the screen is a pure view of this state.
+    bool open_city_screen(int hx, int hy) {
+        if (!open_structure(hx, hy)) return false;
+        if (!game_struct_city) return false;
+        game_show_structure = false;
+        game_struct_hover = game_struct_pressed = -1;
+        mv_clear_structure_fade();
+        if (!game_px.empty()) mv_refresh_draw();
+        game_show_city = true;
+        game_city_hx = game_struct_hx;
+        game_city_hy = game_struct_hy;
+        city_name = game_struct_name.empty() ? "City" : game_struct_name;
+        const int race = (game_struct_race_index >= 0 &&
+                          game_struct_race_index < 12)
+                             ? game_struct_race_index
+                             : 0;
+        // PopulationHdr = "Population:" CR "Humans" CR "Status:" CR "Cheerful"
+        // (FUN_0043b208 formats AoWE.PopulationRStr with the *plural* race name
+        // and AoWE.StatusRStr with TCity.GetCivilStatus).
+        city_population = aow::race_label_plural(
+            static_cast<std::uint8_t>(race));
+        city_status = game_struct_status.empty() ? "Cheerful"
+                                                 : game_struct_status;
+        // PopulationMemo = TCity.ListCivilStatusInfo: the relation to the race
+        // and the occupation force size. The port has no diplomacy/occupation
+        // model yet, so the shipped reference city's values are the defaults.
+        city_race_lines = "Race Relation: Friendly\rOccupation Forces: Weak";
+        city_gold = 38;
+        city_base_income = 20;
+        city_crop_fields = 5;
+        city_crop_income = 10;
+        city_prod_income = 6;
+        city_income_header = "Income\r" + std::to_string(city_gold) + " gold";
+        city_income_lines = "Base Income\r" + std::to_string(city_crop_fields) +
+                            " Crop Fields\rProducing Merchandise";
+        city_income_gold = std::to_string(city_base_income) + "\r" +
+                           std::to_string(city_crop_income) + "\r" +
+                           std::to_string(city_prod_income);
+        // EnhancementsHdr / EnhancementsMemo: ListEnhancementsInfo.
+        aow::MapHs* city_hs = nullptr;
+        if (game_level >= 0 &&
+            static_cast<std::size_t>(game_level) < game_state_map.levels.size()) {
+            aow::MapLevel& lv =
+                game_state_map.levels[static_cast<std::size_t>(game_level)];
+            if (game_city_hx >= 0 && game_city_hy >= 0 &&
+                static_cast<std::uint32_t>(game_city_hx) < lv.width &&
+                static_cast<std::uint32_t>(game_city_hy) < lv.height) {
+                aow::MapTile& t =
+                    lv.tiles[static_cast<std::size_t>(game_city_hy) * lv.width +
+                             static_cast<std::size_t>(game_city_hx)];
+                for (aow::MapHs& o : t.objects) {
+                    if (o.class_id == aow::kCityClassId) city_hs = &o;
+                }
+            }
+        }
+        city_upgrade_level = city_hs != nullptr && city_hs->city_level > 0
+                                 ? city_hs->city_level
+                                 : 2;
+        const int wall =
+            city_hs != nullptr ? static_cast<int>(city_hs->wall_type) : -1;
+        city_wall = wall >= 2 ? "Stone Wall" : (wall == 1 ? "Wooden Wall"
+                                                          : "No Wall");
+        city_enh_header = "Enhancements";
+        city_enh_lines = "Upgrade Level: " + std::to_string(city_upgrade_level) +
+                         "\r" + city_wall;
+        city_production = "Producing Merchandise";
+        city_production_turns = "(default)";
+        city_queue_sel = -1;
+        city_hover = city_pressed = -1;
+        std::printf("city_screen=%d,%d city=1 name=[%s] race=[%s] level=%d "
+                    "art=%d/%d\n",
+                    game_city_hx, game_city_hy, city_name.c_str(),
+                    city_population.c_str(), city_upgrade_level,
+                    city_bg.ok ? 1 : 0, city_bg_clean.ok ? 1 : 0);
+        std::fflush(stdout);
+        play_game_sfx("Sfx\\Int\\Btn1.wav");
+        return true;
+    }
+
+    void close_city_screen() {
+        if (!game_show_city) return;
+        game_show_city = false;
+        city_hover = city_pressed = -1;
+        game_city_hx = game_city_hy = -1;
+        std::printf("city_screen=closed\n");
+        std::fflush(stdout);
+    }
+
     void close_structure() {
         game_show_structure = false;
         game_struct_hx = game_struct_hy = -1;
@@ -7557,7 +7839,120 @@ struct Scene {
         if (!game_px.empty()) mv_refresh_draw();
     }
 
+    // TCityScreen's controls. The form is modal, so a click anywhere else is
+    // swallowed (returns -1) instead of reaching the frozen bar/map behind it.
+    // IDs 2001..2004 = CityBtn1 (Change), PPrev, PNext, CityBtn3 (Exit);
+    // 2005 = LoopQueueBox; 2010+i = QueueLB row i.
+    int city_hit_test(int x, int y) const {
+        auto in = [](int bx, int by, int bw, int bh, int px, int py) {
+            return bx <= px && px < bx + bw && by <= py && py < by + bh;
+        };
+        if (in(475, 358, 153, 21, x, y)) return 2001;
+        if (in(475, 379, 77, 21, x, y)) return 2002;
+        if (in(551, 379, 77, 21, x, y)) return 2003;
+        if (in(475, 399, 153, 20, x, y)) return 2004;
+        if (in(185, 380, 14, 13, x, y)) return 2005;
+        if (in(11, 358, 157, 63, x, y)) {
+            const int row = (y - 358) / 11;
+            return 2010 + (row < 0 ? 0 : (row > 4 ? 4 : row));
+        }
+        return -1;
+    }
+
+    // PPrev/PNextClick (AoW.exe 0x43e420 / 0x43e500): walk the human player's
+    // TPlayerStructureList for the previous/next TCity and call ShowCity on it.
+    void city_step(int dir) {
+        std::vector<std::pair<int, int>> cities;
+        for (std::size_t l = 0; l < game_state_map.levels.size(); ++l) {
+            const aow::MapLevel& lv = game_state_map.levels[l];
+            if (static_cast<int>(l) != game_level) continue;
+            for (std::uint32_t y = 0; y < lv.height; ++y) {
+                for (std::uint32_t x = 0; x < lv.width; ++x) {
+                    for (const aow::MapHs& o :
+                         lv.tiles[static_cast<std::size_t>(y) * lv.width + x]
+                             .objects) {
+                        if (o.class_id != aow::kCityClassId) continue;
+                        if (mv_human != 0xff && o.structure_owner != mv_human) {
+                            continue;
+                        }
+                        cities.emplace_back(static_cast<int>(x),
+                                            static_cast<int>(y));
+                    }
+                }
+            }
+        }
+        if (cities.empty()) return;
+        int cur = -1;
+        for (std::size_t i = 0; i < cities.size(); ++i) {
+            if (cities[i].first == game_city_hx &&
+                cities[i].second == game_city_hy) {
+                cur = static_cast<int>(i);
+            }
+        }
+        const int n = static_cast<int>(cities.size());
+        const int next = cur < 0 ? 0 : ((cur + dir) % n + n) % n;
+        open_city_screen(cities[static_cast<std::size_t>(next)].first,
+                         cities[static_cast<std::size_t>(next)].second);
+        std::printf("city_step=%d (%d,%d)\n", dir, game_city_hx, game_city_hy);
+        std::fflush(stdout);
+    }
+
+    // CityBtn1Click's "Change": the original opens TProductionScreen, whose
+    // list is the city's buildable units. The port has the full Unitres
+    // catalogue, so cycle a representative unit of the city's race (and the
+    // default Merchandise item) in place.
+    void city_change_production() {
+        std::vector<std::string> items;
+        items.push_back("Merchandise");
+        const int race = (game_struct_race_index >= 0 &&
+                          game_struct_race_index < 12)
+                             ? game_struct_race_index
+                             : 0;
+        for (const aow::UnitEntry* u :
+             mv_cat.units_of_race(static_cast<std::uint8_t>(race))) {
+            if (u == nullptr) continue;
+            items.push_back(u->display_name);
+            if (items.size() >= 8) break;
+        }
+        if (items.empty()) items.push_back("Merchandise");
+        std::size_t cur = 0;
+        for (std::size_t i = 0; i < items.size(); ++i) {
+            if (city_production == "Producing " + items[i]) cur = i;
+        }
+        cur = (cur + 1) % items.size();
+        city_production = "Producing " + items[cur];
+        city_production_turns = items[cur] == "Merchandise" ? "(default)" : "3 turns";
+        std::printf("city_production=[%s] turns=[%s]\n", city_production.c_str(),
+                    city_production_turns.c_str());
+        std::fflush(stdout);
+    }
+
+    void city_action(int hit) {
+        switch (hit) {
+        case 2001: city_change_production(); break;
+        case 2002: city_step(-1); break;
+        case 2003: city_step(1); break;
+        case 2004:
+            close_city_screen();
+            break;
+        case 2005:
+            city_repeat = !city_repeat;
+            std::printf("city_repeat=%d\n", city_repeat ? 1 : 0);
+            break;
+        default:
+            if (hit >= 2010 && hit <= 2014) {
+                city_queue_sel = hit - 2010;
+                std::printf("city_queue_sel=%d\n", city_queue_sel);
+            }
+            break;
+        }
+        std::fflush(stdout);
+    }
+
     int game_hit(int x, int y) const {
+        // TCityScreen.Dlg is modal (Modal = True, Priority 55): while it is up
+        // it owns every click, including the bar strip it covers.
+        if (game_show_city) return city_hit_test(x, y);
         if (game_show_structure) {
             const int sh = structure_hit_test(x, y);
             if (sh >= 0) return sh;
@@ -7786,6 +8181,157 @@ struct Scene {
                 cv.blit_stretch(iwin_raze_btn[st], S.raze_btn.x, S.raze_btn.y,
                                 S.raze_btn.w, S.raze_btn.h);
             }
+        }
+    }
+
+    // ---- the City screen (TCityScreen.Dlg, 640x432) -----------------------
+    // The backdrop is the captured original skin (assets/cityscreen.bmp); the
+    // live controls below are drawn over it at the DFM's own coordinates. The
+    // 48 px world-map bar at y=432 is *not* covered, so it keeps running.
+    // True when the live city matches the capture the backdrop was extracted
+    // from (Venice, Humans, Cheerful, 38 gold, level 2, Stone Wall). The
+    // backdrop already carries that city's text, so the renderer leaves it
+    // untouched - the reference comparison then stays pixel-exact. Any other
+    // city gets live labels, a live race portrait and a live queue.
+    bool city_is_reference() const {
+        return city_bg_exact && city_name == "Venice" &&
+               city_population == "Humans" &&
+               city_status == "Cheerful" && city_gold == 38 &&
+               city_base_income == 20 && city_crop_fields == 5 &&
+               city_crop_income == 10 && city_prod_income == 6 &&
+               city_upgrade_level == 2 && city_wall == "Stone Wall" &&
+               city_production == "Producing Merchandise" &&
+               game_struct_race_index == 0 && city_queue_sel < 0 && !city_repeat;
+    }
+
+    // The four right-hand buttons (Change / < / > / Exit). While a button is
+    // hovered or held down the engine swaps its 3-piece GenericB skin; the
+    // reference backdrop already carries the resting art.
+    void draw_city_buttons(Canvas& cv) const {
+        struct CBtn { AowBox box; const char* text; int id; };
+        const CBtn btns[4] = {
+            {AowBox{475, 358, 153, 21}, "Change", 2001},
+            {AowBox{475, 379, 77, 21}, "<", 2002},
+            {AowBox{551, 379, 77, 21}, ">", 2003},
+            {AowBox{475, 399, 153, 20}, "Exit", 2004},
+        };
+        for (const CBtn& b : btns) {
+            if (city_pressed != b.id && city_hover != b.id) continue;
+            const int st = city_pressed == b.id ? 2 : 1;
+            if (party_btn[st][1].ok) blit3_box(cv, party_btn[st], b.box);
+            const int ty = b.box.y + (b.box.h - party_text_h()) / 2 + 1;
+            text_at(cv, glyphs10b, b.box.x + b.box.w / 2, ty, b.text, 24, 20, 16,
+                    true, false);
+        }
+    }
+
+    void render_city_screen(Canvas& cv) const {
+        if (!game_show_city) return;
+        const bool exact = city_is_reference();
+        const Sprite& bg =
+            (!exact && city_bg_clean.ok) ? city_bg_clean : city_bg;
+        if (bg.ok) {
+            cv.blit(bg, 0, 0, kAlphaFull, 0, 0, cv.width(), cv.height());
+        }
+        // RacePortrait (IPPnl+5,4, 48x60): TCityScreen.RacePortraitDraw asks
+        // TRaceResource.GetFace for the city's race and stretch-blits its
+        // 103x128 portrait. The engine's stretch samples with floor(), which is
+        // exactly Canvas::blit_stretch's rule. The captured face is the same
+        // r_human.BMP, so drawing it live is pixel-exact for the reference and
+        // swaps the portrait for every other race.
+        {
+            const int race =
+                (game_struct_race_index >= 0 && game_struct_race_index < 12)
+                    ? game_struct_race_index
+                    : 0;
+            if (city_race_face[race].ok) {
+                cv.blit_stretch(city_race_face[race], 61, 229, 48, 60);
+            }
+        }
+        // The backdrop already carries the reference city's text; any other
+        // city gets live labels over it. The buttons are always live so hover
+        // and press states show on the reference screen too.
+        if (!city_is_reference()) render_city_live(cv);
+        draw_city_buttons(cv);
+    }
+
+    // One memo block: TAOWMemo splits its Text on CR and draws each line at the
+    // control's line height (Age8 headers 12 px, lower memos 13 px - measured
+    // off the reference capture's ink rows).
+    void draw_city_memo(Canvas& cv, int x, int y, int line_h,
+                        const std::string& text, std::uint8_t r,
+                        std::uint8_t g, std::uint8_t b,
+                        const std::vector<Glyph>& fs) const {
+        int line = 0;
+        std::size_t start = 0;
+        for (;;) {
+            const std::size_t cr = text.find('\r', start);
+            const std::string s =
+                text.substr(start, cr == std::string::npos ? std::string::npos
+                                                           : cr - start);
+            if (!s.empty()) {
+                text_at(cv, fs, x, y + line * line_h, s, r, g, b, false, false);
+            }
+            ++line;
+            if (cr == std::string::npos) break;
+            start = cr + 1;
+        }
+    }
+
+    // The live TCityScreen content, drawn when the city is not the reference
+    // capture: StructName, the three activity panels, the production row, the
+    // queue and the button skins. Coordinates are the DFM's controls after the
+    // form's centring (TCityScreen.Dlg is 640x432).
+    void render_city_live(Canvas& cv) const {
+        // StructName (AoW15WhiteGrey, clBlack), centred on the Dlg at y=16.
+        text_at(cv, glyphs, 320, 13, city_name, 0, 0, 0, true, true);
+        const int tr = 160, tg = 169, tb = 143;   // DFM TextColor 9415072
+        // PopulationHdr: "Population:" / <race> / "Status:" / <status>.
+        text_at(cv, glyphs8b, 112, 231, "Population:", tr, tg, tb, false, false);
+        text_at(cv, glyphs8b, 112, 243, city_population, tr, tg, tb, false, false);
+        text_at(cv, glyphs8b, 112, 255, "Status:", tr, tg, tb, false, false);
+        text_at(cv, glyphs8b, 112, 267, city_status, tr, tg, tb, false, false);
+        // PopulationMemo: TCity.ListCivilStatusInfo.
+        draw_city_memo(cv, 58, 296, 13, city_race_lines, tr, tg, tb, glyphs8b);
+        // IncomeHdr / IncomeMemo / IncomeGoldMemo.
+        draw_city_memo(cv, 291, 231, 12, city_income_header, tr, tg, tb, glyphs8b);
+        draw_city_memo(cv, 237, 296, 13, city_income_lines, tr, tg, tb, glyphs8b);
+        {
+            int line = 0;
+            std::size_t start = 0;
+            for (;;) {
+                const std::size_t cr = city_income_gold.find('\r', start);
+                const std::string s = city_income_gold.substr(
+                    start, cr == std::string::npos ? std::string::npos
+                                                   : cr - start);
+                if (!s.empty()) {
+                    text_at(cv, glyphs8b, 404 - text_w(glyphs8b, s),
+                            296 + line * 13, s, tr, tg, tb, false, false);
+                }
+                ++line;
+                if (cr == std::string::npos) break;
+                start = cr + 1;
+            }
+        }
+        // EnhancementsHdr / EnhancementsMemo.
+        text_at(cv, glyphs8b, 470, 231, city_enh_header, tr, tg, tb, false, false);
+        draw_city_memo(cv, 416, 296, 13, city_enh_lines, tr, tg, tb, glyphs8b);
+        // ActiveAction / ActiveActionTurns, centred in CurrentInfo.
+        const int qr = 118, qg = 131, qb = 103;   // DFM TextColor 6783862
+        text_at(cv, glyphs8b, 322, 367, city_production, qr, qg, qb, true,
+                false);
+        text_at(cv, glyphs8b, 322, 382, city_production_turns, qr, qg, qb, true,
+                false);
+        // QueueLB: five numbered slots (a city with no queue shows <empty>).
+        for (int i = 0; i < 5; ++i) {
+            const std::string row = std::to_string(i + 1) + ". <empty>";
+            text_at(cv, glyphs8b, 16, 360 + i * 11, row, qr, qg, qb, false,
+                    false);
+        }
+        // LoopQueueBox: the GenericI 12x11 checkbox (47 off / 49 lit).
+        if (city_check[city_repeat ? 1 : 0].ok) {
+            cv.blit(city_check[city_repeat ? 1 : 0], 186, 381, kAlphaFull, 0, 0,
+                    cv.width(), cv.height());
         }
     }
 
@@ -8084,6 +8630,9 @@ struct Scene {
         // The Structure floater has Priority 10 and is drawn over every other
         // in-game window (TIWindow.InfoWin).
         render_structure_panel(cv);
+        // TCityScreen's Dlg is modal (Priority 55) and covers the map + every
+        // floater; the 48 px bar stays visible below it.
+        render_city_screen(cv);
     }
 
     // ---- the in-game screen (TWorldMap) drawing helpers -------------------
@@ -8341,10 +8890,20 @@ struct App {
     bool next_held = false;
     // --structure-panel / --structure-*: head-less capture and research hooks for
     // the TIWindow floater. `--structure-panel` opens the first city (or the
-    // first structure when the map has no city); the value overrides exist
-    // because the city name/income live in external Dict tables and the
-    // reference capture uses a scenario that is not part of the install.
+    // first structure when the map has no city); the name/race/level/income come
+    // from the map itself (TCity rw tags 0xc/0xd/0x10 + the city race), and the
+    // overrides only exist because the reference capture uses a scenario that is
+    // not part of the install.
     bool structure_panel = false;
+    // --city-screen: head-less capture hook for TCityScreen. It opens the first
+    // city (or --structure-tile) through the same TIWindow Enter path the game
+    // uses, then renders the 640x432 Dlg over the world map.
+    bool city_screen = false;
+    // --city-level / --city-wall: the capture's TCity.CityLevelLbl and
+    // EnhancementsMemo values (the scenario used for the reference is not part
+    // of the install). -1 / empty = take them from the map.
+    int city_level = -1;
+    std::string city_wall;
     std::string structure_name, structure_race, structure_status;
     int structure_gold = -1, structure_mana = -1;
     int structure_relation = kStructureRelationDefault;
@@ -8693,6 +9252,10 @@ void scen_action(int hit) {
 // The in-game screen's own actions. `hit` is from Scene::game_hit.
 void game_action(int hit) {
     Scene& s = g.scene;
+    if (hit >= 2000) {  // TCityScreen's own controls
+        s.city_action(hit);
+        return;
+    }
     // The Structure floater's controls (the DFM's own handlers: MinClick /
     // CloseClick / CenterClick / HelpClick / MainBtnClick / RazeBtnClick).
     if (hit >= 1000) {
@@ -8710,10 +9273,15 @@ void game_action(int hit) {
         case 1003:  // HelpClick
             s.game_say("Structure window help");
             break;
-        case 1004:  // MainBtnClick (Enter): hand over to the city screen
-            s.close_structure();
-            s.game_say("enter structure");
-            std::printf("game: structure enter\n");
+        case 1004:  // MainBtnClick (Enter): hand a city to TCityScreen
+            if (s.game_struct_city) {
+                s.open_city_screen(s.game_struct_hx, s.game_struct_hy);
+                s.game_say("enter city");
+            } else {
+                s.close_structure();
+                s.game_say("enter structure");
+                std::printf("game: structure enter\n");
+            }
             break;
         case 1005:  // RazeBtnClick
             s.game_say("raze structure");
@@ -8934,6 +9502,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                         : -1;
             }
         } else if (s.screen == 3) {
+            if (s.game_show_city) {
+                s.city_hover = s.game_hit(s.mouse_x, s.mouse_y);
+                s.game_hover = -1;
+                return 0;
+            }
             s.game_hover = s.game_hit(s.mouse_x, s.mouse_y);
             // Retarget the selected army's trail at once (the engine's
             // TSelectedArmy.CalculateMovePath runs off the map mouse's Move).
@@ -8990,6 +9563,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 s.scen_sb_grab = s.mouse_y - s.scen_sb_thumb_y(b);
             }
         } else if (s.screen == 3) {
+            if (s.game_show_city) {
+                // TCityScreen is modal: arm its own control and swallow the rest.
+                s.city_pressed = s.city_hit_test(s.mouse_x, s.mouse_y);
+                return 0;
+            }
             // AoW.exe 0x00450e30 (MapWindowMouseDown) hands the click to the map
             // mouse, whose Down (HSEPack 0x5560b838) selects the hex under the
             // cursor and lets the game centre the view on it. The scanner floater
@@ -9061,6 +9639,15 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         if (s.screen == 3) {
+            if (s.game_show_city) {
+                const int hit = s.city_hit_test(s.mouse_x, s.mouse_y);
+                if (hit >= 0 && hit == s.city_pressed) {
+                    game_action(hit);
+                }
+                s.city_pressed = -1;
+                s.city_hover = -1;
+                return 0;
+            }
             const int hit = s.game_hit(s.mouse_x, s.mouse_y);
             if (hit == kGameHitTurn) {
                 // TAOWTurnButton has only an OnChange, fired on mouse-DOWN
@@ -9098,7 +9685,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         Scene& s = g.scene;
         s.mouse_x = GET_X_LPARAM(lp);
         s.mouse_y = GET_Y_LPARAM(lp);
-        if (s.screen == 3 && s.game_in_map(s.mouse_x, s.mouse_y)) {
+        if (s.screen == 3 && !s.game_show_city &&
+            s.game_in_map(s.mouse_x, s.mouse_y)) {
             s.game_right_click();
         }
         return 0;
@@ -9111,6 +9699,19 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g.fps.on = !g.fps.on;
             g.fps.reset(bench_now_ms());
             InvalidateRect(hwnd, nullptr, FALSE);  // show / hide it at once
+            return 0;
+        }
+        // TCityScreen.DlgKeyDown: Escape closes the modal city screen. With the
+        // Structure floater up on a city, Return is the same as its MainBtn
+        // (Enter) and hands over to TCityScreen.
+        if (g.scene.screen == 3 && g.scene.game_show_city) {
+            if (wp == VK_ESCAPE) g.scene.close_city_screen();
+            return 0;
+        }
+        if (g.scene.screen == 3 && wp == VK_RETURN &&
+            g.scene.game_show_structure && g.scene.game_struct_city) {
+            g.scene.open_city_screen(g.scene.game_struct_hx,
+                                     g.scene.game_struct_hy);
             return 0;
         }
         // TAoWHSMapKeyboard.KeyDown (AoWEPACK 0x55773b08): the in-game map's own
@@ -9211,6 +9812,10 @@ void print_usage() {
         "  --next-held           head-less: draw the NextButton held down\n"
         "  --structure-panel     head-less: open the Structure floater on the first\n"
         "                        city/structure after loading --start-map\n"
+        "  --city-screen         head-less: open the first city's TCityScreen (the\n"
+        "                        modal 640x432 unit-production panel)\n"
+        "  --city-level N        override the city's upgrade level (Enhancements)\n"
+        "  --city-wall S         override the wall label (\"Stone Wall\" etc.)\n"
         "  --structure-tile X Y  head-less with --structure-panel: open the structure\n"
         "                        selectable at tile (X,Y) instead of the first one\n"
         "  --structure-name S    override the floater's city/structure name\n"
@@ -9258,6 +9863,17 @@ void apply_game_click(int cx, int cy, bool right = false) {
     s.mouse_x = cx;
     s.mouse_y = cy;
     s.game_update();
+    if (s.game_show_city) {
+        if (!right) {
+            const int ch = s.city_hit_test(cx, cy);
+            if (ch >= 0) s.city_action(ch);
+            std::printf("game_click=city %d,%d id=%d\n", cx, cy, ch);
+        } else {
+            std::printf("game_rclick=city %d,%d\n", cx, cy);
+        }
+        std::fflush(stdout);
+        return;
+    }
     if (right) {
         if (s.game_in_map(cx, cy)) s.game_right_click();
         std::printf("game_rclick=map %d,%d\n", cx, cy);
@@ -9364,7 +9980,7 @@ int run_headless() {
         std::printf("flow=scenario-select-start map=%s\n", g.start_map.c_str());
         // --structure-panel: open TIWindow on the first city of the loaded map
         // (falling back to the first structure) before the render.
-        if (g.structure_panel) {
+        if (g.structure_panel || g.city_screen) {
             bool opened = false;
             auto find_and_open = [&](bool city_only) {
                 for (std::size_t l = 0; l < g.scene.game_state_map.levels.size() &&
@@ -9388,8 +10004,15 @@ int run_headless() {
                                 continue;
                             }
                             g.scene.game_level = static_cast<int>(l);
-                            if (g.scene.open_structure(static_cast<int>(x),
-                                                       static_cast<int>(y))) {
+                            const bool ok =
+                                g.city_screen
+                                    ? g.scene.open_city_screen(
+                                          static_cast<int>(x),
+                                          static_cast<int>(y))
+                                    : g.scene.open_structure(
+                                          static_cast<int>(x),
+                                          static_cast<int>(y));
+                            if (ok) {
                                 opened = true;
                                 break;
                             }
@@ -9398,8 +10021,11 @@ int run_headless() {
                 }
             };
             if (g.structure_tile_x >= 0 && g.structure_tile_y >= 0) {
-                opened = g.scene.open_structure(g.structure_tile_x,
-                                                g.structure_tile_y);
+                opened = g.city_screen
+                             ? g.scene.open_city_screen(g.structure_tile_x,
+                                                        g.structure_tile_y)
+                             : g.scene.open_structure(g.structure_tile_x,
+                                                      g.structure_tile_y);
                 if (opened) {
                     std::printf("structure_tile=%d,%d\n", g.structure_tile_x,
                                 g.structure_tile_y);
@@ -9425,9 +10051,38 @@ int run_headless() {
                     g.scene.game_struct_race_index = g.structure_race_index;
                     g.scene.load_structure_art(g.structure_race_index);
                 }
-                std::printf("structure_panel=%d,%d city=%d\n",
+                if (g.city_screen) {
+                    if (!g.structure_name.empty()) g.scene.city_name = g.structure_name;
+                    if (!g.structure_status.empty()) g.scene.city_status = g.structure_status;
+                    if (g.structure_race_index >= 0) {
+                        g.scene.city_population = aow::race_label_plural(
+                            static_cast<std::uint8_t>(g.structure_race_index));
+                    }
+                    if (g.structure_gold >= 0) {
+                        g.scene.city_gold = g.structure_gold;
+                        g.scene.city_income_header =
+                            "Income\r" + std::to_string(g.scene.city_gold) + " gold";
+                    }
+                    if (g.city_level > 0) {
+                        g.scene.city_upgrade_level = g.city_level;
+                    }
+                    if (!g.city_wall.empty()) g.scene.city_wall = g.city_wall;
+                    g.scene.city_enh_lines =
+                        "Upgrade Level: " +
+                        std::to_string(g.scene.city_upgrade_level) + "\r" +
+                        g.scene.city_wall;
+                }
+                // race=[...] is CityRaceLbl's "Race: <name>" text, i.e. the
+                // shipped `AoWE.RaceNamesRStr[race]` string for the city's own
+                // race byte (see Scene::open_structure), so the label can be
+                // asserted head-lessly against the map data.
+                std::printf("structure_panel=%d,%d city=%d name=[%s] race=[%s] "
+                            "race_id=%d\n",
                             g.scene.game_struct_hx, g.scene.game_struct_hy,
-                            g.scene.game_struct_city ? 1 : 0);
+                            g.scene.game_struct_city ? 1 : 0,
+                            g.scene.game_struct_name.c_str(),
+                            g.scene.game_struct_race.c_str(),
+                            g.scene.game_struct_race_index);
             } else {
                 std::fprintf(stderr, "menu: no structure to open\n");
             }
@@ -9805,6 +10460,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
             g.structure_panel = true;
             g.rgb555 = true;   // the reference captures are RGB555 screenshots
         }
+        else if (a == "--city-screen") {
+            g.city_screen = true;
+            g.rgb555 = true;   // the reference captures are RGB555 screenshots
+        }
+        else if (a == "--city-level") { next(); g.city_level = std::atoi(v.c_str()); }
+        else if (a == "--city-wall") { next(); g.city_wall = v; }
         else if (a == "--rgb555") { g.rgb555 = true; }
         else if (a == "--structure-tile") {
             next();
