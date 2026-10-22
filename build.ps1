@@ -249,6 +249,38 @@ if ((Split-Path $cxx -Leaf) -like 'cl*') {
 if ($LASTEXITCODE -ne 0) { throw "unit viewer build failed ($LASTEXITCODE)" }
 Write-Host "built $uvout"
 
+# Tactical battle map viewer: AoWTBViewer.exe lists TCMaps\*.HSM, renders the
+# selected battlefield with the combat renderer (comb_res.pfs + TCombat ILBs)
+# and pans/zooms it. Win32 + GDI only.
+$tbsrc = @(
+    (Join-Path $Src 'engine\ilb.cpp'),
+    (Join-Path $Src 'engine\pfs.cpp'),
+    (Join-Path $Src 'engine\pfs_types.cpp'),
+    (Join-Path $Src 'engine\unit_catalog.cpp'),
+    (Join-Path $Src 'engine\inflate.cpp'),
+    (Join-Path $Src 'engine\map.cpp'),
+    (Join-Path $Src 'engine\map_resources.cpp'),
+    (Join-Path $Src 'engine\mapviz.cpp'),
+    (Join-Path $Src 'engine\movement.cpp'),
+    (Join-Path $Src 'engine\unit_anim.cpp'),
+    (Join-Path $Src 'engine\game_state.cpp'),
+    (Join-Path $Src 'engine\png.cpp'),
+    (Join-Path $Src 'game\tbviewer.cpp')
+)
+$tbout = Join-Path $BinDir 'AoWTBViewer.exe'
+if ((Split-Path $cxx -Leaf) -like 'cl*') {
+    & $cxx /nologo /std:c++17 /EHsc /W4 /I (Join-Path $Src 'include') `
+        /Fe:$tbout @tbsrc /link /SUBSYSTEM:WINDOWS `
+        gdi32.lib user32.lib shell32.lib
+} else {
+    & $cxx -std=c++17 -Wall -Wextra -Wpedantic -O2 -mwindows `
+        -I (Join-Path $Src 'include') @tbsrc -o $tbout `
+        -lgdi32 -luser32 -lshell32
+}
+if ($LASTEXITCODE -ne 0) { throw "tactical map viewer build failed ($LASTEXITCODE)" }
+Write-Host "built $tbout"
+
+
 # Audio showcase (Stage 3): aow_audio.exe replays the game's .IT music through
 # libopenmpt (engine/openmpt_player.cpp) and its .WAV/.VAG samples through the
 # decoders in engine/audio.cpp.  The reconstructed Galaxy player
@@ -317,6 +349,8 @@ Write-Host "built $mout"
 if ($Viewer) {
     Copy-Item $vout (Join-Path $gameRoot 'aow_view.exe') -Force
     Write-Host "installed $(Join-Path $gameRoot 'aow_view.exe')"
+    Copy-Item $tbout (Join-Path $gameRoot 'AoWTBViewer.exe') -Force
+    Write-Host "installed $(Join-Path $gameRoot 'AoWTBViewer.exe')"
     # The port's game executable takes over the original AoW.exe.  Keep a
     # one-time backup so the shipped binary is never lost.
     $aowexe = Join-Path $gameRoot 'AoW.exe'
@@ -419,6 +453,8 @@ if ($Test) {
 
     # Map-format tests (Stage 2.1): load every scenario/campaign map.
     $msrc = @(
+        (Join-Path $Src 'engine\pfs.cpp'),
+        (Join-Path $Src 'engine\pfs_types.cpp'),
         (Join-Path $Src 'engine\inflate.cpp'),
         (Join-Path $Src 'engine\map.cpp'),
         (Join-Path $Src 'engine\map_resources.cpp'),
@@ -439,6 +475,8 @@ if ($Test) {
 
     # Game-state tests (Stage 2.3): the scenario player roster + turn/day loop.
     $gssrc = @(
+        (Join-Path $Src 'engine\pfs.cpp'),
+        (Join-Path $Src 'engine\pfs_types.cpp'),
         (Join-Path $Src 'engine\inflate.cpp'),
         (Join-Path $Src 'engine\map.cpp'),
         (Join-Path $Src 'engine\map_resources.cpp'),
@@ -1496,6 +1534,39 @@ if ($Test) {
     }
     Remove-Item $flpng, $fllog -Force
     Write-Host 'game flow smoke test: ok'
+    # The Structure floater (TIWindow) - clicking a building opens the 200x216
+    # panel; --structure-panel opens the first city so a head-less render proves
+    # every DFM box / library entry without a human click. The value overrides
+    # reproduce the reference capture's externally-stored city name / income.
+    $stpng = Join-Path $BinDir 'structure_panel.png'
+    $stlog = Join-Path $BinDir 'structure_panel.txt'
+    Remove-Item $stpng, $stlog -Force -ErrorAction SilentlyContinue
+    $stargs = ('--root "{0}" --start-map "Tutorial.hsm" --render "{1}" ' +
+               '--structure-panel --structure-name Venice --structure-race Human ' +
+               '--structure-race-index 0 --structure-gold 38 --structure-mana 2 ' +
+               '--structure-status Cheerful --crop 440 216 199 217 ' +
+               '--no-music --no-cursor') -f $mroot, $stpng
+    $stproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $stargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $stlog
+    if ($stproc.ExitCode -ne 0) {
+        throw "structure panel smoke test failed ($($stproc.ExitCode))"
+    }
+    $stline = Get-Content $stlog -Raw
+    if ($stline -notmatch 'structure_panel=(-?\d+),(-?\d+) city=1') {
+        throw "structure panel regression: $stline"
+    }
+    if (-not (Test-Path $stpng)) { throw 'structure panel produced no PNG' }
+    $refp = Join-Path $BinDir 'StructurePReference.png'
+    if (Test-Path $refp) {
+        $bench = python tools/structure_bench.py $refp $stpng
+        if ($LASTEXITCODE -ne 0) {
+            throw "structure panel pixel benchmark failed: $bench"
+        }
+        Write-Host ($bench | Select-Object -First 1)
+    }
+    Remove-Item $stpng, $stlog -Force
+    Write-Host 'structure panel smoke test: ok'
     # The Scenario screen's per-race player choice must decide which race's cities
     # and armies (its units) are played - TSetupControl.SetupMap (0x557e0b64)
     # writes the screen's type back into the roster. Tutorial.hsm's default human
@@ -1553,6 +1624,8 @@ if ($Test) {
     # Playlist tests (Stage 3): the scenario's music playlist is walked in order
     # and wraps at the end (aow::scenario_playlist + aow::PlaylistPlayer).
     $psrc = @(
+        (Join-Path $Src 'engine\pfs.cpp'),
+        (Join-Path $Src 'engine\pfs_types.cpp'),
         (Join-Path $Src 'engine\inflate.cpp'),
         (Join-Path $Src 'engine\map.cpp'),
         (Join-Path $Src 'engine\map_resources.cpp'),

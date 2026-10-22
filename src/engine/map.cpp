@@ -194,6 +194,9 @@ const ClassName kClassNames[] = {
     {0x10156, "HSEngine.TMapObject"},    {0x20166, "Terrain.TTerrainMO"},
     {0x20164, "Road.TRoad"},             {0x20168, "Mountain.TMountainMO"},
     {0x20152, "Hexagon.THexagon"},       {0x20170, "IsoHex.TUpperIsometricHexagon"},
+    {0x220101, "AoWTC.TAoWCombatMapField"},
+    {0x220102, "AoWTC.TAoWCombatMapLevel"},
+    {0x220100, "AoWTC.TAoWCombatMap"},
     {0x20557, "BorderHx.TBorderHexagon"}, {0x2073d, "AoWHex.TAoWWaterHexagon"},
     {0x2016c, "AoWE.TFrozenWaterHS"},    {0x20217, "AoWE.TArmyHS"},
     {0x20271, "AoWE.TItemHS"},           {0x2077e, "AoWE.TFire"},
@@ -279,7 +282,8 @@ bool load_container(const std::uint8_t* R, std::size_t n, std::size_t ca,
         const std::size_t la = lch.base + le.second;
         if (la + 4 > n) continue;
         const std::uint32_t lcid = read_u32(R + la);
-        if (lcid != kMapLevelClassId && lcid != kAoWMapLevelClassId) continue;
+        if (lcid != kMapLevelClassId && lcid != kAoWMapLevelClassId &&
+            lcid != kAoWCombatMapLevelClassId) continue;
         Table lt;
         if (!read_table(R, n, la + 4, lt)) continue;
         const std::size_t lb = lt.base;
@@ -333,6 +337,30 @@ bool load_container(const std::uint8_t* R, std::size_t n, std::size_t ca,
                         // re/exports/aowepack/City.TCity.ReadWrite.c and
                         // map_types.hpp. Only TCity carries them.
                         if (hs.class_id == kCityClassId) {
+                            // City.TCity rw tag 0xc -> +0x48: the city name. The
+                            // property is a rwString (TCity.GetName copies the
+                            // +0x48 AnsiString), serialised as u32 length +
+                            // bytes; keep the raw dword too for evidence.
+                            const std::size_t r12 = find_off(sub, 0xc);
+                            if (r12 != static_cast<std::size_t>(-1) &&
+                                sub.base + r12 + 4 <= n) {
+                                hs.city_name_id =
+                                    static_cast<std::int32_t>(read_u32(R + sub.base + r12));
+                                const std::uint32_t sl =
+                                    read_u32(R + sub.base + r12);
+                                if (sl > 0 && sl < 200 &&
+                                    sub.base + r12 + 4 + sl <= n) {
+                                    const char* sp = reinterpret_cast<const char*>(
+                                        R + sub.base + r12 + 4);
+                                    bool text = true;
+                                    for (std::uint32_t k = 0; k < sl; ++k) {
+                                        const unsigned char ch =
+                                            static_cast<unsigned char>(sp[k]);
+                                        if (ch < 0x20 || ch == 0x7f) text = false;
+                                    }
+                                    if (text) hs.city_name.assign(sp, sl);
+                                }
+                            }
                             const std::size_t r13 = find_off(sub, 0xd);
                             if (r13 != static_cast<std::size_t>(-1) &&
                                 sub.base + r13 < n) {

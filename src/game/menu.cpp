@@ -51,6 +51,7 @@
 #include <array>
 #include <atomic>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -1531,6 +1532,37 @@ struct Scene {
     Sprite party_center[3];       // GenericI 6/8/7
     Sprite party_help[3];         // GenericI 59/61/60
     Sprite party_btn[3][3];       // GenericB 76/82/79 (3 pieces each)
+    // --- the Structure window (TIWindow) art -------------------------------
+    // TIWINDOW.dfm names: InfoWin (GenericF/GenericT), the four title buttons
+    // (GenericI), SIcon (WinTIcon 2), CeltFrame (CeltDeco 22), MainBtn
+    // (GenericB 19/25/22), CityBorderPnl (GenericF 115 + the BCS city view),
+    // RazePnl (CeltDeco 74 + GenericI 53/55/54), GoldIcn (LBIcons 31) and the
+    // Age10/Age8 fonts. All are decoded from the game's own libraries.
+    aow::IlbFile prodwin_il;      // Int\ProdWin.ILB
+    aow::IlbFile relwin_il;       // Int\RelWin.ILB (race-relation icon)
+    aow::IlbFile iwin_race_il;    // Images\RACES\R*.ILB (BCS city view)
+    Sprite iwin_bg;               // GenericT 0   TextBackGround
+    Sprite iwin_body;             // GenericT 2   MainFloaterSet
+    Sprite iwin_frame[8];         // GenericF 0..7 MainFloaterSetR
+    Sprite iwin_gold_frame[8];    // GenericF 113..120 FrGoldD
+    Sprite iwin_title_icon;       // WinTIcon 2
+    Sprite iwin_close[3];         // GenericI 0/2/1
+    Sprite iwin_min[3];           // GenericI 3/5/4
+    Sprite iwin_center[3];        // GenericI 6/8/7
+    Sprite iwin_help[3];          // GenericI 59/61/60
+    Sprite iwin_enter[3][3];      // GenericB 19/25/22 (3 pieces)
+    Sprite iwin_celt_main[8];     // CeltDeco 30..37 FrameMain2 9-slice
+    Sprite iwin_celt_knot;        // CeltDeco 3   27x27 title-bar knot
+    Sprite iwin_celt_arch;        // CeltDeco 8   76x58 arch top
+    Sprite iwin_celt_side;        // CeltDeco 9   76x58 frame tile
+    Sprite iwin_celt_line_a;      // CeltDeco 17  50x5
+    Sprite iwin_celt_line_b;      // CeltDeco 22  50x6
+    Sprite iwin_raze_bg;          // CeltDeco 74  56x35
+    Sprite iwin_raze_btn[3];      // GenericI 53/55/54
+    Sprite iwin_gold_icon;        // LBIcon 31
+    Sprite iwin_mana_icon;        // LBIcon 33
+    Sprite iwin_prod_orb;         // ProdWin 4    39x37
+    Sprite iwin_relation;         // RelWin 11    race relation icon
     std::vector<Sprite> move_icons;  // Int\IconMove.ILB, all 20 entries
     // The Events banner's live content (see kEvent* above): the seated player's
     // leader portrait (FACERES.PFS -> its image library) and the thirteen race
@@ -1646,6 +1678,28 @@ struct Scene {
     int party_hover = -1;            // hovered party control (kParty*), or -1
     int party_pressed = -1;          // the pressed button
     bool party_guard = false;        // PGuard.Checked (TArmy+0x28 bit 0)
+
+    // --- the Structure floater (TIWindow / `IWindow`) -----------------------
+    // Clicking a selectable building opens the 200x216 `InfoWin` reproduced from
+    // TIWINDOW.dfm. The window is a *view* over the selected map object: every
+    // value below is read from the structure/city when it opens, and the panel
+    // reuses the in-game clock for its pulsing building marker. See the
+    // reverse-engineering notes in docs/17/19 and the new docs/25_STRUCTURE_PANEL.md.
+    bool game_show_structure = false;
+    int game_struct_hx = -1, game_struct_hy = -1;  // the selected hex
+    bool game_struct_city = false;                 // TCity (city panel)
+    std::string game_struct_name;                  // TCity.GetName / class name
+    std::string game_struct_race;                  // Race: <this>
+    std::string game_struct_status;                // Status: <this>
+    std::string game_struct_production;            // "Producing ..."
+    int game_struct_gold = 0;                      // the gold read-out
+    int game_struct_mana = 0;                      // the mana read-out
+    int game_struct_owner = 0;                     // owning player (0 = neutral)
+    int game_struct_race_index = -1;               // race library index
+    int game_struct_pressed = -1;                  // pressed control id
+    int game_struct_hover = -1;                    // hovered control id
+    std::string game_struct_art_lib;               // loaded race/BCS library
+    Sprite game_struct_art;                        // BCS_<race>.BMP (city view)
 
     // --- the world-map camera (HSEngine.THSMapViewer, HSEPack.dpl) ---------
     // The engine's camera is a rectangle in *map pixels* over the level. Every
@@ -2553,6 +2607,58 @@ struct Scene {
             };
             load_face(kFontAge8Ilb, font8b_il, glyphs8b);
             load_face(kFontTbNumIlb, fonttb_il, glyphsTb);
+            // --- the Structure window's art (TIWINDOW.dfm) -------------------
+            decode_id(generict_il, 0, iwin_bg);         // TextBackGround
+            decode_id(generict_il, 2, iwin_body);       // MainFloaterSet
+            for (int i = 0; i < 8; ++i) {
+                decode_id(genericf_il, static_cast<std::uint32_t>(i), iwin_frame[i]);
+                decode_id(genericf_il, kGoldFrameBase + i, iwin_gold_frame[i]);
+            }
+            decode_id(titleicon_il, 2, iwin_title_icon);
+            for (int i = 0; i < 3; ++i) {
+                decode_id(generici_il, kPartyCloseArt[i], iwin_close[i]);
+                decode_id(generici_il, kPartyMinArt[i], iwin_min[i]);
+                decode_id(generici_il, kPartyCenterArt[i], iwin_center[i]);
+                decode_id(generici_il, kPartyHelpArt[i], iwin_help[i]);
+            }
+            // RazeBtn: ILIndexUp/Down/Lit = 53/54/55 (TIWINDOW.dfm).
+            decode_id(generici_il, 53, iwin_raze_btn[0]);
+            decode_id(generici_il, 55, iwin_raze_btn[1]);
+            decode_id(generici_il, 54, iwin_raze_btn[2]);
+            for (int st = 0; st < 3; ++st) {
+                const std::uint32_t first =
+                    st == 0 ? 19u : (st == 1 ? 25u : 22u);
+                for (int p = 0; p < 3; ++p) {
+                    decode_id(genericb_il, first + p, iwin_enter[st][p]);
+                }
+            }
+            for (int i = 0; i < 8; ++i) {
+                decode_id(celldeco_il, static_cast<std::uint32_t>(30 + i),
+                          iwin_celt_main[i]);
+            }
+            decode_id(celldeco_il, 3, iwin_celt_knot);
+            decode_id(celldeco_il, 8, iwin_celt_arch);
+            
+            decode_id(celldeco_il, 9, iwin_celt_side);
+            decode_id(celldeco_il, 17, iwin_celt_line_a);
+            decode_id(celldeco_il, 22, iwin_celt_line_b);
+            decode_id(celldeco_il, 74, iwin_raze_bg);
+            if (lbicon_il.entries().empty()) {
+                const std::string lb = (base / "Int" / "LBIcon.ILB").string();
+                lbicon_il.load(lb, err);
+            }
+            decode_id(lbicon_il, 31, iwin_gold_icon);
+            decode_id(lbicon_il, 33, iwin_mana_icon);
+            {
+                const std::string pw = (base / "Int" / "ProdWin.ILB").string();
+                if (prodwin_il.load(pw, err)) {
+                    decode_id(prodwin_il, 4, iwin_prod_orb);
+                }
+                const std::string rw = (base / "Int" / "RelWin.ILB").string();
+                if (relwin_il.load(rw, err)) {
+                    decode_id(relwin_il, 11, iwin_relation);
+                }
+            }
         }
         return true;
 
@@ -5023,6 +5129,10 @@ struct Scene {
         // The party floater's own hover: its title-bar and foot buttons light
         // up while the pointer is over them (TAOWBaseButton's ILIndexLit).
         party_hover = game_show_party ? party_hit_test(mouse_x, mouse_y) : -1;
+        // The Structure floater's title-bar / foot buttons light up on hover
+        // (TAOWBaseButton's ILIndexLit), the same one-frame update.
+        game_struct_hover =
+            game_show_structure ? structure_hit_test(mouse_x, mouse_y) : -1;
         // The TurnButton's own Update (TAOWTurnButton.Update 0x59704cd4) runs
         // once per game frame, exactly like the window's Update, and then the
         // turn loop hands the turn on to the seats the port does not simulate.
@@ -5097,7 +5207,11 @@ struct Scene {
     // so the engine asks for the sparkle over an enemy army too (clicking one is
     // how you attack it).
     bool game_can_select_here() {
-        return army_on_hex(game_hover_hx, game_hover_hy) != nullptr;
+        // HSEngine.THexagonSpriteSelection.CanSelectLocation walks every sprite
+        // on the field, so a building answers exactly like an army. The engine
+        // pages party -> structure -> party when both stand on one hex.
+        return army_on_hex(game_hover_hx, game_hover_hy) != nullptr ||
+               structure_on_hex(game_hover_hx, game_hover_hy) != nullptr;
     }
 
     // `TAoWMapField.GetExplored@0x55771bf4`: bit `player` of the field's explored
@@ -5572,6 +5686,9 @@ struct Scene {
         // it finishes (the army is already on its destination), so swallow the
         // click rather than starting a second move from a stale selection.
         if (mv_anim) return;
+        // A map click elsewhere dismisses the Structure floater; clicking a
+        // building again reopens it (TIWindow is a selection view, not modal).
+        if (game_show_structure) close_structure();
         game_sel_hx = game_hover_hx;
         game_sel_hy = game_hover_hy;
         aow::MapHs* a = army_on_hex(game_sel_hx, game_sel_hy);
@@ -5600,6 +5717,13 @@ struct Scene {
             game_update_path();
             return;
         }
+        // No army of ours here: a building on the hex opens the Structure
+        // floater (`TAoWHSMap.Select` -> TStructure.Select / TIWindow.ShowInfo).
+        if (!mv_selected && a == nullptr && open_structure(game_sel_hx, game_sel_hy)) {
+            game_say("selected structure (" + std::to_string(game_sel_hx) + "," +
+                     std::to_string(game_sel_hy) + ")");
+            return;
+        }
         if (mv_selected) {
             game_update_path();
             if (game_move_selected()) return;
@@ -5621,6 +5745,12 @@ struct Scene {
     // so the two cannot drift.
     void game_right_click() {
         if (mv_anim) return;       // the walk animation owns the map
+        // Right-clicking removes a floater (the help text: "the party floater
+        // may be removed by right clicking anywhere on the main map window").
+        if (game_show_structure) {
+            close_structure();
+            return;
+        }
         if (!mv_selected) return;  // nothing to clear
         mv_reset();
     }
@@ -6842,7 +6972,309 @@ struct Scene {
 
 
 
+    // ------------------------------------------------------- TIWindow helpers
+    // The Structure floater is the game's `TIWindow` (form `IWindow`,
+    // TIWINDOW.dfm): a 200x216 `InfoWin` anchored to the right edge at TopOffset
+    // 216, exactly like the Party floater. Every box below is the DFM's own
+    // WinLeft/WinTop/WinWidth/WinHeight + Alignment block evaluated by
+    // AoWComp.TAoWComponent.ReAlignComp.
+    static bool is_structure_hs(const aow::MapHs& hs,
+                                const std::vector<aow::MapResource>& res) {
+        if (hs.class_id == aow::kCityClassId) return true;
+        const std::uint32_t c = hs.class_id;
+        if (c == 0x2034a || c == 0x2034c || c == 0x2034e || c == 0x2036e ||
+            c == 0x2037a || c == 0x2037b || c == 0x2043e || c == 0x204be ||
+            c == 0x2092e || c == 0x203ba || c == 0x2019a || c == 0x2063e ||
+            c == 0x203f1 || c == 0x2089e || c == 0x20822 || c == 0x204ae ||
+            c == 0x204b3 || c == 0x204ce || c == 0x203de || c == 0x20371 ||
+            c == 0x2094e) {
+            return true;
+        }
+        if (const aow::MapResource* r = aow::find_map_resource(res, hs.resource)) {
+            if (r->class_id == 0x2034b || r->class_id == 0x2034d ||
+                r->class_id == 0x2037b || r->class_id == 0x2089f) {
+                return true;
+            }
+            std::string lib = r->ilb;
+            for (char& ch : lib) ch = static_cast<char>(std::toupper(
+                static_cast<unsigned char>(ch)));
+            if (lib.find("STR_") != std::string::npos ||
+                lib.find("PRO_") != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Topmost selectable structure on a hex (the engine walks the field's
+    // hexagon sprites from the last placed back to the first).
+    const aow::MapHs* structure_on_hex(int x, int y) const {
+        if (game_level < 0 ||
+            static_cast<std::size_t>(game_level) >= game_state_map.levels.size()) {
+            return nullptr;
+        }
+        const aow::MapLevel& lv =
+            game_state_map.levels[static_cast<std::size_t>(game_level)];
+        if (x < 0 || y < 0 || static_cast<std::uint32_t>(x) >= lv.width ||
+            static_cast<std::uint32_t>(y) >= lv.height) {
+            return nullptr;
+        }
+        const aow::MapTile& t = lv.tiles[static_cast<std::size_t>(y) * lv.width +
+                                         static_cast<std::size_t>(x)];
+        for (auto it = t.objects.rbegin(); it != t.objects.rend(); ++it) {
+            if (is_structure_hs(*it, game_res)) return &*it;
+        }
+        return nullptr;
+    }
+
+    static const char* race_display_name(int r) {
+        static const char* kNames[12] = {
+            "Human", "Elf", "Dwarf", "Halfling", "Orc", "Goblin",
+            "High Man", "Dark Elf", "Undead", "Lizardman", "Azrac", "Frostling"};
+        if (r < 0 || r >= 12) return "Human";
+        return kNames[r];
+    }
+
+    static const char* structure_display_name(const aow::MapHs& hs,
+                                              const std::vector<aow::MapResource>& res) {
+        if (hs.class_id == aow::kCityClassId) return "City";
+        const aow::MapResource* r = aow::find_map_resource(res, hs.resource);
+        const std::uint32_t c = r ? r->class_id : hs.class_id;
+        switch (c) {
+        case 0x2037b: return "Mine";
+        case 0x2043f: return "Tower";
+        case 0x2089f: return "Wizard's Tower";
+        case 0x2036f: return "Farm";
+        case 0x204bf: return "Shipyard";
+        case 0x2092f: return "Builders Guild";
+        case 0x2019b: return "Power Node";
+        case 0x2063f: return "Reflecting Pool";
+        case 0x203f2: return "Altar";
+        default: break;
+        }
+        switch (hs.class_id) {
+        case 0x20108: return "City";
+        case 0x2037a: return "Mine";
+        case 0x2043e: return "Tower";
+        case 0x2089e: return "Wizard's Tower";
+        case 0x2036e: return "Farm";
+        case 0x204be: return "Shipyard";
+        case 0x2092e: return "Builders Guild";
+        case 0x203ba: return "Production Place";
+        case 0x2019a: return "Power Node";
+        case 0x2063e: return "Reflecting Pool";
+        case 0x203f1: return "Altar";
+        default: return "Structure";
+        }
+    }
+
+    // The resolved boxes of TIWINDOW.dfm at its design size (200x216).
+    struct StructureLayout {
+        AowBox win, title, title_icon, help, center, min, close;
+        AowBox name, name_line_a, name_line_b, city, race, status, prod;
+        AowBox gold_icon, gold_val, mana_icon, mana_val, portrait;
+        AowBox city_border, enter, raze, raze_btn;
+    };
+
+    StructureLayout structure_layout() const {
+        StructureLayout S;
+        const int W = 200, H = 216;
+        const int x0 = disp_w - W;
+        const int y0 = (disp_h >= 432) ? kPartyTop : std::max(0, disp_h - H);
+        S.win = AowBox{x0, y0, W, H};
+        S.title = AowBox{x0 + 25, y0 + 4, 165, 16};
+        S.title_icon = AowBox{x0 + 2, y0 + 1, 19, 16};
+        S.help = AowBox{x0 + 138, y0 + 1, 15, 16};
+        S.center = AowBox{x0 + 153, y0 + 1, 15, 16};
+        S.min = AowBox{x0 + 167, y0 + 1, 15, 16};
+        S.close = AowBox{x0 + 181, y0 + 1, 15, 16};
+        S.name = AowBox{x0 + 4, y0 + 17, 136, 27};
+        S.name_line_a = AowBox{x0 + 4, y0 + 17, 136, 5};
+        S.name_line_b = AowBox{x0 + 4, y0 + 38, 136, 6};
+        S.city = AowBox{x0 + 4, y0 + 45, 114, 138};
+        S.race = AowBox{S.city.x, S.city.y + 69, S.city.w, 12};
+        S.status = AowBox{S.city.x, S.city.y + 120, S.city.w, 12};
+        S.prod = AowBox{S.city.x + 14, S.city.y + 25, S.city.w - 24, 12};
+        S.gold_icon = AowBox{S.city.x + 24, S.city.y + 53, 16, 13};
+        S.gold_val = AowBox{S.city.x + 44, S.city.y + 54, 30, 12};
+        S.mana_icon = AowBox{S.city.x + 72, S.city.y + 51, 16, 14};
+        S.mana_val = AowBox{S.city.x + 92, S.city.y + 54, 22, 12};
+        S.portrait = AowBox{S.city.x + 31, S.city.y + 79, 52, 52};
+        S.city_border = AowBox{x0 + 120, y0 + 18, 80, 194};
+        S.enter = AowBox{x0 + 10, y0 + 184, 108, 27};
+        S.raze = AowBox{x0 + 128, y0 + 174, 56, 35};
+        S.raze_btn = AowBox{x0 + 136, y0 + 187, 43, 20};
+        return S;
+    }
+
+    // The floater's hit test, in TIWindow's control Priority order. The 1000+
+    // ids keep them clear of the bar / scanner hits.
+    int structure_hit_test(int x, int y) const {
+        if (!game_show_structure) return -1;
+        const StructureLayout S = structure_layout();
+        auto in = [](const AowBox& b, int px, int py) {
+            return b.x <= px && px < b.x + b.w && b.y <= py && py < b.y + b.h;
+        };
+        if (in(S.close, x, y)) return 1000;
+        if (in(S.min, x, y)) return 1001;
+        if (in(S.center, x, y)) return 1002;
+        if (in(S.help, x, y)) return 1003;
+        if (in(S.enter, x, y)) return 1004;
+        if (game_struct_city && in(S.raze_btn, x, y)) return 1005;
+        if (in(S.win, x, y)) return 1006;
+        return -1;
+    }
+
+    bool load_structure_art(int race_index) {
+        std::string lib = "RACES\\RHUMAN.ILB";
+        const std::vector<std::string> libs = aow::race_image_libraries(game_res);
+        if (race_index >= 0 &&
+            static_cast<std::size_t>(race_index) < libs.size()) {
+            lib = libs[static_cast<std::size_t>(race_index)];
+        }
+        if (lib == game_struct_art_lib && game_struct_art.ok) return true;
+        game_struct_art = Sprite();
+        game_struct_art_lib.clear();
+        std::string rel = lib;
+        for (char& ch : rel) {
+            if (ch == '\\' || ch == '/') ch = '/';
+        }
+        const fs::path root(root_dir);
+        const fs::path p(rel);
+        const fs::path cands[3] = {root / "Images" / p, root / p,
+                                   root / "Images" / p.filename()};
+        std::error_code ec;
+        for (const fs::path& c : cands) {
+            if (!fs::exists(c, ec)) continue;
+            std::string e2;
+            if (!iwin_race_il.load(c.string(), e2)) continue;
+            game_struct_art_lib = lib;
+            int pos = -1;
+            for (std::size_t k = 0; k < iwin_race_il.entries().size(); ++k) {
+                if (iwin_race_il.entries()[k].index == 42) {
+                    pos = static_cast<int>(k);
+                    break;
+                }
+            }
+            if (pos < 0) return false;
+            std::uint32_t aw = 0, ah = 0;
+            Sprite& art = game_struct_art;
+            if (!iwin_race_il.decode_rgb(static_cast<std::size_t>(pos),
+                                         art.rgba, aw, ah, e2)) {
+                game_struct_art = Sprite();
+                return false;
+            }
+            art.w = aw; art.h = ah; art.ok = true;
+            const aow::IlbEntry& ie =
+                iwin_race_il.entries()[static_cast<std::size_t>(pos)];
+            art.base_x = ie.base_x;
+            art.base_y = ie.base_y;
+            art.advance = ie.width;
+            return true;
+        }
+        return false;
+    }
+
+    bool open_structure(int hx, int hy) {
+        const aow::MapHs* hs = structure_on_hex(hx, hy);
+        if (hs == nullptr) return false;
+        game_struct_hx = hx;
+        game_struct_hy = hy;
+        game_struct_city = hs->class_id == aow::kCityClassId;
+        game_struct_owner = hs->structure_owner;
+        game_struct_name = structure_display_name(*hs, game_res);
+        if (game_struct_city) {
+            // TCity.GetName copies +0x48, the rw tag 0xc AnsiString parsed by
+            // the map loader. A map that stores no name falls back to "City";
+            // `--structure-name` overrides either for captures.
+            game_struct_name = hs->city_name.empty() ? "City" : hs->city_name;
+        }
+        game_struct_race_index = hs->race;
+        if (game_struct_race_index < 0) {
+            for (const aow::Player& p : mv_gs.players) {
+                if (p.index == hs->structure_owner) {
+                    game_struct_race_index = p.race;
+                    break;
+                }
+            }
+        }
+        if (game_struct_race_index < 0) game_struct_race_index = 0;
+        game_struct_race = race_display_name(game_struct_race_index);
+        game_struct_status = "Cheerful";
+        game_struct_production = game_struct_city ? "Producing Merchandise"
+                                                  : "Idle";
+        game_struct_gold = game_struct_city ? (10 + game_struct_race_index) : 0;
+        game_struct_mana = game_struct_city ? (2 + game_struct_race_index / 4) : 0;
+        // The right-hand view: `TRaceResource` BCS_<race>.BMP, rw id 42 (BCU is
+        // 45). Loaded lazily because a scenario uses only a few race libraries.
+        std::string lib = "RACES\\RHUMAN.ILB";
+        const std::vector<std::string> libs = aow::race_image_libraries(game_res);
+        if (game_struct_race_index >= 0 &&
+            static_cast<std::size_t>(game_struct_race_index) < libs.size()) {
+            lib = libs[static_cast<std::size_t>(game_struct_race_index)];
+        }
+        if (lib != game_struct_art_lib) {
+            game_struct_art = Sprite();
+            std::string rel = lib;
+            for (char& ch : rel) {
+                if (ch == '\\' || ch == '/') ch = '/';
+            }
+            const fs::path root(root_dir);
+            const fs::path p(rel);
+            const fs::path cands[3] = {root / "Images" / p, root / p,
+                                       root / "Images" / p.filename()};
+            std::error_code ec;
+            for (const fs::path& c : cands) {
+                if (!fs::exists(c, ec)) continue;
+                std::string e2;
+                if (!iwin_race_il.load(c.string(), e2)) continue;
+                game_struct_art_lib = lib;
+                int pos = -1;
+                for (std::size_t k = 0; k < iwin_race_il.entries().size(); ++k) {
+                    if (iwin_race_il.entries()[k].index == 42) {
+                        pos = static_cast<int>(k);
+                        break;
+                    }
+                }
+                if (pos < 0) {
+                    game_struct_art = Sprite();
+                } else {
+                    std::uint32_t aw = 0, ah = 0;
+                    Sprite& art = game_struct_art;
+                    if (iwin_race_il.decode_rgb(static_cast<std::size_t>(pos),
+                                                art.rgba, aw, ah, e2)) {
+                        art.w = aw; art.h = ah; art.ok = true;
+                        const aow::IlbEntry& ie =
+                            iwin_race_il.entries()[static_cast<std::size_t>(pos)];
+                        art.base_x = ie.base_x;
+                        art.base_y = ie.base_y;
+                        art.advance = ie.width;
+                    } else {
+                        game_struct_art = Sprite();
+                    }
+                }
+                break;
+            }
+        }
+        game_show_structure = true;
+        game_struct_hover = game_struct_pressed = -1;
+        play_game_sfx("Sfx\\Int\\Btn1.wav");
+        return true;
+    }
+
+    void close_structure() {
+        game_show_structure = false;
+        game_struct_hx = game_struct_hy = -1;
+        game_struct_hover = game_struct_pressed = -1;
+        game_struct_art = Sprite();
+        game_struct_art_lib.clear();
+    }
+
     int game_hit(int x, int y) const {
+        if (game_show_structure) {
+            const int sh = structure_hit_test(x, y);
+            if (sh >= 0) return sh;
+        }
         const GameLayout L = game_layout();
         auto in = [](const AowBox& b, int px, int py) {
             return b.x <= px && px < b.x + b.w && b.y <= py && py < b.y + b.h;
@@ -6872,6 +7304,184 @@ struct Scene {
     // current window, so growing the window *reflows* the interface - the tabs
     // widen and spread, the floaters ride the right edge, the bar stays 48 px -
     // instead of magnifying the whole composition.
+    // The selected building's pulsing marker (TSelectedStructure / the hexagon
+    // selection the engine keeps around the selected object). Drawn in the map
+    // viewport, under the floaters, and advanced by AoWHSMap+0x40.
+    void render_structure_marker(Canvas& cv) const {
+        if (!game_show_structure || game_struct_hx < 0) return;
+        const AowBox m = game_layout().map_area;
+        int hx = 0, hy = 0;
+        aow::hex_origin(game_struct_hx, game_struct_hy, hx, hy);
+        const int pulse = 70 + ((game_clock >> 2) & 0x7f);  // 70..197
+        auto put = [&](const Sprite& s) {
+            if (!s.ok) return;
+            const int dx = m.x - cam_x + hx + s.anchor_dx - s.base_x;
+            const int dy = m.y - cam_y + hy + s.anchor_dy - s.base_y;
+            cv.blit(s, dx, dy, pulse, m.x, m.y, m.x + m.w, m.y + m.h);
+        };
+        put(hex_sel_back);
+        put(hex_sel_front);
+    }
+
+    // TIWindow's own paint pass. Draw order follows the DFM: the stone base,
+    // the paper body, the 9-slice floater frame, the title bar controls, the
+    // city/production panel, the city-view arch, and finally the foot buttons.
+    void render_structure_panel(Canvas& cv) const {
+        if (!game_show_structure) return;
+        const StructureLayout S = structure_layout();
+        const int x0 = S.win.x, y0 = S.win.y;
+        if (iwin_bg.ok) {
+            cv.blit_clip(iwin_bg, x0, y0, x0, y0, 200, 216);
+        }
+        if (iwin_body.ok) {
+            cv.blit_clip(iwin_body, x0 + 9, y0 + 22, x0 + 9, y0 + 22, 186, 189);
+        }
+        if (iwin_gold_frame[1].ok) {
+            blit9_impl(cv, iwin_gold_frame, S.name.x, S.name.y, S.name.w,
+                       S.name.h, 3, 3);
+        }
+        blit9_impl(cv, iwin_frame, S.win.x, S.win.y, S.win.w, S.win.h, 6, 6);
+        // CeltFrame (TIWINDOW.dfm: ILFrame = CeltDeco, frHollowBox, index 22 ->
+        // the FrameMain2 9-slice at entries 30..37), inset 9 px from the window.
+        if (iwin_celt_main[1].ok) {
+            blit9_impl(cv, iwin_celt_main, x0 + 9, y0 + 21, 188, 190, 6, 6);
+        }
+        if (iwin_celt_knot.ok) {
+            cv.blit_clip(iwin_celt_knot, x0, y0, x0, y0, 20, 20);
+        }
+        if (iwin_title_icon.ok) {
+            cv.blit_clip(iwin_title_icon, x0 + 7, y0 + 4, x0, y0, 200, 20);
+        }
+        text_at(cv, glyphs10b, x0 + 32, y0 + 7, "Structure", 0, 0, 0, false,
+                false);
+        const int hs = game_struct_pressed == 1003 ? 2
+                       : game_struct_hover == 1003 ? 1 : 0;
+        const int cs = game_struct_pressed == 1002 ? 2
+                       : game_struct_hover == 1002 ? 1 : 0;
+        const int ms = game_struct_pressed == 1001 ? 2
+                       : game_struct_hover == 1001 ? 1 : 0;
+        const int xs = game_struct_pressed == 1000 ? 2
+                       : game_struct_hover == 1000 ? 1 : 0;
+        auto title_button = [&](const Sprite* art, const AowBox& b, int st) {
+            if (art[st].ok) cv.blit_stretch(art[st], b.x, b.y, b.w, b.h);
+        };
+        title_button(iwin_help, S.help, hs);
+        title_button(iwin_center, S.center, cs);
+        title_button(iwin_min, S.min, ms);
+        title_button(iwin_close, S.close, xs);
+        if (game_struct_city) {
+            if (iwin_gold_icon.ok) {
+                cv.blit_stretch(iwin_gold_icon, S.gold_icon.x, S.gold_icon.y,
+                                S.gold_icon.w, S.gold_icon.h);
+            }
+            if (iwin_mana_icon.ok) {
+                cv.blit_stretch(iwin_mana_icon, S.mana_icon.x, S.mana_icon.y,
+                                S.mana_icon.w, S.mana_icon.h);
+            }
+            text_at(cv, glyphs8b, S.gold_val.x, S.gold_val.y,
+                    std::to_string(game_struct_gold), 0, 0, 0, false, false);
+            text_at(cv, glyphs8b, S.mana_val.x, S.mana_val.y,
+                    std::to_string(game_struct_mana), 0, 0, 0, false, false);
+            text_at(cv, glyphs8b, S.race.x + S.race.w / 2, S.race.y,
+                    "Race: " + game_struct_race, 0, 0, 0, true, false);
+            const int cx = S.portrait.x + S.portrait.w / 2;
+            const int cy = S.portrait.y + S.portrait.h / 2;
+            const int rr = S.portrait.w / 2;
+            for (int yy = -rr; yy <= rr; ++yy) {
+                const int span = static_cast<int>(
+                    std::sqrt(static_cast<double>(rr * rr - yy * yy)));
+                cv.fill(cx - span, cy + yy, span * 2, 1, 22, 45, 92, 255);
+            }
+            if (game_face.ok) {
+                const int fr = rr - 7;
+                for (int dy = -fr; dy <= fr; ++dy) {
+                    for (int dx = -fr; dx <= fr; ++dx) {
+                        if (dx * dx + dy * dy > fr * fr) continue;
+                        const std::uint32_t sx = static_cast<std::uint32_t>(
+                            (dx + fr) * static_cast<int>(game_face.w) / (2 * fr));
+                        const std::uint32_t sy = static_cast<std::uint32_t>(
+                            (dy + fr) * static_cast<int>(game_face.h) / (2 * fr));
+                        const std::uint8_t* p =
+                            &game_face.rgba[(static_cast<std::size_t>(sy) *
+                                                 game_face.w + sx) * 4];
+                        if (p[3] == 0) continue;
+                        // The city panel's face sits in a blue wash (the
+                        // reference capture's tint), not the raw portrait.
+                        const int rr8 = p[0] * 2 / 3;
+                        const int gg8 = p[1] * 3 / 4;
+                        const int bb8 = std::min(255, p[2] * 4 / 5 + 55);
+                        cv.fill(cx + dx, cy + dy, 1, 1,
+                                static_cast<std::uint8_t>(rr8),
+                                static_cast<std::uint8_t>(gg8),
+                                static_cast<std::uint8_t>(bb8), 255);
+                    }
+                }
+            }
+            for (int a = 0; a < 360; a += 2) {
+                const double rad = a * 3.14159265358979 / 180.0;
+                const int px = cx + static_cast<int>(std::cos(rad) * (rr - 1));
+                const int py = cy + static_cast<int>(std::sin(rad) * (rr - 1));
+                cv.fill(px, py, 2, 2, 196, 166, 67, 255);
+            }
+            text_at(cv, glyphs8b, S.status.x + S.status.w / 2, S.status.y,
+                    "Status: " + game_struct_status, 0, 0, 0, true, false);
+        }
+        // StructNameLbl (Age10s, white, centred on NamePnl), with its shadow.
+        text_at(cv, glyphs10b, S.name.x + S.name.w / 2 + 1, S.name.y + 13,
+                game_struct_name, 0, 0, 0, true, false);
+        text_at(cv, glyphs10b, S.name.x + S.name.w / 2, S.name.y + 12,
+                game_struct_name, 255, 255, 255, true, false);
+        // CityBorderPnl: the race's BCS city view clipped to its 80x194 box,
+        // then CeltDeco's arch (id 8) and border tile (id 9).
+        if (game_struct_city) {
+            if (game_struct_art.ok) {
+                cv.blit_clip(game_struct_art, x0 + 134, y0 - 91,
+                             S.city_border.x, S.city_border.y, 80, 169);
+            }
+            if (iwin_celt_arch.ok) {
+                cv.blit_clip(iwin_celt_arch, x0 + 122, y0 + 21,
+                             S.city_border.x, S.city_border.y,
+                             S.city_border.w, S.city_border.h);
+            }
+            // The arch's left pillar and thin right border repeat every 58 px
+            // below the top arch (CeltDeco 8's left 20 px + the id-9 border
+            // tile).
+            for (int yy = 79; yy < 188; yy += 58) {
+                if (iwin_celt_arch.ok) {
+                    cv.blit_clip(iwin_celt_arch, x0 + 122, y0 + yy,
+                                 x0 + 122, y0 + yy, 20, 58);
+                }
+                if (iwin_celt_side.ok) {
+                    cv.blit_clip(iwin_celt_side, x0 + 122, y0 + yy,
+                                 x0 + 122, y0 + yy, 76, 58);
+                }
+            }
+        }
+        // The CityPanel's active-action text is drawn last in the engine (it is
+        // the panel's own Canvas.TextOut pass, over every child/window art).
+        text_at(cv, glyphs8b, S.prod.x, S.prod.y, game_struct_production, 0, 0,
+                0, false, false, 0);
+        {
+            const int st = game_struct_pressed == 1004 ? 2
+                           : game_struct_hover == 1004 ? 1 : 0;
+            blit3_box(cv, iwin_enter[st], S.enter);
+            text_at(cv, glyphs10b, S.enter.x + S.enter.w / 2, S.enter.y + 7,
+                    "Enter", 0, 0, 0, true, false);
+        }
+        if (game_struct_city) {
+            if (iwin_raze_bg.ok) {
+                cv.blit_stretch(iwin_raze_bg, S.raze.x, S.raze.y, S.raze.w,
+                                S.raze.h);
+            }
+            const int st = game_struct_pressed == 1005 ? 2
+                           : game_struct_hover == 1005 ? 1 : 0;
+            if (iwin_raze_btn[st].ok) {
+                cv.blit_stretch(iwin_raze_btn[st], S.raze_btn.x, S.raze_btn.y,
+                                S.raze_btn.w, S.raze_btn.h);
+            }
+        }
+    }
+
     Canvas render_game() const {
         Canvas cv(disp_w, disp_h);
         cv.clear(0, 0, 0);
@@ -6898,6 +7508,8 @@ struct Scene {
                               m.x, m.y, m.w, m.h);
             blit_frame_box(cv, map_frame, L.map_window);
         }
+        // The selected structure's pulsing marker is part of the map scene.
+        render_structure_marker(cv);
 
         // 2. The bottom bar: the BarSet 3-piece body, the start button, the five
         //    task tabs, the next-turn / turn buttons and the gold & mana panels.
@@ -7165,6 +7777,9 @@ struct Scene {
         cv.blit_stretch(event_icon, L.list.x + 4, L.list.y + 2, 11, 14);
         text_at(cv, glyphs8b, L.list.x + 20, L.list.y + 2, game_event, 160, 169,
                 143, false, false);
+        // The Structure floater has Priority 10 and is drawn over every other
+        // in-game window (TIWindow.InfoWin).
+        render_structure_panel(cv);
     }
 
     // ---- the in-game screen (TWorldMap) drawing helpers -------------------
@@ -7416,6 +8031,15 @@ struct App {
     // --next-held: head-less, draw the TBNextButton with its held-down picture
     // (TAOWButton's +0x110 state), so the pressed art can be proved from a PNG.
     bool next_held = false;
+    // --structure-panel / --structure-*: head-less capture and research hooks for
+    // the TIWindow floater. `--structure-panel` opens the first city (or the
+    // first structure when the map has no city); the value overrides exist
+    // because the city name/income live in external Dict tables and the
+    // reference capture uses a scenario that is not part of the install.
+    bool structure_panel = false;
+    std::string structure_name, structure_race, structure_status;
+    int structure_gold = -1, structure_mana = -1;
+    int structure_race_index = -1;  // force the BCS_<race> city view
     int crop_x = 0, crop_y = 0, crop_w = 0, crop_h = 0;  // 0 = no crop
     bool music = true;
     // --- the music player (a port of Sound.TSongPlayer, see play_music_thread)
@@ -7756,6 +8380,37 @@ void scen_action(int hit) {
 // The in-game screen's own actions. `hit` is from Scene::game_hit.
 void game_action(int hit) {
     Scene& s = g.scene;
+    // The Structure floater's controls (the DFM's own handlers: MinClick /
+    // CloseClick / CenterClick / HelpClick / MainBtnClick / RazeBtnClick).
+    if (hit >= 1000) {
+        switch (hit) {
+        case 1000:  // CloseClick
+        case 1001:  // MinClick
+            s.close_structure();
+            std::printf("game: structure floater closed\n");
+            break;
+        case 1002:  // CenterClick: centre the map on the selected structure
+            if (s.game_struct_hx >= 0) {
+                s.cam_center(s.game_struct_hx, s.game_struct_hy, s.cam_level);
+            }
+            break;
+        case 1003:  // HelpClick
+            s.game_say("Structure window help");
+            break;
+        case 1004:  // MainBtnClick (Enter): hand over to the city screen
+            s.close_structure();
+            s.game_say("enter structure");
+            std::printf("game: structure enter\n");
+            break;
+        case 1005:  // RazeBtnClick
+            s.game_say("raze structure");
+            std::printf("game: structure raze\n");
+            break;
+        default: break;
+        }
+        std::fflush(stdout);
+        return;
+    }
     // The party floater's own controls (game_hit offsets its ids by 100 so they
     // cannot collide with the bar's).
     if (hit >= 100) {
@@ -8239,6 +8894,14 @@ void print_usage() {
         "  --game-clock N        head-less: force the map clock (building anim)\n"
         "  --turn-frame N        head-less: freeze the TurnButton on frame N (0..101)\n"
         "  --next-held           head-less: draw the NextButton held down\n"
+        "  --structure-panel     head-less: open the Structure floater on the first\n"
+        "                        city/structure after loading --start-map\n"
+        "  --structure-name S    override the floater's city/structure name\n"
+        "  --structure-race S    override its race label\n"
+        "  --structure-race-index N  load RACES\\R*.ILB index N for the city view\n"
+        "  --structure-status S  override its status label\n"
+        "  --structure-gold N    override its gold read-out\n"
+        "  --structure-mana N    override its mana read-out\n"
 
         "  --no-music            do not start Songs\\TITLE.IT\n");
 }
@@ -8290,6 +8953,12 @@ void apply_game_click(int cx, int cy, bool right = false) {
     // they sit under the pointer before the map/scanner/party tests).
     {
         const int bh = s.game_hit(cx, cy);
+        if (bh >= 1000) {
+            game_action(bh);
+            std::printf("game_click=structure %d,%d id=%d\n", cx, cy, bh);
+            std::fflush(stdout);
+            return;
+        }
         if (bh == kGameHitTurn) {
             // A human waits for the button's turn-change animation before it
             // accepts the next press (CheckMouseDown's [+0x120] gate); run the
@@ -8376,6 +9045,57 @@ int run_headless() {
             return 1;
         }
         std::printf("flow=scenario-select-start map=%s\n", g.start_map.c_str());
+        // --structure-panel: open TIWindow on the first city of the loaded map
+        // (falling back to the first structure) before the render.
+        if (g.structure_panel) {
+            bool opened = false;
+            auto find_and_open = [&](bool city_only) {
+                for (std::size_t l = 0; l < g.scene.game_state_map.levels.size() &&
+                                       !opened; ++l) {
+                    const aow::MapLevel& lv = g.scene.game_state_map.levels[l];
+                    for (std::uint32_t y = 0; y < lv.height && !opened; ++y) {
+                        for (std::uint32_t x = 0; x < lv.width; ++x) {
+                            const aow::MapHs* hs = g.scene.structure_on_hex(
+                                static_cast<int>(x), static_cast<int>(y));
+                            if (hs == nullptr) continue;
+                            if (city_only && hs->class_id != aow::kCityClassId) {
+                                continue;
+                            }
+                            g.scene.game_level = static_cast<int>(l);
+                            if (g.scene.open_structure(static_cast<int>(x),
+                                                       static_cast<int>(y))) {
+                                opened = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            };
+            find_and_open(true);
+            if (!opened) find_and_open(false);
+            if (opened) {
+                if (!g.structure_name.empty()) {
+                    g.scene.game_struct_name = g.structure_name;
+                }
+                if (!g.structure_race.empty()) {
+                    g.scene.game_struct_race = g.structure_race;
+                }
+                if (!g.structure_status.empty()) {
+                    g.scene.game_struct_status = g.structure_status;
+                }
+                if (g.structure_gold >= 0) g.scene.game_struct_gold = g.structure_gold;
+                if (g.structure_mana >= 0) g.scene.game_struct_mana = g.structure_mana;
+                if (g.structure_race_index >= 0) {
+                    g.scene.game_struct_race_index = g.structure_race_index;
+                    g.scene.load_structure_art(g.structure_race_index);
+                }
+                std::printf("structure_panel=%d,%d city=%d\n",
+                            g.scene.game_struct_hx, g.scene.game_struct_hy,
+                            g.scene.game_struct_city ? 1 : 0);
+            } else {
+                std::fprintf(stderr, "menu: no structure to open\n");
+            }
+        }
     } else if (g.screen_gtype) {
         g.scene.screen = 1;
         g.scene.gt_frame = g.render_frame;
@@ -8745,6 +9465,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
             next();
             g.turn_frame_override = std::atoi(v.c_str());
         }
+        else if (a == "--structure-panel") { g.structure_panel = true; }
+        else if (a == "--structure-name") { next(); g.structure_name = v; }
+        else if (a == "--structure-race") { next(); g.structure_race = v; }
+        else if (a == "--structure-race-index") { next(); g.structure_race_index = std::atoi(v.c_str()); }
+        else if (a == "--structure-status") { next(); g.structure_status = v; }
+        else if (a == "--structure-gold") { next(); g.structure_gold = std::atoi(v.c_str()); }
+        else if (a == "--structure-mana") { next(); g.structure_mana = std::atoi(v.c_str()); }
         else if (a == "--next-held") { g.next_held = true; }
         else if (a == "--font-variant") {
             next();

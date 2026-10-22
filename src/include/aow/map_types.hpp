@@ -53,6 +53,13 @@ constexpr std::uint32_t kAoWHSMapClassId = 0x20011;    // AoWE.TAoWHSMap
 constexpr std::uint32_t kMapContainerClassId = 0x10103;  // HSEngine.TMapContainer
 constexpr std::uint32_t kMapLevelClassId = 0x10102;    // HSEngine.TMapLevel
 constexpr std::uint32_t kAoWMapLevelClassId = 0x20013;  // AoWE.TAoWMapLevel
+// AoWTC.TAoWCombatMapLevel / TAoWCombatMapField (AoWTCPCK.dpl): the tactical
+// battle map variants of the scenario level/field. ClassID getters at
+// AoWTCPCK.dpl 0x41b350 / 0x41b2f4 return these. They inherit TAoWMapLevel /
+// TAoWMapField, so the field/level serialisation is identical; only the
+// registered class ids differ. The shipped TCMaps\*.HSM files use them.
+constexpr std::uint32_t kAoWCombatMapLevelClassId = 0x220102;
+constexpr std::uint32_t kAoWCombatMapFieldClassId = 0x220101;
 constexpr std::uint32_t kMapFieldClassId = 0x10101;    // HSEngine.TMapField
 constexpr std::uint32_t kIsoUpperHexagonClassId = 0x20170;  // IsoHex.TUpperIsometricHexagon
 constexpr std::uint32_t kPadClassId = 0x20106;          // Pad.TPad (city hill)
@@ -67,6 +74,17 @@ constexpr std::uint32_t kTerrainMoClassId = 0x20166;      // Terrain.TTerrainMO
 // `aow::fill_tile_terrain` in aow/movement.hpp). Its resources are the
 // `Mountain.TMountainMOR` records (class 0x20169) of Release.hss.
 constexpr std::uint32_t kMountainMoClassId = 0x20168;      // Mountain.TMountainMO
+// Crops.TCrop (0x2036a) - the field tile a TPlayerCropStructure plants around
+// itself. It is a TILTerrainMO whose resource is Crops.TCropResource (0x2036b,
+// the single Release.hss record id 41). `GetTerrainTypeImage` selects the sprite
+// by the *hex's terrain number* (plus 0x1e for an Undead owner), so the frame is
+// not a per-resource variant - see aow::crop_image_index.
+constexpr std::uint32_t kCropClassId = 0x2036a;            // Crops.TCrop
+constexpr std::uint32_t kCropResourceClassId = 0x2036b;    // Crops.TCropResource
+// Farm.TFarm (0x2036e) - the only shipped TPlayerCropStructure subclass. It is
+// the structure that owns/links the crop tiles around it (TCrop.LinkToCropOwner /
+// TPlayerCropStructure.LinkToCrops); its rw tag 5 is the farm's owner.
+constexpr std::uint32_t kFarmClassId = 0x2036e;            // Farm.TFarm
 
 // The map-object classes that carry the placed units. A `TMapField`'s
 // `AoWE.TArmyHS` (0x20217) holds one army: its rw tag 10 is the `AoWE.TArmy`
@@ -171,6 +189,14 @@ struct MapHs {
     // never stores - `TStructure.Create` leaves the build counter at -1 and no
     // shipped map writes rw tag 0xff). Bit 0 also suppresses the flag.
     std::uint8_t city_flags = 0;
+    // `City.TCity` (class 0x20108) only: rw **tag 0xc** -> +0x48 is the city's
+    // name id. `City.TCity.GetName@557ac918` hands +0x48 to the Localize/Dict
+    // name table (AoW.exe import thunk 0x55701158), so the string is not stored
+    // in the map; `-1` means "no name tag" (the engine then uses its default).
+    std::int32_t city_name_id = -1;
+    // The decoded TCity rw tag 0xc AnsiString (the map stores "Venice" etc as a
+    // length-prefixed string; TCity.GetName copies +0x48 through LStrAsg).
+    std::string city_name;
     // `City.TCity` (class 0x20108) only: `City.TCity.ReadWrite@557acbcc` rw
     // **tag 0x10** writes +0x4d, the city's size/level byte (1..4).
     // `TCity.UpdateFlagID@557ac8b0` packs it into the flag byte's pole-select
