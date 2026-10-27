@@ -1,0 +1,250 @@
+INFO  Using log config file: jar:file:/C:/Users/Utente/Desktop/Programmini/ghidra_12.1.2_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\application.log (LoggingInitialization)  
+INFO  Loading user preferences: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\preferences (Preferences)  
+INFO  Loading previous preferences: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.0.4_PUBLIC\preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (924 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: SHA1PRNG (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (2981 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 60 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\BSim\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\FileFormats\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\Base\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\8051\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Debug\Debugger\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\VersionTracking\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\DecompilerDependent\ghidra_scripts
+    C:\GOG Games\Age of Wonders\port\tools\ghidra
+    C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\Extensions\Jython\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\WildcardAssembler\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\GnuDemangler\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\BytePatterns\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\PDB\ghidra_scripts
+    C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\Extensions\MachineLearning\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\DATA\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\Decompiler\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\PIC\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\PyGhidra\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\FunctionID\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\SystemEmulation\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Debug\Debugger-rmi-trace\ghidra_scripts
+    C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\Extensions\Lisa\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\Atmel\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Processors\JVM\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\MicrosoftCodeAnalyzer\ghidra_scripts
+    C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\SwiftDemangler\ghidra_scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Creating project: C:\GOG Games\Age of Wonders\port\re\ghidra_proj_aowfull\aowfull (HeadlessAnalyzer)  
+INFO  Creating project: C:\GOG Games\Age of Wonders\port\re\ghidra_proj_aowfull\aowfull (DefaultProject)  
+INFO  REPORT: Processing input files:  (HeadlessAnalyzer)  
+INFO       project: C:\GOG Games\Age of Wonders\port\re\ghidra_proj_aowfull\aowfull (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///C:/GOG Games/Age of Wonders/AoW.exe.orig (HeadlessAnalyzer)  
+INFO  Using Loader: Portable Executable (PE) (ProgramLoader)  
+INFO  Using Language/Compiler: x86:LE:32:default:borlanddelphi (ProgramLoader)  
+INFO  Using Library Search Path: [., C:\WINDOWS\SysWOW64, C:\Program Files\Java\jdk-25\bin, C:\WINDOWS\Sun\Java\bin, C:\WINDOWS\system32, C:\WINDOWS, C:\Program Files\Common Files\Oracle\Java\javapath, C:\Program Files (x86)\Common Files\Oracle\Java\java8path, C:\Program Files (x86)\Common Files\Oracle\Java\javapath, C:\WINDOWS\System32\Wbem, C:\WINDOWS\System32\WindowsPowerShell\v1.0\, C:\WINDOWS\System32\OpenSSH\, C:\Program Files\NVIDIA Corporation\NVIDIA App\NvDLISR, C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common, C:\Program Files\Git\cmd, C:\Program Files\dotnet\, C:\Program Files (x86)\Java\jdk-1.8, C:\Program Files (x86)\Java\jdk-1.8\bin, C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\, C:\Program Files (x86)\Windows Kits\8.1\Windows Performance Toolkit\, C:\Program Files\nodejs\, C:\Program Files (x86)\GtkSharp\2.12\bin, C:\Users\Utente\.local\bin, C:\Users\Utente\AppData\Local\Programs\Python\Python310\Scripts\, C:\Users\Utente\AppData\Local\Programs\Python\Python310\, C:\Users\Utente\AppData\Local\Microsoft\WindowsApps, C:\Users\Utente\AppData\Local\Programs\Ollama, C:\Users\Utente\.dotnet\tools, C:\Users\Utente\.lmstudio\bin, C:\msys64\ucrt64\bin, C:\Users\Utente\AppData\Local\Programs\Microsoft VS Code\bin, C:\Users\Utente\AppData\Roaming\npm, C:\Users\Utente\AppData\Local\PowerToys\DSCModules\, C:\Users\Utente\AppData\Local\Programs\Microsoft VS Code\bin\copilot-shim, c:\Users\Utente\.vscode\extensions\ms-python.debugpy-2026.6.0-win32-x64\bundled\scripts\noConfigScripts] (ProgramLoader)  
+INFO  TLS callbacks at 100057cc (TLSDirectory)  
+INFO  TLS callbacks at 100295f8 (TLSDirectory)  
+WARN  Invalid or missing function at 105f0c6c (ExportDataDirectory)  
+WARN  Invalid or missing function at 100dcd7c (ExportDataDirectory)  
+INFO  Additional info:
+Loading file:///C:/GOG Games/Age of Wonders/AoW.exe.orig?MD5=f2c3630ead01aaae7c3fcd27a88c992d...
+------------------------------------------------
+
+Searching 28 paths for library AOWDPLAY.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/aowDPlay.dpl?MD5=566fad8335117c1acfb38b7e2a4da619...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowdplay.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library AOWEPACK.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/AoWEPACK.dpl?MD5=08149246b0316d350b37b509f74d8164...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowepack.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library AOWFXPCK.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/aowFXpck.dpl?MD5=15e69c6705d65b6216c3b5df5cef941f...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowfxpck.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library AOWINT.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/aowInt.dpl?MD5=716a314b8167c627cf68280aece84c57...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowint.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library AOWTCPCK.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/AoWTCPCK.dpl?MD5=03568b2fc922f1d4b7d3ad4029d3c499...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowtcpck.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library AOWTOOLS.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/AOWTools.dpl?MD5=b8979d29cb44e6b13f92bc0412e26221...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowtools.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library DCPACK.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/Dcpack.dpl?MD5=4bfc7350e8bc2250eb013069d5b91b3a...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\dcpack.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library ENGINEP.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/Enginep.dpl?MD5=b56e2a8cf1f1db637f6ff648ce8b1877...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\enginep.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library GFXEPACK.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/Gfxepack.dpl?MD5=e2870f5462f1c9b68078e2e087b7f25a...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\gfxepack.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library HSEPACK.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/HSEPack.dpl?MD5=c117b7a5c4fe816699e36401a273a008...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\hsepack.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library ILPACK.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/Ilpack.dpl?MD5=ef6d035e1b1c335d3c7dfd15af29316e...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\ilpack.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library IMS.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/ims.dpl?MD5=c5f5164207f019b7e7daf2f4e2fcf680...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\ims.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library KERNEL32.DLL...
+Loading file:///C:/Windows/SysWOW64/kernel32.dll?MD5=770414a520903821a02bbcad3ca69fcc...
+Using existing exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\kernel32.exports
+WARNING: Existing exports file may not be an exact match.
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library LOCALIZE.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/Localize.dpl?MD5=b24d28305c8970dfb68116dbea8db4f4...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\localize.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library NETWORK.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/Network.dpl?MD5=02af854a0ed3084e78ad7a519c115f91...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\network.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library OLE32.DLL...
+Loading file:///C:/Windows/SysWOW64/ole32.dll?MD5=d1ff0e61ad5f77f5661664728a6b2eaf...
+[ole32.dll]: failed to create WEVTResource at 10139740: Failed to resolve data length for WEVTResource
+Using existing exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\ole32.exports
+WARNING: Existing exports file may not be an exact match.
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library SHELL32.DLL...
+Loading file:///C:/Windows/SysWOW64/shell32.dll?MD5=61ed45c783402049778830620b45a8ed...
+Using existing exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\shell32.exports
+WARNING: Existing exports file may not be an exact match.
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library SOUNDP.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/SoundP.dpl?MD5=0ed05a870400d298ba945aba4a4f5517...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\soundp.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library USER32.DLL...
+Loading file:///C:/Windows/SysWOW64/user32.dll?MD5=a87613d5a9420564cc848130252fed2b...
+[user32.dll]: failed to create WEVTResource at 100fba70: Failed to resolve data length for WEVTResource
+Using existing exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\user32.exports
+WARNING: Existing exports file may not be an exact match.
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library VCL30.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/vcl30.dpl?MD5=5e8946912b9ea5dc9a5b4c7945ba10cd...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\vcl30.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library VCLX30.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/VCLX30.DPL?MD5=49c9e2b7173c5715459cc791c10e69ed...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\vclx30.exports
+Library not saved to project.
+------------------------------------------------
+
+Searching 28 paths for library VIDEOP.DPL...
+Loading file:///C:/GOG Games/Age of Wonders/VideoP.dpl?MD5=f8312dc5abaccc8563e1a84421a48246...
+Created exports file: C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\videop.exports
+Library not saved to project.
+------------------------------------------------
+
+Applying cached symbols from VCL30.DPL
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\kernel32.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\user32.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\ole32.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\gfxepack.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\ilpack.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\enginep.exports
+Applying cached symbols from SOUNDP.DPL
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\hsepack.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\network.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowepack.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\localize.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowfxpck.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\dcpack.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowint.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowtools.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowtcpck.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\vclx30.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\aowdplay.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\shell32.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\ims.exports
+Applying C:\Users\Utente\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\symbols\win32\videop.exports
+Linking the External Programs of 'AoW.exe.orig' to imported libraries...
+  [VCL30.DPL] -> not found in project
+  [KERNEL32.DLL] -> not found in project
+  [USER32.DLL] -> not found in project
+  [OLE32.DLL] -> not found in project
+  [GFXEPACK.DPL] -> not found in project
+  [ILPACK.DPL] -> not found in project
+  [ENGINEP.DPL] -> not found in project
+  [SOUNDP.DPL] -> not found in project
+  [HSEPACK.DPL] -> not found in project
+  [NETWORK.DPL] -> not found in project
+  [AOWEPACK.DPL] -> not found in project
+  [LOCALIZE.DPL] -> not found in project
+  [AOWFXPCK.DPL] -> not found in project
+  [DCPACK.DPL] -> not found in project
+  [AOWINT.DPL] -> not found in project
+  [AOWTOOLS.DPL] -> not found in project
+  [AOWTCPCK.DPL] -> not found in project
+  [VCLX30.DPL] -> not found in project
+  [AOWDPLAY.DPL] -> not found in project
+  [SHELL32.DLL] -> not found in project
+  [IMS.DPL] -> not found in project
+  [VIDEOP.DPL] -> not found in project
+------------------------------------------------
+
+ (ProgramLoader)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  ANALYZING all memory and code: file:///C:/GOG Games/Age of Wonders/AoW.exe.orig (HeadlessAnalyzer)  
+WARN  Ignoring leading '_' chars on no-return name '___raise_securityfailure' specified in file: C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\Base\data\PEFunctionsThatDoNotReturn (NoReturnFunctionAnalyzer)  
+WARN  Ignoring leading '_' chars on no-return name '___report_rangecheckfailure' specified in file: C:\Users\Utente\Desktop\Programmini\ghidra_12.1.2_PUBLIC\Ghidra\Features\Base\data\PEFunctionsThatDoNotReturn (NoReturnFunctionAnalyzer)  
+INFO  Skipping PDB processing: missing PDB information in program metadata (PdbUniversalAnalyzer)  
+INFO  Packed database cache: C:\Users\Utente\AppData\Local\ghidra\packed-db-cache (PackedDatabaseCache)  
+INFO  Applied data type archive: windows_vs12_32 (ApplyDataArchiveAnalyzer)  
+Premere un tasto per continuare . . .                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                Premere un tasto per continuare . . . 

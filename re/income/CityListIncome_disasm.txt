@@ -1,0 +1,125 @@
+﻿..\AoWEPACK.dpl  VA 0x557ab9dc (CODE)  390 bytes
+557ab9dc  55                       push ebp
+557ab9dd  8b ec                    mov ebp, esp
+557ab9df  83 c4 e0                 add esp, -0x20
+557ab9e2  53                       push ebx
+557ab9e3  56                       push esi
+557ab9e4  33 db                    xor ebx, ebx
+557ab9e6  89 5d f4                 mov dword ptr [ebp - 0xc], ebx
+557ab9e9  89 5d f0                 mov dword ptr [ebp - 0x10], ebx
+557ab9ec  89 5d e4                 mov dword ptr [ebp - 0x1c], ebx
+557ab9ef  89 4d f8                 mov dword ptr [ebp - 8], ecx
+557ab9f2  89 55 fc                 mov dword ptr [ebp - 4], edx
+557ab9f5  8b d8                    mov ebx, eax
+557ab9f7  33 c0                    xor eax, eax
+557ab9f9  55                       push ebp
+557ab9fa  68 83 bb 7a 55           push 0x557abb83
+557ab9ff  64 ff 30                 push dword ptr fs:[eax]
+557aba02  64 89 20                 mov dword ptr fs:[eax], esp
+557aba05  8b c3                    mov eax, ebx
+557aba07  e8 2c ef ff ff           call 0x557aa938
+557aba0c  8d 34 80                 lea esi, [eax + eax*4]
+557aba0f  8d 55 f0                 lea edx, [ebp - 0x10]
+557aba12  a1 54 92 8e 55           mov eax, dword ptr [0x558e9254]
+557aba17  e8 f4 57 f5 ff           call 0x55701210
+557aba1c  8b 45 f0                 mov eax, dword ptr [ebp - 0x10]
+557aba1f  8d 55 f4                 lea edx, [ebp - 0xc]
+557aba22  e8 d5 8f f7 ff           call 0x557249fc
+557aba27  8b 55 f4                 mov edx, dword ptr [ebp - 0xc]
+557aba2a  8b 45 fc                 mov eax, dword ptr [ebp - 4]
+557aba2d  8b 08                    mov ecx, dword ptr [eax]
+557aba2f  ff 51 34                 call dword ptr [ecx + 0x34]
+557aba32  8d 55 f4                 lea edx, [ebp - 0xc]
+557aba35  8b c6                    mov eax, esi
+557aba37  e8 50 5b f5 ff           call 0x5570158c
+557aba3c  8b 55 f4                 mov edx, dword ptr [ebp - 0xc]
+557aba3f  8b 45 f8                 mov eax, dword ptr [ebp - 8]
+557aba42  8b 08                    mov ecx, dword ptr [eax]
+557aba44  ff 51 34                 call dword ptr [ecx + 0x34]
+557aba47  8b c3                    mov eax, ebx
+557aba49  e8 32 aa ff ff           call 0x557a6480
+557aba4e  03 c0                    add eax, eax
+557aba50  03 f0                    add esi, eax
+557aba52  8d 45 f4                 lea eax, [ebp - 0xc]
+557aba55  50                       push eax
+557aba56  8b c3                    mov eax, ebx
+557aba58  e8 23 aa ff ff           call 0x557a6480
+557aba5d  8d 55 f0                 lea edx, [ebp - 0x10]
+557aba60  e8 27 5b f5 ff           call 0x5570158c
+557aba65  8b 45 f0                 mov eax, dword ptr [ebp - 0x10]
+557aba68  89 45 e8                 mov dword ptr [ebp - 0x18], eax
+557aba6b  c6 45 ec 0b              mov byte ptr [ebp - 0x14], 0xb
+557aba6f  8d 45 e8                 lea eax, [ebp - 0x18]
+557aba72  50                       push eax
+557aba73  8d 55 f4                 lea edx, [ebp - 0xc]
+557aba76  a1 8c 94 8e 55           mov eax, dword ptr [0x558e948c]
+557aba7b  e8 90 57 f5 ff           call 0x55701210
+557aba80  8b 45 f4                 mov eax, dword ptr [ebp - 0xc]
+557aba83  8d 55 e4                 lea edx, [ebp - 0x1c]
+557aba86  e8 71 8f f7 ff           call 0x557249fc
+557aba8b  8b 45 e4                 mov eax, dword ptr [ebp - 0x1c]
+557aba8e  33 c9                    xor ecx, ecx
+557aba90  5a                       pop edx
+557aba91  e8 4e 5b f5 ff           call 0x557015e4
+557aba96  8b 55 f4                 mov edx, dword ptr [ebp - 0xc]
+557aba99  8b 45 fc                 mov eax, dword ptr [ebp - 4]
+557aba9c  8b 08                    mov ecx, dword ptr [eax]
+557aba9e  ff 51 34                 call dword ptr [ecx + 0x34]
+557abaa1  8b c3                    mov eax, ebx
+557abaa3  e8 d8 a9 ff ff           call 0x557a6480
+557abaa8  03 c0                    add eax, eax
+557abaaa  8d 55 f4                 lea edx, [ebp - 0xc]
+557abaad  e8 da 5a f5 ff           call 0x5570158c
+557abab2  8b 55 f4                 mov edx, dword ptr [ebp - 0xc]
+557abab5  8b 45 f8                 mov eax, dword ptr [ebp - 8]
+557abab8  8b 08                    mov ecx, dword ptr [eax]
+557ababa  ff 51 34                 call dword ptr [ecx + 0x34]
+557ababd  8b c3                    mov eax, ebx
+557ababf  e8 e4 db ff ff           call 0x557a96a8
+557abac4  2c 02                    sub al, 2
+557abac6  73 5a                    jae 0x557abb22
+557abac8  8d 55 f0                 lea edx, [ebp - 0x10]
+557abacb  a1 c0 8f 8e 55           mov eax, dword ptr [0x558e8fc0]
+557abad0  e8 3b 57 f5 ff           call 0x55701210
+557abad5  8b 45 f0                 mov eax, dword ptr [ebp - 0x10]
+557abad8  8d 55 f4                 lea edx, [ebp - 0xc]
+557abadb  e8 1c 8f f7 ff           call 0x557249fc
+557abae0  8b 55 f4                 mov edx, dword ptr [ebp - 0xc]
+557abae3  8b 45 fc                 mov eax, dword ptr [ebp - 4]
+557abae6  8b 08                    mov ecx, dword ptr [eax]
+557abae8  ff 51 34                 call dword ptr [ecx + 0x34]
+557abaeb  89 75 e0                 mov dword ptr [ebp - 0x20], esi
+557abaee  db 45 e0                 fild dword ptr [ebp - 0x20]
+557abaf1  d8 0d 90 bb 7a 55        fmul dword ptr [0x557abb90]
+557abaf7  e8 4c 55 f5 ff           call 0x55701048
+557abafc  8d 55 f4                 lea edx, [ebp - 0xc]
+557abaff  e8 88 5a f5 ff           call 0x5570158c
+557abb04  8b 55 f4                 mov edx, dword ptr [ebp - 0xc]
+557abb07  8b 45 f8                 mov eax, dword ptr [ebp - 8]
+557abb0a  8b 08                    mov ecx, dword ptr [eax]
+557abb0c  ff 51 34                 call dword ptr [ecx + 0x34]
+557abb0f  89 75 e0                 mov dword ptr [ebp - 0x20], esi
+557abb12  db 45 e0                 fild dword ptr [ebp - 0x20]
+557abb15  d8 0d 90 bb 7a 55        fmul dword ptr [0x557abb90]
+557abb1b  e8 28 55 f5 ff           call 0x55701048
+557abb20  03 f0                    add esi, eax
+557abb22  f6 43 5c 02              test byte ptr [ebx + 0x5c], 2
+557abb26  74 38                    je 0x557abb60
+557abb28  8d 55 f0                 lea edx, [ebp - 0x10]
+557abb2b  a1 28 92 8e 55           mov eax, dword ptr [0x558e9228]
+557abb30  e8 db 56 f5 ff           call 0x55701210
+557abb35  8b 45 f0                 mov eax, dword ptr [ebp - 0x10]
+557abb38  8d 55 f4                 lea edx, [ebp - 0xc]
+557abb3b  e8 bc 8e f7 ff           call 0x557249fc
+557abb40  8b 55 f4                 mov edx, dword ptr [ebp - 0xc]
+557abb43  8b 45 fc                 mov eax, dword ptr [ebp - 4]
+557abb46  8b 08                    mov ecx, dword ptr [eax]
+557abb48  ff 51 34                 call dword ptr [ecx + 0x34]
+557abb4b  8d 55 f4                 lea edx, [ebp - 0xc]
+557abb4e  8b c6                    mov eax, esi
+557abb50  e8 37 5a f5 ff           call 0x5570158c
+557abb55  8b 55 f4                 mov edx, dword ptr [ebp - 0xc]
+557abb58  8b 45 f8                 mov eax, dword ptr [ebp - 8]
+557abb5b  8b 08                    mov ecx, dword ptr [eax]
+557abb5d  ff 51 34                 call dword ptr [ecx + 0x34]
+557abb60  33 c0                    xor eax, eax

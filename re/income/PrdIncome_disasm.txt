@@ -1,0 +1,71 @@
+﻿..\AoWEPACK.dpl  VA 0x557be500 (CODE)  180 bytes
+557be500  53                       push ebx
+557be501  56                       push esi
+557be502  57                       push edi
+557be503  51                       push ecx
+557be504  8b d8                    mov ebx, eax
+557be506  8b c3                    mov eax, ebx
+557be508  8b 10                    mov edx, dword ptr [eax]
+557be50a  ff 92 2c 02 00 00        call dword ptr [edx + 0x22c]
+557be510  8b f0                    mov esi, eax
+557be512  8b c3                    mov eax, ebx
+557be514  8b 10                    mov edx, dword ptr [eax]
+557be516  ff 92 30 02 00 00        call dword ptr [edx + 0x230]
+557be51c  3c 08                    cmp al, 8
+557be51e  75 2c                    jne 0x557be54c
+557be520  8b 7b 44                 mov edi, dword ptr [ebx + 0x44]
+557be523  80 7f 20 02              cmp byte ptr [edi + 0x20], 2
+557be527  75 10                    jne 0x557be539
+557be529  8b 47 14                 mov eax, dword ptr [edi + 0x14]
+557be52c  33 d2                    xor edx, edx
+557be52e  e8 d9 e2 f9 ff           call 0x5575c80c
+557be533  83 78 08 0a              cmp dword ptr [eax + 8], 0xa
+557be537  75 13                    jne 0x557be54c
+557be539  89 34 24                 mov dword ptr [esp], esi
+557be53c  db 04 24                 fild dword ptr [esp]
+557be53f  d8 0d 54 e5 7b 55        fmul dword ptr [0x557be554]
+557be545  e8 fe 2a f4 ff           call 0x55701048
+557be54a  03 f0                    add esi, eax
+557be54c  8b c6                    mov eax, esi
+557be54e  5a                       pop edx
+557be54f  5f                       pop edi
+557be550  5e                       pop esi
+557be551  5b                       pop ebx
+557be552  c3                       ret 
+557be553  00 00                    add byte ptr [eax], al
+557be555  00 80 3e 80 78 48        add byte ptr [eax + 0x4878803e], al
+557be55b  01 0f                    add dword ptr [edi], ecx
+557be55d  94                       xchg esp, eax
+557be55e  c0 c3 53                 rol bl, 0x53
+557be561  8b d8                    mov ebx, eax
+557be563  84 d2                    test dl, dl
+557be565  74 1b                    je 0x557be582
+557be567  8b 43 44                 mov eax, dword ptr [ebx + 0x44]
+557be56a  8b 10                    mov edx, dword ptr [eax]
+557be56c  ff 52 6c                 call dword ptr [edx + 0x6c]
+557be56f  83 ca ff                 or edx, 0xffffffff
+557be572  8b c3                    mov eax, ebx
+557be574  8b 08                    mov ecx, dword ptr [eax]
+557be576  ff 91 f0 01 00 00        call dword ptr [ecx + 0x1f0]
+557be57c  c6 43 48 01              mov byte ptr [ebx + 0x48], 1
+557be580  eb 04                    jmp 0x557be586
+557be582  c6 43 48 00              mov byte ptr [ebx + 0x48], 0
+557be586  0f be 53 18              movsx edx, byte ptr [ebx + 0x18]
+557be58a  8b c3                    mov eax, ebx
+557be58c  8b 08                    mov ecx, dword ptr [eax]
+557be58e  ff 91 2c 01 00 00        call dword ptr [ecx + 0x12c]
+557be594  89 43 14                 mov dword ptr [ebx + 0x14], eax
+557be597  5b                       pop ebx
+557be598  c3                       ret 
+557be599  8d 40 00                 lea eax, [eax]
+557be59c  55                       push ebp
+557be59d  8b ec                    mov ebp, esp
+557be59f  83 c4 d4                 add esp, -0x2c
+557be5a2  53                       push ebx
+557be5a3  56                       push esi
+557be5a4  57                       push edi
+557be5a5  33 db                    xor ebx, ebx
+557be5a7  89 5d f4                 mov dword ptr [ebp - 0xc], ebx
+557be5aa  89 5d f0                 mov dword ptr [ebp - 0x10], ebx
+557be5ad  89 5d d8                 mov dword ptr [ebp - 0x28], ebx
+557be5b0  89 5d d4                 mov dword ptr [ebp - 0x2c], ebx

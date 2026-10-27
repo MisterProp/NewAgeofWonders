@@ -103,6 +103,15 @@ Implemented by `src/engine/ilb.cpp` (`aow ilb <file>`), validated against all
 `re/exports/ilpack/`. The older `tools/ilb_tool.py` is heuristic (name scan
 only) and superseded.
 
+**Reloading.** `IlbFile::load()` / `load_memory()` reset the parsed directory
+(`entries_`, `data_`) before reading a new file. An `IlbEntry::blob_offset` is
+relative to the file it was read from, while `decode_rgb()` indexes the current
+`data_`, so keeping a previous library's entries would decode the new file at
+the old offsets. The unit detail page reuses one `IlbFile` for the selected
+unit's face library and hit exactly this when switching from a
+`FACES\UNITS.ILB` unit (machines/monsters) to a `FACES\R_FACES.ILB` race face:
+the portrait came out sheared and showed slivers of the neighbouring pictures.
+
 ### Image classes and decoding
 
 Each image record carries a `class_id` naming its `TLibraryImage` subclass; the

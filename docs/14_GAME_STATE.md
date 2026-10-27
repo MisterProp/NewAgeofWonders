@@ -58,10 +58,10 @@ written. Offsets are from the object pointer (the vtable).
 |-----|-----|------|-------|----------|
 | `0x02` | `+0xa5` | `rwByte` | race id (`0xff` = independents; **absent = 0 = Humans**) | `SetRace` `0x55752cf8`; maps show 255/5/6/9/10, and omit the tag for a Humans player (Europe player 1, Barondir Bay player 3, ...) |
 | `0x03` | `+0xa7` | `rwData(1)` | **player type** (0 human, AI levels, 4 independents) | `TSetupControl.hPickMap` `0x557e20c8` reads `+0xa7` into the race's `TSetupSettings`; verified against the 9 campaign maps (see below) |
-| `0x05` | `+0xac` | `rwInteger` | **gold** (Create default 250) | map values 250/1000/125/275 |
+| `0x05` | `+0xac` | `rwInteger` | **starting gold** (Create default 250) | map values 250/1000/125/275; `TAoWHSMap.StartNewMap@55777d68` copies it into `+0xc4` |
 | `0x06` | `+0xb0` | `rwInteger` | base income | `UpdateIncome` reads `+0xb0` |
 | `0x0a` | - | `rwByte` | `unknown` (present in maps) | - |
-| `0x10` | `+0xc4` | `rwInteger` | **gems / crystals** | `SetGems` `0x55751f38` writes `+0xc4` |
+| `0x10` | `+0xc4` | `rwInteger` | **live gold treasury** | `SetGems` `0x55751f38` writes `+0xc4`; `TPlayerControl.NewTurn@557553c4`, `UpdateTurnInfo@55752d70` (TTurnInfoItem+8) and the bar all read it as gold. The historical method name is misleading - AoW1 has no separate crystal currency: Gems.TGems pickups add gold (`Gems.TGems.ArmyEntered@557c50f8`). |
 | `0x12` | `+0xa6` | `rwByte` | **player index/id** (absent = 0 = independents) | `SetPlayerIndex` `0x55751838` |
 | `0x14`/`0x15`/`0x16` | `+0x2d..+0x2f` | `rwByte` | player colour (RGB; absent = 0) | `ReadWrite` tags 0x14..0x16 |
 | `0x17` | `+0xd8` | `rwEObject` | `TEventLogbook` | object (tag 10 inside) |
@@ -212,15 +212,38 @@ if (day != 1) {
 turn_count += 1
 ```
 
+`TAoWHSMap.StartNewMap` (`0x55777d68`) seeds the live treasury before the first
+turn: `gold(+0xc4) = start_gold(+0xac)`, plus +250 for CPU King (type 6) and
++500 for CPU Emperor (type 7). (It also seeds mana from the magic control's
+own starting-mana field with the same +250/+500 AI bonuses.)
+
 `TPlayer.UpdateIncome` (`0x55751f88`) sets `income = base_income + Σ(income
-source)`; the AI difficulty types 2/3/6/0xa apply a rounding (and literal
-`+50`/`+100` for types 6/0xa). The port reproduces the base and the two literal
-bonuses; the multiplier for 2/3 is `TODO(RE)`.
+source)`, then applies the CPU multiplier - the constants at AoWEPACK
+`0x5575205c`/`60`/`64` are 1.0 / 2.0 / 2.5, and the Emperor branch is
+`x*3 + 100`:
+
+| player type | multiplier | flat bonus |
+|---|---|---|
+| 2 CPU Knight | `round(x * 1.0)` | - |
+| 3 CPU Lord | `round(x * 2.0)` | - |
+| 6 CPU King | `round(x * 2.5)` | +50 |
+| 7 CPU Emperor | `round(x * 3.0)` | +100 |
+
+`System.ROUND` is Delphi's round-to-nearest-even. The port reproduces all four
+branches and the start-gold bonuses. The full **building income + army upkeep**
+chain is recovered in `docs/28_ECONOMY.md` and implemented by
+`aow::compute_economy`.
 
 `TPlayerMagicControl.NewTurn` (`0x5577cc2c`) grows the research list, adds
 `net_power_to_research` to research progress (granting a spell when it reaches
 0), then `mana = mana + mana_income - mana_upkeep`, clamped at 0 (`OutOfMana`).
-The port exposes these as `Player::magic` and `PlayerMagic::net_power_to_research`.
+It is reached through `TPlayerMagicControl.MsgProc@5577d264`, which runs it for
+message `0x20020002`; `TPlayerControl.NewTurn` posts that message outside its
+`day != 1` gold branch, so mana income is credited on day 1 too. The port
+reproduces that step in `GameState::begin_player_turn`
+(`magic.mana += magic.mana_income - magic.mana_upkeep`, clamp 0) and exposes the
+fields as `Player::magic` / `PlayerMagic::net_power_to_research`; research
+progress itself is parsed but not simulated. See `docs/28_ECONOMY.md` 3.2.
 
 ### The end-turn rule (`TPlayer+0x2c`)
 
@@ -323,10 +346,16 @@ accounting and the deficit clamp. Run via `./build.ps1 -Test` or
 
 * `TRaceList` (`TAoWHSMap` tag `0x16`) per-record tags - the race list is not
   parsed yet.
-* `TPlayer` tag 0x0a; the remaining `TLeader` (`0x1e`) sub-record fields (only the
-  face index, hero-resource index, name and nickname are read - the leader's
-  spheres, skill points, personality, ... are still unparsed).
+* `TPlayer` tag 0x0a; the remaining `TLeader` (`0x1e`) sub-record fields (the
+  face index, hero-resource index, name, nickname and sphere picks - rw tag
+  0x2e - are read; skill points, personality, ... are still unparsed).
 * The magic-control researched-spell `TIntegerList` (tag 0x16) body.
-* The AI-difficulty income multiplier for player types 2/3 (`UpdateIncome`).
-* The map's own day value / RNG seed (the port starts at day 1 with a caller
-  seed).
+* City enchantment state (`TCity+0x58`, rw tag 0x1d) - the Gold Rush flag
+  (`TCity+0x5c` bit 1) is not parsed, so a scenario that starts with Gold Rush
+  already cast is not doubled yet. The base income / merchandise rules are
+  implemented in `docs/28_ECONOMY.md`.
+* The map's own day value: `Map::day` parses TAoWHSMap rw tag 0x13 (absent = 0
+  on a fresh scenario), but the turn loop still starts at day 1. The map's RNG
+  state (`Map::rand_seed`, rw tag 0x1c) *is* parsed and drives the gold-pile
+  generation with Borland's `System._RandInt` (`docs/28_ECONOMY.md` 7.2); the
+  turn-order shuffle still uses the port's xorshift with the caller's seed.

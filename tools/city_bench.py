@@ -2,8 +2,9 @@
 
 The reference is a 1:1 capture of the original 640x480 screen cropped to
 638x472 (2 px off the right edge, 8 px off the bottom).  The port renders the
-full 640x480 frame, so the comparison crop is (0,0,638,472): the capture's
-rows are the screen's own rows.
+full 640x480 frame but draws the live world-map bar below the 432 px dialog,
+while the capture's rows 432..471 show the original's frozen bar.  The
+comparison is therefore limited to the dialog rect (0,0,638,432).
 
     python tools/city_bench.py bin/UnitCreationRef.png bin/city_final.png
 """
@@ -15,10 +16,10 @@ from PIL import Image
 def main():
     ref_path = sys.argv[1] if len(sys.argv) > 1 else 'bin/UnitCreationRef.png'
     cur_path = sys.argv[2] if len(sys.argv) > 2 else 'bin/city_final.png'
-    ref = Image.open(ref_path).convert('RGB')
+    ref = Image.open(ref_path).convert('RGB').crop((0, 0, 638, 432))
     cur = Image.open(cur_path).convert('RGB')
     if cur.size == (640, 480):
-        cur = cur.crop((0, 0, 638, 472))
+        cur = cur.crop((0, 0, 638, 432))
     if cur.size != ref.size:
         raise SystemExit('size mismatch: ref %s cur %s' % (ref.size, cur.size))
     w, h = ref.size

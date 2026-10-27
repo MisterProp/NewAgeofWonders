@@ -1,0 +1,63 @@
+﻿..\AoWEPACK.dpl  VA 0x5577cee4 (CODE)  170 bytes
+5577cee4  53                       push ebx
+5577cee5  56                       push esi
+5577cee6  51                       push ecx
+5577cee7  8b d8                    mov ebx, eax
+5577cee9  8b c3                    mov eax, ebx
+5577ceeb  e8 d4 ff ff ff           call 0x5577cec4
+5577cef0  8b f0                    mov esi, eax
+5577cef2  8b c3                    mov eax, ebx
+5577cef4  e8 87 00 00 00           call 0x5577cf80
+5577cef9  2b f0                    sub esi, eax
+5577cefb  8b 43 10                 mov eax, dword ptr [ebx + 0x10]
+5577cefe  8a 80 a7 00 00 00        mov al, byte ptr [eax + 0xa7]
+5577cf04  2c 02                    sub al, 2
+5577cf06  74 0e                    je 0x5577cf16
+5577cf08  fe c8                    dec al
+5577cf0a  74 1f                    je 0x5577cf2b
+5577cf0c  2c 03                    sub al, 3
+5577cf0e  74 30                    je 0x5577cf40
+5577cf10  fe c8                    dec al
+5577cf12  74 41                    je 0x5577cf55
+5577cf14  eb 52                    jmp 0x5577cf68
+5577cf16  89 34 24                 mov dword ptr [esp], esi
+5577cf19  db 04 24                 fild dword ptr [esp]
+5577cf1c  d8 0d 70 cf 77 55        fmul dword ptr [0x5577cf70]
+5577cf22  e8 21 41 f8 ff           call 0x55701048
+5577cf27  8b f0                    mov esi, eax
+5577cf29  eb 3d                    jmp 0x5577cf68
+5577cf2b  89 34 24                 mov dword ptr [esp], esi
+5577cf2e  db 04 24                 fild dword ptr [esp]
+5577cf31  d8 0d 74 cf 77 55        fmul dword ptr [0x5577cf74]
+5577cf37  e8 0c 41 f8 ff           call 0x55701048
+5577cf3c  8b f0                    mov esi, eax
+5577cf3e  eb 28                    jmp 0x5577cf68
+5577cf40  89 34 24                 mov dword ptr [esp], esi
+5577cf43  db 04 24                 fild dword ptr [esp]
+5577cf46  d8 0d 78 cf 77 55        fmul dword ptr [0x5577cf78]
+5577cf4c  e8 f7 40 f8 ff           call 0x55701048
+5577cf51  8b f0                    mov esi, eax
+5577cf53  eb 13                    jmp 0x5577cf68
+5577cf55  89 34 24                 mov dword ptr [esp], esi
+5577cf58  db 04 24                 fild dword ptr [esp]
+5577cf5b  d8 0d 7c cf 77 55        fmul dword ptr [0x5577cf7c]
+5577cf61  e8 e2 40 f8 ff           call 0x55701048
+5577cf66  8b f0                    mov esi, eax
+5577cf68  8b c6                    mov eax, esi
+5577cf6a  5a                       pop edx
+5577cf6b  5e                       pop esi
+5577cf6c  5b                       pop ebx
+5577cf6d  c3                       ret 
+5577cf6e  00 00                    add byte ptr [eax], al
+5577cf70  00 00                    add byte ptr [eax], al
+5577cf72  a0 3f 00 00 c0           mov al, byte ptr [0xc000003f]
+5577cf77  3f                       aas 
+5577cf78  00 00                    add byte ptr [eax], al
+5577cf7a  e0 3f                    loopne 0x5577cfbb
+5577cf7c  00 00                    add byte ptr [eax], al
+5577cf7e  00 40 53                 add byte ptr [eax + 0x53], al
+5577cf81  51                       push ecx
+5577cf82  8b d8                    mov ebx, eax
+5577cf84  8b c3                    mov eax, ebx
+5577cf86  e8 39 ff ff ff           call 0x5577cec4
+5577cf8b  f7 6b 2c                 imul dword ptr [ebx + 0x2c]

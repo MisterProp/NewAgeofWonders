@@ -539,6 +539,22 @@ bool unit_pose_rgba(const UnitCatalog& cat, const std::string& ilb_root,
                     int& out_w, int& out_h, int& vx, int& vy,
                     std::string& error);
 
+// The same standing pose, placed the way a plain image-library show blits it:
+// the sprite's visual box lands at `(x + base_x + xshift, y + base_y + yshift)`
+// - the frame's own offsets *without* the sequence's `xoff/yoff`. The map and
+// the Party floater want the sequence anchor (the hex/HXtoHP one), while
+// `TCityScreen`'s production cards ask the `TUnitProduction`'s sprite draw for
+// the art at a plain anchor, so the sequence offsets must not be added there:
+// the reference capture places `HMNAR209` (facing 3, shift (25,25)) at
+// `cell + (21,19)` for a call anchored at `cell + (-4,-6)`. `vx`/`vy` are those
+// frame offsets relative to the caller's anchor. Returns false (with `error`)
+// when the unit, its sequence or the frame cannot be resolved.
+bool unit_pose_sprite_rgba(const UnitCatalog& cat,
+                           const std::string& ilb_root, const MapUnit& unit,
+                           int direction, int clock, int phase,
+                           std::vector<std::uint8_t>& rgba, int& out_w,
+                           int& out_h, int& vx, int& vy, std::string& error);
+
 // The moving sprite at a walk's hand-off: the walking pose cross-faded into the
 // standing pose it hands over to (`settle` = the standing pose's weight, 0 =
 // exactly `unit_pose_rgba`'s walking pose, 1 = exactly the standing pose). Both

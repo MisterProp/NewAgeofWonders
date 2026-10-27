@@ -507,12 +507,15 @@ if ($Test) {
 
     # Game-state tests (Stage 2.3): the scenario player roster + turn/day loop.
     $gssrc = @(
+        (Join-Path $Src 'engine\movement.cpp'),
         (Join-Path $Src 'engine\pfs.cpp'),
         (Join-Path $Src 'engine\pfs_types.cpp'),
         (Join-Path $Src 'engine\inflate.cpp'),
         (Join-Path $Src 'engine\map.cpp'),
         (Join-Path $Src 'engine\map_resources.cpp'),
         (Join-Path $Src 'engine\unit_anim.cpp'),
+        (Join-Path $Src 'engine\unit_catalog.cpp'),
+
         (Join-Path $Src 'engine\game_state.cpp'),
         (Join-Path $Src 'tests\game_state_test.cpp')
     )
@@ -830,6 +833,73 @@ if ($Test) {
     Remove-Item $spng, $slog -Force
     Write-Host 'scenario smoke test: ok'
 
+    # Settings panel (docs/08_SCENARIO_SCREEN.md sec. 11): the Turns combo, the
+    # two Duration sliders and the four Misc checkboxes must be live. The run
+    # below clicks PlayModeCB's field and its "Classic" row, the "Leaders on
+    # map" box, and one step right on both sliders - the same scen_hit /
+    # scen_action paths the window's mouse handlers use - and pins both the
+    # resulting state and the NGCBox 48 / ILIndexLit 49 faces.
+    $stpng = Join-Path $BinDir 'scenario_settings.png'
+    $stlog = Join-Path $BinDir 'scenario_settings.txt'
+    Remove-Item $stpng, $stlog -Force -ErrorAction SilentlyContinue
+    # PlayModeCB field (560,70) -> its "Classic" row (560,90); the "Leaders on
+    # map" box at (521,208); one step right on TurnsSl (560,161) and on
+    # TurnTimeSl (560,132).
+    $stargs = ('--root "{0}" --screen scenario --scen-frame 90 --render "{1}" ' +
+               '--no-music --no-cursor --scen-click 560 70 --scen-click 560 90 ' +
+               '--scen-click 521 208 --scen-click 560 161 --scen-click 560 132')
+    $stargs = $stargs -f $mroot, $stpng
+    $stproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $stargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $stlog
+    if ($stproc.ExitCode -ne 0) {
+        throw "scenario settings smoke test failed ($($stproc.ExitCode))"
+    }
+    if (-not (Test-Path $stpng) -or (Get-Item $stpng).Length -le 1000) {
+        throw 'scenario settings smoke test produced no PNG'
+    }
+    $stline = Get-Content $stlog -Raw
+    # The four clicks: Classic (mode 1), Leaders on map off, one turn-limit step
+    # (10 turns) and one turn-time step (1 minute).
+    foreach ($need in @('scen_set mode=1 turntime=1 turns=1 checks=0001',
+                        'scenario: turns -> Classic',
+                        'scenario: leaders on map -> off',
+                        'scenario: turn limit -> 10 turns',
+                        'scenario: turn time -> 1 minutes')) {
+        if ($stline -notmatch [regex]::Escape($need)) {
+            throw "scenario settings regression ($need): $stline"
+        }
+    }
+    if ($stline -notmatch 'chk=12' -or $stline -notmatch 'lit=12') {
+        throw "scenario settings checkbox art regression: $stline"
+    }
+    Remove-Item $stpng, $stlog -Force
+
+    # ...and a thumb drag (TAOWHScrollBar.CheckMouseMove): press TurnTimeSl's
+    # thumb at (518,132) and drag it to x 560, the far end of its travel, which
+    # is the maximum 20 minutes.
+    $drpng = Join-Path $BinDir 'scenario_settings_drag.png'
+    $drlog = Join-Path $BinDir 'scenario_settings_drag.txt'
+    Remove-Item $drpng, $drlog -Force -ErrorAction SilentlyContinue
+    $drargs = ('--root "{0}" --screen scenario --scen-frame 90 --render "{1}" ' +
+               '--no-music --no-cursor --scen-drag 518 132 560')
+    $drargs = $drargs -f $mroot, $drpng
+    $drproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $drargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $drlog
+    if ($drproc.ExitCode -ne 0) {
+        throw "scenario settings drag test failed ($($drproc.ExitCode))"
+    }
+    $drline = Get-Content $drlog -Raw
+    foreach ($need in @('scenario: turn time -> 20 minutes',
+                        'scen_set mode=2 turntime=20 turns=0')) {
+        if ($drline -notmatch [regex]::Escape($need)) {
+            throw "scenario settings drag regression ($need): $drline"
+        }
+    }
+    Remove-Item $drpng, $drlog -Force
+    Write-Host 'scenario settings smoke test: ok'
+
     # Race availability across maps: a race cell lights only when the chosen
     # map's roster holds that race (FUN_00411460 / FUN_00410f2c). A TPlayer's
     # race is a plain `rwByte`, whose absent-tag branch stores **0**, so a map
@@ -1056,6 +1126,32 @@ if ($Test) {
     }
     Remove-Item $gppng, $gplog -Force
     Write-Host 'game party-window smoke test: ok'
+    # The Unit info window (TUnitWindow, docs/30_UNIT_WINDOW.md). Clicking the
+    # fourth party portrait opens it on the Halfling Pony Rider; the Info tab
+    # and the title-bar Close answer their DFM handlers (`UnitTabChange` /
+    # `CloseClick`). The head-less click log carries the window's own control
+    # ids: 2 = UnitTab.Info, 0 = Close.
+    $gupng = Join-Path $BinDir 'game_unit_window.png'
+    $gulog = Join-Path $BinDir 'game_unit_window.txt'
+    Remove-Item $gupng, $gulog -Force -ErrorAction SilentlyContinue
+    $guargs = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+               '--game-click 513 141 --game-click 220 216 --game-click 610 245 ' +
+               '--game-click 450 205 --game-click 500 42') -f $mroot, $gupng
+    $guproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $guargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gulog
+    if ($guproc.ExitCode -ne 0) { throw 'game unit-window test failed' }
+    $guline = Get-Content $gulog -Raw
+    foreach ($need in @('game_unit=open slot=4 name=Halfling Pony Rider',
+                        'game_click=unit 450,205 id=2',
+                        'game_click=unit 500,42 id=0',
+                        'game_unit=close')) {
+        if ($guline -notmatch [regex]::Escape($need)) {
+            throw "game unit-window test: missing `"$need`""
+        }
+    }
+    Remove-Item $gupng, $gulog -Force
+    Write-Host 'game unit-window smoke test: ok'
     # Leaving a spent unit behind revalidates the party at once. The engine's
     # `TSelectedArmy.SetSelection` rebuilds `TArmy.MovePoints`, `TArmy.MoveTypes`
     # and the move-point table from the *travelling* units only, so a unit with
@@ -1153,11 +1249,13 @@ if ($Test) {
     }
     Remove-Item $gnpng, $gnlog -Force
     Write-Host 'game next-button smoke test: ok'
-    # TurnButtonChange (AoW.exe 0x004574ac) ends the seated player's turn; the
-    # turn loop only hands it on once every player has ended theirs, so each
-    # click advances the *day* by one after the Goblins' and the independents'
-    # turns have run. The TurnButton follows the seat's RACE block:
-    # frame = 11 + 7*race (Halflings = 5 -> 46).
+    # TurnButtonChange (AoW.exe 0x004574ac) ends the seated player's turn and
+    # files the result back into Checked, so right after the click the button
+    # shows its Checked glow (checked=1); the turn loop only hands the turn on
+    # once every player has ended theirs, so each click advances the *day* by
+    # one after the Goblins' and the independents' turns have run, and the
+    # new-day rotation clears Checked again. The TurnButton follows the seat's
+    # RACE block: frame = 11 + 7*race (Halflings = 5 -> 46).
     $gtpng = Join-Path $BinDir 'game_turnbtn.png'
     $gtlog = Join-Path $BinDir 'game_turnbtn.txt'
     Remove-Item $gtpng, $gtlog -Force -ErrorAction SilentlyContinue
@@ -1168,17 +1266,36 @@ if ($Test) {
         -RedirectStandardOutput $gtlog
     if ($gtproc.ExitCode -ne 0) { throw 'game turn-button test failed' }
     $gtline = Get-Content $gtlog -Raw
-    foreach ($need in @('game_click=turn 616,458 checked=0 day=1',
+    foreach ($need in @('game_click=turn 616,458 checked=1 day=1',
+                        'game_click=turn 616,458 checked=1 day=2',
                         'game_endturn=player=1 ok=1 from=1 to=2 day=1',
                         'game_turn=player=2 name=Borok day=1',
                         'game_turn=player=0 name=Independents day=2',
                         'game_turn=player=1 name=Trodsen day=2',
                         'game_msg=your turn - day 2',
                         'game_turnnow=player=1 day=2 frame=46',
-                        'game_turnnow=player=1 day=3 frame=46')) {
+                        'game_turnnow=player=1 day=3 frame=46',
+                        'game_turnanim=start from=-1 to=5',
+                        'game_turnanim=done frame=35',
+                        'game_newturn_sound=day=1 at=seat-start')) {
         if ($gtline -notmatch [regex]::Escape($need)) {
             throw "game turn-button regression ($need): $gtline"
         }
+    }
+    # Two clicks = two new days = exactly two one-rotation changes, each from
+    # the day handler's LastPlayer = -1 to the Halflings block (race 5 -> 35).
+    if (([regex]::Matches($gtline, 'game_turnanim=start from=-1 to=5')).Count -ne 2) {
+        throw "game turn-button regression (rotation count): $gtline"
+    }
+    if (([regex]::Matches($gtline, 'game_turnanim=done frame=35')).Count -ne 2) {
+        throw "game turn-button regression (rotation done count): $gtline"
+    }
+    # NEWTURN.WAV starts with the rotation, not with the later human-seat hand-over.
+    if (([regex]::Matches($gtline, 'game_newturn_sound=day=[23] at=turnanim-start')).Count -ne 2) {
+        throw "game turn-button regression (new-turn sound timing): $gtline"
+    }
+    if (([regex]::Matches($gtline, 'game_newturn_sound=day=[23] at=seat-start')).Count -ne 0) {
+        throw "game turn-button regression (new-turn sound duplicated): $gtline"
     }
     # The two buttons' art is 1:1 with the libraries: the TurnButton paints
     # TBTurnBt.ILB entry 11 + 7*race (46 for the Halflings seat) and the
@@ -1263,6 +1380,87 @@ if ($Test) {
     }
     Remove-Item $gamergpng, $gamerglog -Force
     Write-Host 'game army-combine smoke test: ok'
+    # A building changes hands only when the army has *arrived*, never when the
+    # move is ordered (docs/29_BUILDING_ACQUISITION.md 3.2). `TArmyHS.PlaceOnMap`
+    # sends the map field's 0x1102 (ArmyPlaced) message, and the port delivers it
+    # from `TMoveArmyTE.FinishMove` - the end of the walk transition. Selecting
+    # the hero at (15,34) and clicking the independent Tower at (19,31) starts
+    # the walk: five animation ticks must leave the tower with the independents
+    # (no `game_structure_owner` / `game_capture` line at all), and letting the
+    # walk play out claims it for the Halfling player (flag 0x5) only then.
+    $gcapmidpng = Join-Path $BinDir 'game_capture_walk.png'
+    $gcapmidlog = Join-Path $BinDir 'game_capture_walk.txt'
+    Remove-Item $gcapmidpng, $gcapmidlog -Force -ErrorAction SilentlyContinue
+    $gcapmidargs = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+                    '--game-click 513 141 --game-click 220 216 --game-click 348 120 ' +
+                    '--game-anim 5') -f $mroot, $gcapmidpng
+    $gcapmidproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $gcapmidargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gcapmidlog
+    if ($gcapmidproc.ExitCode -ne 0) { throw 'game building-capture walk test failed' }
+    $gcapmidline = Get-Content $gcapmidlog -Raw
+    if ($gcapmidline -notmatch [regex]::Escape('game_move=15,34->19,31')) {
+        throw "game building-capture walk test: the move was not ordered: $gcapmidline"
+    }
+    if ($gcapmidline -match 'game_structure_owner=' -or
+        $gcapmidline -match 'game_capture=') {
+        throw 'game building-capture walk test: claimed before the army arrived'
+    }
+    Remove-Item $gcapmidpng, $gcapmidlog -Force
+    $gcappng = Join-Path $BinDir 'game_capture.png'
+    $gcaplog = Join-Path $BinDir 'game_capture.txt'
+    Remove-Item $gcappng, $gcaplog -Force -ErrorAction SilentlyContinue
+    $gcapargs = ('--root "{0}" --screen game --no-music --no-cursor --render "{1}" ' +
+                 '--game-click 513 141 --game-click 220 216 --game-click 348 120 ' +
+                 '--game-anim 200') -f $mroot, $gcappng
+    $gcapproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $gcapargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gcaplog
+    if ($gcapproc.ExitCode -ne 0) { throw 'game building-capture test failed' }
+    $gcapline = Get-Content $gcaplog -Raw
+    foreach ($need in @('game_structure_owner=19,31 owner=1 old=0 flag=0x5',
+                        'game_capture=19,31 player=1')) {
+        if ($gcapline -notmatch [regex]::Escape($need)) {
+            throw "game building-capture test: missing `"$need`""
+        }
+    }
+    # ... and the claim is reported *after* the move that ordered it, i.e. at the
+    # end of the transition (`game_move` is printed when the walk starts).
+    $gcapMoveAt = $gcapline.IndexOf('game_move=15,34->19,31')
+    $gcapClaimAt = $gcapline.IndexOf('game_capture=19,31')
+    if ($gcapMoveAt -lt 0 -or $gcapClaimAt -lt 0 -or $gcapClaimAt -lt $gcapMoveAt) {
+        throw 'game building-capture test: the claim did not wait for the walk'
+    }
+    Remove-Item $gcappng, $gcaplog -Force
+    Write-Host 'game building-capture smoke test: ok'
+    # A gold pile is collected when a party arrives (Gems.TGems.ArmyEntered,
+    # docs/28_ECONOMY.md section 7). Heartwood Forest's Elven leader starts at
+    # (27,28) next to a size-2 pile at (29,23); the opening camera centres the
+    # leader, so (220,216) selects it and (284,56) clicks the pile. The pile pays
+    # 60 gold into the human's treasury on arrival, and a second --game-gold on
+    # the same hex (which runs after the walk) must find nothing left.
+    $ggpng = Join-Path $BinDir 'game_gold.png'
+    $gglog = Join-Path $BinDir 'game_gold.txt'
+    Remove-Item $ggpng, $gglog -Force -ErrorAction SilentlyContinue
+    $ggargs = ('--root "{0}" --start-map "Heartwood Forest.HSM" --scen-human 4 ' +
+               '--game-click 220 216 --game-click 284 56 --game-anim 400 ' +
+               '--game-gold 29 23 --render "{1}" --no-music --no-cursor') -f $mroot, $ggpng
+    $ggproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $ggargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $gglog
+    if ($ggproc.ExitCode -ne 0) { throw 'game gold-pile test failed' }
+    $ggline = Get-Content $gglog -Raw
+    foreach ($need in @('game_move=27,28->29,23',
+                        'game_gold=29,23 player=1 amount=60 total=60 gold=310',
+                        'game_msg=60 gold pieces found',
+                        'game_gold_hook=29,23 ok=0')) {
+        if ($ggline -notmatch [regex]::Escape($need)) {
+            throw "game gold-pile test: missing `"$need`""
+        }
+    }
+    Remove-Item $ggpng, $gglog -Force
+    Write-Host 'game gold-pile smoke test: ok'
+
     # The world-map pointer (docs/09_GAME_SCREEN.md 6.8). With no army selected,
     # hovering a hex that carries one swaps the arrow for the game's animated
     # hover sparkle: `AoWE.TAoWHSMap.MouseMoved` (0x55777a58) asks for cursor
@@ -1606,8 +1804,9 @@ if ($Test) {
     # the first city's map values (TCity rw tags 0xc/0xd/0x10) fill the activity
     # panels, while --city-level/--city-wall reproduce the captured reference
     # (a scenario that is not part of the install).  The screenshot itself is
-    # the original 640x480 frame cropped 2 px right / 8 px bottom, so the bench
-    # compares the port's (0,0,638,472) crop.
+    # the original 640x480 frame cropped 2 px right / 8 px bottom; the bench
+    # compares the port's (0,0,638,432) dialog crop because the 48 px bar below
+    # the modal is drawn live (identical to the overworld bar), not captured.
     $ctypng = Join-Path $BinDir 'city_screen.png'
     $ctylog = Join-Path $BinDir 'city_screen.txt'
     Remove-Item $ctypng, $ctylog -Force -ErrorAction SilentlyContinue
@@ -1658,6 +1857,298 @@ if ($Test) {
     }
     Remove-Item $ctypng, $ctylog -Force
     Write-Host 'city screen smoke test: ok'
+    # TCityScreen mode 1: CityBtn1Click's Change shows the production picker.
+    # Its six B1CB..B6CB activity pages are captured 1:1 in bin/cityscreen;
+    # --city-change / --city-activity N renders each page through the same
+    # Change path (docs/27_PRODUCTION_SCREEN.md). The bench registers the
+    # captures' few-pixel crop offsets and compares the 432 px dialog only, so
+    # a correct page matches exactly while the live bar below stays out of it.
+    for ($cpi = 0; $cpi -lt 6; $cpi++) {
+        $cppng = Join-Path $BinDir ('city_prod_' + ($cpi + 1) + '.png')
+        $cplog = Join-Path $BinDir ('city_prod_' + ($cpi + 1) + '.txt')
+        Remove-Item $cppng, $cplog -Force -ErrorAction SilentlyContinue
+        $cpargs = ('--root "{0}" --start-map "Barondir Bay.HSM" --scen-human 0 ' +
+                   '--city-screen --structure-name Venice --structure-race-index 0 ' +
+                   '--structure-status Cheerful --structure-gold 38 --city-level 2 ' +
+                   '--city-wall "Stone Wall" --city-change --city-activity {2} ' +
+                   '--render "{1}" --no-music --no-cursor') -f $mroot, $cppng, $cpi
+        $cpproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $cpargs -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $cplog
+        if ($cpproc.ExitCode -ne 0) {
+            throw "production page $cpi render failed ($($cpproc.ExitCode))"
+        }
+        $cpline = Get-Content $cplog -Raw
+        if ($cpline -notmatch 'city_change=1 activity=0') {
+            throw "production page $cpi did not enter mode 1: $cpline"
+        }
+        if ($cpi -gt 0 -and $cpline -notmatch ('city_activity=' + $cpi + ' title=')) {
+            throw "production page $cpi did not select its activity: $cpline"
+        }
+    }
+    $cpbench = python tools/city_prod_bench.py --all $BinDir (Join-Path $BinDir 'cityscreen')
+    if ($LASTEXITCODE -ne 0) {
+        throw "production page pixel benchmark failed: $cpbench"
+    }
+    $cpbenchs = $cpbench -join "`n"
+    if ($cpbenchs -notmatch 'worst mean ([\d.]+)/255') {
+        throw "production page benchmark output: $cpbenchs"
+    }
+    $cpmean = [double]$Matches[1]
+    if ($cpmean -gt 0.05) {
+        throw "production pages differ from bin/cityscreen (worst mean $cpmean)"
+    }
+    Write-Host ($cpbench | Select-Object -Last 1)
+    # The user-facing QueueRef.png benchmark: page 01's dialog must match the
+    # original capture pixel-for-pixel (row 432 is the live bar, not graded).
+    $qref = Join-Path $BinDir 'QueueRef.png'
+    if (Test-Path $qref) {
+        python tools/city_queue_bench.py $qref (Join-Path $BinDir 'city_prod_1.png')
+        if ($LASTEXITCODE -ne 0) {
+            throw 'QueueRef.png pixel benchmark failed'
+        }
+    }
+    # The P1CB..P12CB card row (UnitsORREF.png, Bloody Marauders' human capital
+    # at (32,45)): the bench renders the row through the *live* card path -
+    # `draw_city_production_cards` - and grades the eight cells, so the unit
+    # art's facing (3 Produce / 5 Install), its anchor and the 45 % fade are
+    # all under test (docs/27_PRODUCTION_SCREEN.md §3.3.1).
+    $uoref = Join-Path $BinDir 'UnitsORREF.png'
+    if (Test-Path $uoref) {
+        $uorout = python tools/unit_or_bench.py
+        if ($LASTEXITCODE -ne 0) {
+            throw ("UnitsORREF.png production-card benchmark failed: " +
+                   ($uorout -join "`n"))
+        }
+        Write-Host ($uorout | Select-Object -Last 2)
+    }
+    # The unit detail page (`FUN_0043c43c` cases 7/8): checking a production
+    # card shows UnitPnl (portrait + face, six stat cells, ability list,
+    # Alignment/Level/Upkeep, Cost/Turns). UnitsSelectionRef.png is a 636x429
+    # crop of the shipped frame taken in Bloody Marauders' Venice (32,45) with
+    # the Human Swordsman checked; its crop origin is (3,-1).
+    $uref = Join-Path $BinDir 'UnitsSelectionRef.png'
+    if (Test-Path $uref) {
+        $upng = Join-Path $BinDir 'unit_selection.png'
+        $ulog = Join-Path $BinDir 'unit_selection.txt'
+        Remove-Item $upng, $ulog -Force -ErrorAction SilentlyContinue
+        $uargs = ('--root "{0}" --start-map "Bloody Marauders.HSM" ' +
+                  '--scen-human 0 --city-screen --structure-tile 32 45 ' +
+                  '--city-change --city-activity 0 --game-click 90 190 ' +
+                  '--render "{1}" --no-music --no-cursor') -f $mroot, $upng
+        $uproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $uargs -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $ulog
+        if ($uproc.ExitCode -ne 0) {
+            throw "unit page render failed ($($uproc.ExitCode))"
+        }
+        $ulines = Get-Content $ulog -Raw
+        foreach ($need in @('city_screen=32,45',
+                            'city_production_sel=1 name=[Human Swordsman]')) {
+            if ($ulines -notmatch [regex]::Escape($need)) {
+                throw "unit page test missing '$need': $ulines"
+            }
+        }
+        $ubench = python tools/unit_sel_bench.py $upng $uref
+        if ($LASTEXITCODE -ne 0) {
+            throw "unit page pixel benchmark failed: $ubench"
+        }
+        $ubenchs = $ubench -join "`n"
+        if ($ubenchs -notmatch 'page\s+594x130 mean\|d\| = ([\d.]+)/255') {
+            throw "unit page benchmark output: $ubenchs"
+        }
+        $umean = [double]$Matches[1]
+        if ($umean -gt 1.10) {
+            throw "unit page differs from UnitsSelectionRef.png (page mean $umean)"
+        }
+        Write-Host ("unit page vs UnitsSelectionRef.png: page mean {0}/255" -f $umean)
+        # Switching cards must repaint UFace from the newly checked card:
+        # `UFaceDraw@0043dc0c` resolves the production item of the card in
+        # +0x2c4 on every draw. The port used to key its decoded-face cache on
+        # `city_unit_page.unit_id`, which already names the new card when the
+        # face is loaded, so every selection after the first kept the previous
+        # unit's portrait. Card 0 (Human Archer) -> card 2 (Battering Ram) ->
+        # card 1 (Human Swordsman) must end up identical to a fresh selection.
+        $uspng = Join-Path $BinDir 'unit_selection_switch.png'
+        $uslog = Join-Path $BinDir 'unit_selection_switch.txt'
+        Remove-Item $uspng, $uslog -Force -ErrorAction SilentlyContinue
+        $usargs = ('--root "{0}" --start-map "Bloody Marauders.HSM" ' +
+                   '--scen-human 0 --city-screen --structure-tile 32 45 ' +
+                   '--city-change --city-activity 0 --game-click 38 190 ' +
+                   '--game-click 140 190 --game-click 89 190 ' +
+                   '--render "{1}" --no-music --no-cursor') -f $mroot, $uspng
+        $usproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $usargs -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $uslog
+        if ($usproc.ExitCode -ne 0) {
+            throw "unit page selection render failed ($($usproc.ExitCode))"
+        }
+        $uslines = Get-Content $uslog -Raw
+        foreach ($need in @('city_production_sel=0 name=[Human Archer]',
+                            'city_production_sel=2 name=[Battering Ram]',
+                            'city_production_sel=1 name=[Human Swordsman]')) {
+            if ($uslines -notmatch [regex]::Escape($need)) {
+                throw "unit page selection test missing '$need': $uslines"
+            }
+        }
+        $usbench = python tools/unit_sel_bench.py $uspng $uref
+        if ($LASTEXITCODE -ne 0) {
+            throw "unit page selection pixel benchmark failed: $usbench"
+        }
+        $usbenchs = $usbench -join "`n"
+        if ($usbenchs -notmatch 'page\s+594x130 mean\|d\| = ([\d.]+)/255') {
+            throw "unit page selection benchmark output: $usbenchs"
+        }
+        $usmean = [double]$Matches[1]
+        if ($usmean -gt 1.10) {
+            throw "unit portrait does not follow the checked card (page mean $usmean)"
+        }
+        Write-Host ("unit page selection switch: page mean {0}/255" -f $usmean)
+        Remove-Item $uspng, $uslog -Force
+        # Reloading a different face library must not inherit the previous
+        # directory: `IlbFile::load` used to append to `entries_`, and every
+        # entry carries the blob offset of the file it came from while
+        # `decode_rgb` reads the *current* file. Starting on Battering Ram
+        # (FACES\UNITS.ILB, face 35) and then checking Human Swordsman
+        # (FACES\R_FACES.ILB, face 0) matched the stale UNITS entry 0 and
+        # decoded it out of the R_FACES bytes, which sheared the portrait and
+        # showed slivers of the neighbouring pictures (page mean ~9.7).
+        $ulpng = Join-Path $BinDir 'unit_selection_lib.png'
+        $ullog = Join-Path $BinDir 'unit_selection_lib.txt'
+        Remove-Item $ulpng, $ullog -Force -ErrorAction SilentlyContinue
+        $ulargs = ('--root "{0}" --start-map "Bloody Marauders.HSM" ' +
+                   '--scen-human 0 --city-screen --structure-tile 32 45 ' +
+                   '--city-change --city-activity 0 --game-click 140 190 ' +
+                   '--game-click 89 190 ' +
+                   '--render "{1}" --no-music --no-cursor') -f $mroot, $ulpng
+        $ulproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $ulargs -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $ullog
+        if ($ulproc.ExitCode -ne 0) {
+            throw "unit page library render failed ($($ulproc.ExitCode))"
+        }
+        $ullines = Get-Content $ullog -Raw
+        foreach ($need in @('city_production_sel=2 name=[Battering Ram]',
+                            'city_production_sel=1 name=[Human Swordsman]')) {
+            if ($ullines -notmatch [regex]::Escape($need)) {
+                throw "unit page library test missing '$need': $ullines"
+            }
+        }
+        $ulbench = python tools/unit_sel_bench.py $ulpng $uref
+        if ($LASTEXITCODE -ne 0) {
+            throw "unit page library pixel benchmark failed: $ulbench"
+        }
+        $ulbenchs = $ulbench -join "`n"
+        if ($ulbenchs -notmatch 'page\s+594x130 mean\|d\| = ([\d.]+)/255') {
+            throw "unit page library benchmark output: $ulbenchs"
+        }
+        $ulmean = [double]$Matches[1]
+        if ($ulmean -gt 1.10) {
+            throw "unit portrait leaks the previous face library (page mean $ulmean)"
+        }
+        Write-Host ("unit page library switch: page mean {0}/255" -f $ulmean)
+        Remove-Item $ulpng, $ullog -Force
+        Remove-Item $upng, $ulog -Force
+    }
+    # Interaction regression: card -> Queue -> row -> Delete. This is the
+    # TCityScreen mode 1/2 path that used to be a set of no-op logs.
+    $cqpng = Join-Path $BinDir 'city_queue_smoke.png'
+    $cqlog = Join-Path $BinDir 'city_queue_smoke.txt'
+    Remove-Item $cqpng, $cqlog -Force -ErrorAction SilentlyContinue
+    $cqargs = ('--root "{0}" --start-map "Barondir Bay.HSM" --scen-human 0 ' +
+               '--city-screen --city-change --city-activity 0 ' +
+               '--game-click 38 190 --game-click 550 390 --game-click 60 365 ' +
+               '--render "{1}" --no-music --no-cursor') -f $mroot, $cqpng
+    $cqproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $cqargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $cqlog
+    if ($cqproc.ExitCode -ne 0) {
+        throw "city queue interaction test failed ($($cqproc.ExitCode))"
+    }
+    $cqline = Get-Content $cqlog -Raw
+    foreach ($need in @(
+        'city_production_sel=0 name=[',
+        'city_queue_add=[Produce ',
+        'rows=1',
+        'city_queue_sel=0 action=8',
+        'mode=2')) {
+        if ($cqline -notmatch [regex]::Escape($need)) {
+            throw "city queue interaction test missing '$need': $cqline"
+        }
+    }
+    Remove-Item $cqpng, $cqlog -Force
+    Write-Host 'city queue interaction: ok'
+    # The unit production mechanic (docs/27_PRODUCTION_SCREEN.md): Produce and
+    # Install both queue a TProductionItem (kind 1/2), ExecuteProduction
+    # charges the Unitres tag-27 cost and starts the timer, and each new turn
+    # ticks it. Install flips TUnitProduction+0xc (the card becomes producible);
+    # Produce places the new TUnit at the city's TArmyHS. Barondir Bay's
+    # capital (40,25) is player 1's size-4 city: card 0 is installed and card 3
+    # is not, so the two runs exercise both paths.
+    $prpng = Join-Path $BinDir 'city_production_smoke.png'
+    $prlog = Join-Path $BinDir 'city_production_smoke.txt'
+    $prcases = @(
+        @{ Card = 0; Click = '38 190';  Kind = 'Produce'; Need = 'city_unit_produced=unit=';
+           Extra = '--game-after-click 204 200 --game-after-click 236 216';
+           Move = 'game_army=41,25' },
+        @{ Card = 3; Click = '192 190'; Kind = 'Install'; Need = 'city_unit_installed=index=3';
+           Extra = ''; Move = '' }
+    )
+    foreach ($case in $prcases) {
+        Remove-Item $prpng, $prlog -Force -ErrorAction SilentlyContinue
+        $prargs = ('--root "{0}" --start-map "Barondir Bay.HSM" --scen-human 2 ' +
+                   '--city-screen --structure-tile 40 25 --city-change ' +
+                   '--game-click {1} --game-click 551 368 --game-click 551 405 ' +
+                   '--game-turns 2 {3} --render "{2}" --no-music --no-cursor') -f $mroot, $case.Click, $prpng, $case.Extra
+        $prproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+            -ArgumentList $prargs -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $prlog
+        if ($prproc.ExitCode -ne 0) {
+            throw "production mechanic test failed ($($prproc.ExitCode))"
+        }
+        $prline = Get-Content $prlog -Raw
+        foreach ($need in @('city_production_sel=' + $case.Card,
+                            'city_queue_add=[' + $case.Kind,
+                            'city_production_start=[' + $case.Kind,
+                            $case.Need)) {
+            if ($prline -notmatch [regex]::Escape($need)) {
+                throw "production mechanic test missing '$need': $prline"
+            }
+        }
+        if ($case.Move -and $prline -notmatch [regex]::Escape($case.Move)) {
+            throw "produced unit cannot move (missing '$($case.Move)'): $prline"
+        }
+    }
+    Remove-Item $prpng, $prlog -Force
+    Write-Host 'unit production/install mechanic: ok'
+    # The Change -> tab -> Done path: Change arms mode 1, a B cell switches the
+    # page, Done returns to the overview (it must not close the city screen).
+    Remove-Item $ctypng, $ctylog -Force -ErrorAction SilentlyContinue
+    $cpclickargs = ('--root "{0}" --start-map "Barondir Bay.HSM" --scen-human 0 ' +
+                    '--city-screen --structure-name Venice --structure-race-index 0 ' +
+                    '--structure-status Cheerful --structure-gold 38 --city-level 2 ' +
+                    '--city-wall "Stone Wall" --game-click 551 365 ' +
+                    '--game-click 300 390 --game-click 551 405 --render "{1}" ' +
+                    '--no-music --no-cursor') -f $mroot, $ctypng
+    $cpclickproc = Start-Process -FilePath (Join-Path $BinDir 'AoW.exe') `
+        -ArgumentList $cpclickargs -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $ctylog
+    $cpclick = Get-Content $ctylog -Raw
+    foreach ($need in @('city_change=1 activity=0',
+                        'game_click=city 551,365 id=2001',
+                        'city_activity=2 title=[Fortify]',
+                        'game_click=city 300,390 id=2102',
+                        'city_change=0',
+                        'game_click=city 551,405 id=2004')) {
+        if ($cpclick -notmatch [regex]::Escape($need)) {
+            throw "production page click test: missing `"$need`""
+        }
+    }
+    if ($cpclick -match 'city_screen=closed') {
+        throw 'production page Done click closed the city screen'
+    }
+    Remove-Item $ctypng, $ctylog -Force -ErrorAction SilentlyContinue
+    Write-Host 'production page smoke test: ok'
     # CityRaceLbl reads the *shipped* singular race name for the city's own race
     # byte: "Race: %s" (AoWE.RaceX) with `AoWE.RaceNamesRStr[city+0x45]`, i.e.
     # human/azrac/lizard/frostling/elf/halfling/dwarf/highman/darkelf/orc/goblin/

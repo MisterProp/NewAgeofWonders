@@ -13,8 +13,9 @@ top of it.
 This tool extracts that backdrop into `assets/cityscreen.bmp` - a plain
 uncompressed 24-bit BMP, which `Scene::load_city_art` reads at runtime (the
 port deliberately has no PNG decoder).  The missing two columns on the right
-are filled by repeating the last captured column; the 48 px bottom bar is not
-part of the file (the port renders it live).
+are filled by repeating the last captured column.  The 48 px bar band of the
+capture is kept in the file, but the renderer clips every city blit at the
+432 px dialog edge so the live world-map bar below remains visible.
 
     python tools/city_screen_bg.py bin/UnitCreationRef.png assets/cityscreen.bmp
 """
@@ -58,7 +59,6 @@ def write_bmp24(path, im):
 BODY_HDR = (525, 230, 50, 55)
 BODY_MEMO = (525, 296, 50, 38)
 LIVE_REGIONS = [
-    ((288, 6, 352, 32), (300, 22, 20, 8)),         # StructName (banner colour)
     ((106, 224, 226, 289), BODY_HDR),              # PopulationHdr
     ((52, 288, 226, 340), BODY_MEMO),              # PopulationMemo
     ((285, 224, 405, 289), BODY_HDR),              # IncomeHdr
@@ -68,6 +68,56 @@ LIVE_REGIONS = [
     ((234, 360, 412, 400), BODY_MEMO),             # ActiveAction / Turns
     ((10, 354, 168, 422), (120, 360, 40, 9)),      # QueueLB rows
 ]
+
+
+def clean_title(img):
+    """Remove the reference city's StructName from the green title plaque.
+
+    The plaque is a curved, leaf-textured surface, so a rectangular patch
+    leaves a very visible block. Mask only the white glyph ink + its black
+    shadow and fill each masked pixel from the nearest unmasked plaque pixel;
+    the shape and border are untouched.
+    """
+    import numpy as np
+    out = img.copy()
+    x0, y0, x1, y1 = 268, 8, 382, 36
+    region = out[y0:y1, x0:x1]
+    mx = region.max(axis=2)
+    mn = region.min(axis=2)
+    mask = (mx > 150) | ((mx < 42) & ((mx - mn) < 16))
+    # Dilate once for the anti-aliased edge.
+    grown = mask.copy()
+    grown[1:, :] |= mask[:-1, :]
+    grown[:-1, :] |= mask[1:, :]
+    grown[:, 1:] |= mask[:, :-1]
+    grown[:, :-1] |= mask[:, 1:]
+    mask = grown
+    for _ in range(12):
+        changed = False
+        ys, xs = np.nonzero(mask)
+        for y, x in zip(ys, xs):
+            if not mask[y, x]:
+                continue
+            best = None
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    ny, nx = y + dy, x + dx
+                    if ny < 0 or nx < 0 or ny >= mask.shape[0] or nx >= mask.shape[1]:
+                        continue
+                    if mask[ny, nx]:
+                        continue
+                    d = dx * dx + dy * dy
+                    if best is None or d < best[0]:
+                        best = (d, region[ny, nx].copy())
+            if best is not None:
+                region[y, x] = best[1]
+                mask[y, x] = False
+                changed = True
+        if not changed:
+            break
+    return out
 
 
 def write_clean(src, dst):
@@ -85,6 +135,7 @@ def write_clean(src, dst):
         for y in range(y0, y1):
             for x in range(x0, x1):
                 out[y, x] = tile[(y - y0) % th, (x - x0) % tw]
+    out = clean_title(out)
     cv2.imwrite(dst, out)
 
 
@@ -97,9 +148,9 @@ def main():
     # The Dlg is 640x432 and the 48 px world-map bar below it stays visible; the
     # capture is 1:1 but cropped 2 px on the right and 8 px on the bottom, so the
     # backdrop is the full 640x480 frame with the two missing columns / eight
-    # bottom rows extended from the captured edge.  TCityScreen.Dlg is modal
-    # (`Modal = True`, Priority 55): the bar behind it is frozen while the city
-    # screen is up, exactly as the capture shows it.
+    # bottom rows extended from the captured edge.  At runtime the city blits
+    # stop at y=432, so the captured bar band is stored but never drawn: the
+    # live overworld bar is used instead.
     bg = Image.new('RGB', (640, 480))
     bg.paste(ref.crop((0, 0, 638, 472)), (0, 0))
     last_col = ref.crop((637, 0, 638, 472))

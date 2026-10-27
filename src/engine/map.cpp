@@ -32,6 +32,149 @@ std::string read_short_string(const std::uint8_t* R, std::size_t n, std::size_t 
     return eobject_short_string(R, n, off);
 }
 
+// Engine class ids of the production objects (from their ClassID getters,
+// re/exports/aowepack/AoWE.TUnitProduction.ClassID.c and the class table).
+constexpr std::uint32_t kUnitProductionClassId = 0x20299;  // AoWE.TUnitProduction
+constexpr std::uint32_t kProductionItemClassId = 0x20297;  // AoWE.TProductionItem
+
+// Reads a TProductionItem (+8 kind / +0xc index / +0x10 extra) from the rw
+// table `t` whose base is relative to the object's own property table.
+CityQueueItem read_production_item(const std::uint8_t* R, std::size_t n,
+                                   const Table& t) {
+    CityQueueItem it;
+    const std::size_t k = find_off(t, 0x14);
+    if (k != static_cast<std::size_t>(-1) && t.base + k + 4 <= n) {
+        it.kind = read_i32(R + t.base + k);
+    }
+    const std::size_t i = find_off(t, 0x15);
+    if (i != static_cast<std::size_t>(-1) && t.base + i + 4 <= n) {
+        it.index = read_i32(R + t.base + i);
+    }
+    const std::size_t e = find_off(t, 0x16);
+    if (e != static_cast<std::size_t>(-1) && t.base + e + 4 <= n) {
+        it.extra = read_i32(R + t.base + e);
+    }
+    return it;
+}
+
+// Parses City.TCity rw tag 0x12 (`AoWE.TProductionControl`) into `out`.
+//
+// `TCity.ReadWrite@557acbcc` serialises the control with `rwEObject`, so the
+// tag points at the control's own property table (no class id). The control's
+// two lists are `TNode`s: their table tag 1 is a children table whose entries
+// are offsets to `rwCreateEObject` records (class id + rw table). This is the
+// same shape the TMapField parser uses for placed sprites.
+void parse_production(const std::uint8_t* R, std::size_t n, const Table& city,
+                      MapHs& out) {
+    const std::size_t pc_off = find_off(city, 0x12);
+    if (pc_off == static_cast<std::size_t>(-1)) return;
+    Table pc;
+    if (!read_table(R, n, city.base + pc_off, pc)) return;
+
+    // TProductionControl+0x20, rw tag 0x17: the production state byte. 2 means
+    // a production item is active; `TCity.GetActiveAction@557a96a8` only reads
+    // the queue when this byte is 2.
+    const std::size_t state = find_off(pc, 0x17);
+    if (state != static_cast<std::size_t>(-1) && pc.base + state < n) {
+        out.production_state = R[pc.base + state];
+    }
+    // TProductionControl+0x18, rw tag 0x18: LoopQueueBox.Checked.
+    const std::size_t loop = find_off(pc, 0x18);
+    if (loop != static_cast<std::size_t>(-1) && pc.base + loop < n) {
+        out.loop_queue = R[pc.base + loop] != 0;
+    }
+
+    // TProductionControl+0x24 (rw tag 0x16) is the TProductionSettings object
+    // `ExecuteProduction@5575d118` fills while an item runs. It is NOT a
+    // TProductionItem: `TProductionSettings.ReadWrite@5575c8c4` streams
+    //   tag 0x0a -> +8    paid gold    (rwInteger)
+    //   tag 0x0b -> +0xc  paid mana    (rwInteger)
+    //   tag 0x0c -> +0x10 turns left   (rwByte, read as a signed char)
+    //   tag 0x0d -> +0x1c total turns  (rwByte)
+    //   tag 0x0e -> +0x1d owner player (rwByte)
+    //   tag 0x0f -> +0x20 group production id
+    //   tag 0x10 -> +0x28 run id
+    //   tag 0x11 -> +0x24 produced-unit object
+    //   tag 0x12 -> +0x14, tag 0x13 -> +0x18 (production upkeep/group data)
+    // `TProductionControl.NewTurn@5575dd00` decrements +0x10 and
+    // `FUN_0043f574` formats that same byte as the overview's "N turns left",
+    // so a save loaded mid-production must carry these into the runtime fields
+    // (the queue rows are the ones with tags 0x14/0x15/0x16).
+    const std::size_t cur = find_off(pc, 0x16);
+    if (cur != static_cast<std::size_t>(-1)) {
+        Table ct;
+        if (read_table(R, n, pc.base + cur, ct)) {
+            out.production_current_present = true;
+            auto read_i32_field = [&](std::uint32_t tag, std::int32_t& dst) {
+                const std::size_t o = find_off(ct, tag);
+                if (o != static_cast<std::size_t>(-1) && ct.base + o + 4 <= n) {
+                    dst = read_i32(R + ct.base + o);
+                }
+            };
+            auto read_i8_field = [&](std::uint32_t tag, std::int32_t& dst) {
+                const std::size_t o = find_off(ct, tag);
+                if (o != static_cast<std::size_t>(-1) && ct.base + o < n) {
+                    dst = static_cast<std::int8_t>(R[ct.base + o]);
+                }
+            };
+            read_i32_field(0x0a, out.production_gold_paid);
+            read_i32_field(0x0b, out.production_mana_paid);
+            read_i8_field(0x0c, out.production_turns_left);
+            read_i8_field(0x0d, out.production_turns_total);
+            // The runtime mirror keeps the TProductionItem shape used by the
+            // rest of MapHs (kind/index/extra = paid gold/mana/turns left).
+            out.production_current.kind = out.production_gold_paid;
+            out.production_current.index = out.production_mana_paid;
+            out.production_current.extra = out.production_turns_left;
+        }
+    }
+
+    auto read_children = [&](std::uint32_t tag, Table& out_children) -> bool {
+        const std::size_t obj = find_off(pc, tag);
+        if (obj == static_cast<std::size_t>(-1)) return false;
+        Table obj_t;
+        if (!read_table(R, n, pc.base + obj, obj_t)) return false;
+        const std::size_t list = find_off(obj_t, 1);
+        if (list == static_cast<std::size_t>(-1)) return false;
+        return read_table(R, n, obj_t.base + list, out_children);
+    };
+
+    // tag 0x15: TUnitProductionList -> TUnitProduction children.
+    Table units;
+    if (read_children(0x15, units)) {
+        for (const Entry& e : units.entries) {
+            const std::size_t a = units.base + e.second;
+            if (a + 4 > n || read_u32(R + a) != kUnitProductionClassId) {
+                continue;
+            }
+            Table ut;
+            if (!read_table(R, n, a + 4, ut)) continue;
+            CityProductionUnit u;
+            const std::size_t id = find_off(ut, 0x14);
+            if (id != static_cast<std::size_t>(-1) && ut.base + id + 4 <= n) {
+                u.unit_id = read_i32(R + ut.base + id);
+            }
+            // rw tag 0x15 is a rwBool: its mere presence sets +0xc.
+            u.flag = find_off(ut, 0x15) != static_cast<std::size_t>(-1);
+            out.production_units.push_back(u);
+        }
+    }
+
+    // tag 0x14: TProductionQueue -> TProductionItem children.
+    Table queue;
+    if (read_children(0x14, queue)) {
+        for (const Entry& e : queue.entries) {
+            const std::size_t a = queue.base + e.second;
+            if (a + 4 > n || read_u32(R + a) != kProductionItemClassId) {
+                continue;
+            }
+            Table it;
+            if (!read_table(R, n, a + 4, it)) continue;
+            out.production_queue.push_back(read_production_item(R, n, it));
+        }
+    }
+}
+
 // Parses the army `hs` (an AoWE.TArmyHS). Its rw tag 10 is the embedded
 // `AoWE.TArmy` object (rwEObject = a bare property table, no class id); the
 // army's children (rw tag 1) are the unit objects. Fills out.units (lead first)
@@ -383,6 +526,27 @@ bool load_container(const std::uint8_t* R, std::size_t n, std::size_t ca,
                             if (r22 != static_cast<std::size_t>(-1) &&
                                 sub.base + r22 < n) {
                                 hs.city_flags = R[sub.base + r22];
+                                // `TCity.GetRazed@557ab474` is bit 1 of +0x44.
+                                hs.razed = (hs.city_flags & 2) != 0;
+                            }
+                            // City.TCity rw tag 0x12: the production control
+                            // (unit list / queue / loop). See parse_production.
+                            parse_production(R, n, sub, hs);
+                        }
+                        // Gems.TGems.ReadWrite@557c4fdc: rw tag 5 -> +0x1c is
+                        // the pile's gold amount (rwInteger) and rw tag 6 ->
+                        // +0x20 its size class (a 1-byte blob). `TGems.Create`
+                        // defaults them to 0 / 2.
+                        if (hs.class_id == kGemsClassId) {
+                            const std::size_t g5 = find_off(sub, 5);
+                            if (g5 != static_cast<std::size_t>(-1) &&
+                                sub.base + g5 + 4 <= n) {
+                                hs.gems_gold = read_i32(R + sub.base + g5);
+                            }
+                            const std::size_t g6 = find_off(sub, 6);
+                            if (g6 != static_cast<std::size_t>(-1) &&
+                                sub.base + g6 < n) {
+                                hs.gems_size = R[sub.base + g6];
                             }
                         }
                         // AoWE.TPlayerStructure rw tag 5 -> +0x30: the owning
@@ -394,6 +558,29 @@ bool load_container(const std::uint8_t* R, std::size_t n, std::size_t ca,
                             if (r5 != static_cast<std::size_t>(-1) &&
                                 sub.base + r5 < n) {
                                 hs.structure_owner = R[sub.base + r5];
+                            }
+                            // Farm.TFarm.ReadWrite@557b2c64 and
+                            // Mine.TMine.ReadWrite@557b4690 both store a status
+                            // byte at rw tag 0x14; bit 0 is their GetRazed.
+                            if (hs.class_id == kFarmClassId ||
+                                hs.class_id == kMineClassId ||
+                                hs.class_id == kPowerNodeClassId) {
+                                const std::size_t r20 = find_off(sub, 0x14);
+                                if (r20 != static_cast<std::size_t>(-1) &&
+                                    sub.base + r20 < n) {
+                                    hs.structure_status = R[sub.base + r20];
+                                    hs.razed = (hs.structure_status & 1) != 0;
+                                }
+                            }
+                            // PrdPlace.TProductionPlace.ReadWrite@557bec9c:
+                            // rw tag 0x0a -> +0x48, 1 = razed.
+                            if (is_production_place_class(hs.class_id)) {
+                                const std::size_t r10 = find_off(sub, 0x0a);
+                                if (r10 != static_cast<std::size_t>(-1) &&
+                                    sub.base + r10 < n) {
+                                    hs.structure_status = R[sub.base + r10];
+                                    hs.razed = hs.structure_status == 1;
+                                }
                             }
                         }
                     }
@@ -456,6 +643,28 @@ const std::uint32_t kPlayerStructureClasses[] = {
 
 bool is_player_structure_class(std::uint32_t class_id) {
     for (std::uint32_t c : kPlayerStructureClasses) {
+        if (c == class_id) return true;
+    }
+    return false;
+}
+
+// `PrdPlace.TProductionPlace` (0x203ba) and its subclasses, from the same VMT
+// walk (`vmt-36` parent chain) used for kPlayerStructureClasses.
+const std::uint32_t kProductionPlaceClasses[] = {
+    0x203ba,  // PrdPlace.TProductionPlace
+    0x204be,  // Shipyard.TShipyard
+    0x2092e,  // BldGuild.TBuildersGuild
+    0x204b3,  // WaterNode.TWaterNode
+    0x204ae,  // DeathNode.TDeathNode
+    0x204ce,  // EarthNode.TEarthNode
+    0x203de,  // FireNode.TFireNode
+    0x20371,  // LifeNode.TLifeNode
+    0x2094e,  // AirNode.TAirNode
+    0x20822,  // RandomNode.TRandomNode
+};
+
+bool is_production_place_class(std::uint32_t class_id) {
+    for (std::uint32_t c : kProductionPlaceClasses) {
         if (c == class_id) return true;
     }
     return false;
@@ -533,6 +742,19 @@ bool load_map(const std::string& path, Map& out, std::string& error) {
     const std::size_t hss_off = find_off(top, 2);
     if (hss_off != static_cast<std::size_t>(-1)) {
         out.hss_file = read_short_string(R, n, tb + hss_off);
+    }
+
+    // TAoWHSMap rw tag 0x13 -> +0x174: the day counter. A fresh scenario does
+    // not store it (rwInteger's absent-tag default is 0); a saved game does.
+    const std::size_t day_off = find_off(top, 0x13);
+    if (day_off != static_cast<std::size_t>(-1) && tb + day_off + 4 <= n) {
+        out.day = read_i32(R + tb + day_off);
+    }
+    // TAoWHSMap rw tag 0x1c -> +0x230: the map's own RNG state (`TAoWHSMap.
+    // Random@5577827c`). `Gems.TGems.GenerateGemsAmount` draws from it.
+    const std::size_t seed_off = find_off(top, 0x1c);
+    if (seed_off != static_cast<std::size_t>(-1) && tb + seed_off + 4 <= n) {
+        out.rand_seed = read_u32(R + tb + seed_off);
     }
 
     // The scenario music playlist (see map_types.hpp / docs/09_GAME_SCREEN.md).

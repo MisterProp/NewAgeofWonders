@@ -1,0 +1,76 @@
+﻿  the original either (the label is blank; `TCity.Create`'s `AoWE.NonameRStr` =
+  resource string 64638 "Noname" only ever applies to a city the editor has not
+  named yet).
+* `CityRaceLbl.Text = "Race: %s"` - `AoWE.RaceX` (AoWEPACK resourcestring
+  **64846**) formatted with `AoWE.RaceNamesRStr[city+0x45]`. The routine loads
+  the table element first and then the format string:
+  `MOVSX EAX, byte [city+0x45]` / `MOV EDX,[0x0045e000]` /
+  `MOV EAX,[EDX+EAX*4]` / `TranslateRStr` / `LoadResString([0x0045e1c0])` /
+  `Format`. So the index is the **signed** city race byte (`0xff` -> -1) and
+  the name is the *shipped singular* string, not a plural and not the port's
+  own spelling. `AoWE.RaceNamesRStr` is imported from `AoWEPACK.dpl` (the exe
+  slot `0x0045e000` is the pre-fixup record `AoWE.RaceNamesRStr@B11890CE`), so
+  the strings are that package's RT_STRING entries - the singular declared
+  next to each race's plural (`AoWE.RaceNamesPluralRStr`, see
+  `aow::race_label_plural`):
+
+  | race | label | id | race | label | id |
+  |------|-------|----|------|-------|----|
+  | 0 Human | `Human` | 65255 | 6 Dwarf | `Dwarf` | 65235 |
+  | 1 Azrac | `Azrac` | 65257 | 7 Highman | `Highman` | 65237 |
+  | 2 Lizard | `Lizard` | 65259 | 8 DarkElf | `DarkElf` | 65239 |
+  | 3 Frostling | `Frostling` | 65261 | 9 Orc | `Orc` | 65241 |
+  | 4 Elf | `Elf` | 65263 | 10 Goblin | `Goblin` | 65243 |
+  | 5 Halfling | `Halfling` | 65233 | 11 Undead | `Undead` | 65245 |
+
+  `Highman`/`DarkElf` really are spelled without a space (their plurals are
+  "Highmen"/"Dark Elves"), and Elf is the one race whose plural ("Elves",
+  65232) is not adjacent to its singular in the table. The port exposes the
+  table as `aow::race_label_singular` and shows it verbatim. Before that, the
+  panel indexed a hand-written name list in a different order
+  (`Human, Elf, Dwarf, Halfling, Orc, ...`), which renamed every race from id 4
+  on - Heartwood Forest's Elves read "Orc", its Goblins "Azrac", its Orcs
+  "Lizardman". An unset race (rw tag 0xd absent, or the editor's `0xff` =
+  `C_random`) is resolved to the owner player's race, the same value
+  `city_body_race` uses for the body art; when that also yields no race (the
+  independents' roster entry carries 255) the label falls back to race 0, while
+  the original indexes the raw byte and reads out of bounds. Heartwood Forest
+  has 6 such cities.
+* `CityLevelLbl.Text = IntToStr(city+0x4d)` (the size/level byte).
+* `CityLevelLbl.Text = IntToStr(city+0x4d)` (the size/level byte).
+* `CityIncomeLbl.Text = IntToStr(city+0x3c)`.
+7479:                     break;
+7480:                 }
+7481:             }
+7482:         }
+7483:         if (game_struct_race_index < 0) game_struct_race_index = 0;
+7484:         // CityRaceLbl.Text = "Race: %s" (AoWE.RaceX, resourcestring 64846)
+7485:         // formatted with `AoWE.RaceNamesRStr[city+0x45]` - the *shipped*
+7486:         // singular race name indexed by the signed city race byte, i.e.
+7487:         // `human, azrac, lizard, frostling, elf, halfling, dwarf, highman,
+7488:         // darkelf, orc, goblin, undead`. Indexing the port's own readable
+7489:         // spellings here (or any other order) mixed the races up - Heartwood
+7490:         // Forest's Elves came out as "Orc" because id 4 was named Orc. An
+7491:         // unset race is resolved to the owner's race (the same value the
+7492:         // city-body art uses, `city_body_race`); the original indexes the raw
+7493:         // byte and is out of bounds for the editor's 0xff.
+7494:         // A race id outside the resource list (the independents' roster entry,
+7495:         // and therefore a city with no race byte of its own, carries 255 =
+7496:         // `C_random`) has no string: clamp the label to race 0 exactly like the
+7497:         // old fallback did, while the BCS view keeps using the raw index.
+7498:         const int race_label_id =
+7499:             (game_struct_race_index >= 0 && game_struct_race_index < 12)
+7500:                 ? game_struct_race_index
+7501:                 : 0;
+7502:         game_struct_race = aow::race_label_singular(
+7503:             static_cast<std::uint8_t>(race_label_id));
+7504:         game_struct_status = "Cheerful";
+7505:         game_struct_production = game_struct_city ? "Producing Merchandise"
+7506:                                                   : "Idle";
+7507:         game_struct_gold = game_struct_city ? (10 + game_struct_race_index) : 0;
+7508:         game_struct_mana = game_struct_city ? (2 + game_struct_race_index / 4) : 0;
+7509:         // The right-hand view: `TRaceResource` BCS_<race>.BMP, rw id 42 (the
+7510:         // underground BCU banner is 45). Loaded lazily because a scenario uses
+7511:         // only a few race libraries.
+7512:         std::string lib = "RACES\\RHUMAN.ILB";
+7513:         const std::vector<std::string> libs = aow::race_image_libraries(game_res);

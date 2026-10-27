@@ -9,13 +9,17 @@
 # Reverse-engineering scratch (large, regeneratable)
 /re/re/exports/
 /re/exports/
-/re/ghidra_proj/
+/re/ghidra_proj*/
 /re/*.txt
 
 # Extracted assets are regeneratable from the original game files
 /assets/dfm/
 /assets/ilb/
 /assets/pfs/
+
+# Oversized scratch dumps (full-memory / full-disassembly text dumps, GB-sized)
+/tmp_hw_all.txt
+/tmp_s_all.txt
 
 # Tool scratch
 /tools/_dbg.py

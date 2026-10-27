@@ -3442,6 +3442,40 @@ bool unit_pose_rgba(const UnitCatalog& cat, const std::string& ilb_root,
     return true;
 }
 
+// See mapviz.hpp. Same pose resolution as `unit_pose_rgba`, but placed with the
+// frame's own offsets only (`base_x + xshift`, no sequence `xoff/yoff`): what a
+// plain `TImageLibrary` show of the pose blits, which is how `TCityScreen`
+// draws a production card's unit art.
+bool unit_pose_sprite_rgba(const UnitCatalog& cat, const std::string& ilb_root,
+                           const MapUnit& unit, int direction, int clock,
+                           int phase, std::vector<std::uint8_t>& rgba,
+                           int& out_w, int& out_h, int& vx, int& vy,
+                           std::string& error) {
+    rgba.clear();
+    out_w = out_h = 0;
+    vx = vy = 0;
+    LibResolver& resolver = shared_resolver(ilb_root);
+    std::map<std::string, Library>& cache = shared_libraries();
+    const UnitPose pose = resolve_unit_pose(&cat, resolver, cache, unit,
+                                            direction, /*moving=*/false,
+                                            clock, phase);
+    if (!pose.ok) {
+        error = "unit pose did not resolve";
+        return false;
+    }
+    const Sprite& spr = pose.lib->frames[pose.slot];
+    if (!spr.ok) {
+        error = "unit pose did not decode";
+        return false;
+    }
+    rgba = spr.rgba;
+    out_w = static_cast<int>(spr.w);
+    out_h = static_cast<int>(spr.h);
+    vx = spr.vx;
+    vy = spr.vy;
+    return true;
+}
+
 // See mapviz.hpp. The engine swaps the walking sprite for the standing one in a
 // single frame; a front-end can instead draw the two cross-faded over the last
 // few animation frames of the move, at one anchor and one facing, so the unit

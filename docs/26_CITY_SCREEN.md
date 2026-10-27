@@ -139,9 +139,10 @@ static dialog backdrop.
 `tools/city_screen_bg.py` extracts `bin/UnitCreationRef.png` into two files:
 
 * `assets/cityscreen.bmp` - the exact 640x480 skin (the 2 missing right columns
-  and 8 missing bottom rows extended from the captured edge). The 48 px bar is
-  included because `TCityScreen.Dlg` is modal (`Modal = True`, Priority 55) and
-  freezes the bar while it is up, exactly as the capture shows.
+  and 8 missing bottom rows extended from the captured edge). The capture's
+  48 px bar band is present in the asset for reference, but the renderer clips
+  every city blit at the `TCityScreen.Dlg` bottom edge (y=432); the live
+  world-map bar is drawn below it exactly as on the overworld.
 * `assets/cityscreen_clean.bmp` - the same backdrop with the live text regions
   mirror-tiled from blank patches of the same panel. It is used for any city
   other than the reference, so live labels do not ghost over the captured ones.
@@ -152,7 +153,8 @@ game root (`assets/`, `port/assets/`) and the executable.
 
 ## 4. The port's rendering
 
-`Scene::render_city_screen` draws the backdrop at (0,0), then:
+`Scene::render_city_screen` draws the backdrop at (0,0) clipped to the dialog
+(`0,0,640,432`; the captured bar rows are never blitted), then:
 
 * `RacePortrait` - `R_Faces.ILB` id `game_struct_race_index` stretched to
   48x60 at (61,229) with `Canvas::blit_stretch`'s floor sampling. This is
@@ -172,13 +174,14 @@ screen is up and swallows everything else. The controls are Change (`475,358`
 153x21), `<` (`475,379` 77x21), `>` (`551,379` 77x21), Exit (`475,399` 153x20),
 the Repeat checkbox (`186,381` 12x11) and the five queue rows. `Escape` closes
 the screen. `PPrev`/`PNext` walk the human player's city list (`TCity` objects
-on the current level) like `0x43e420`; `Change` cycles the race's buildable
-units from the recovered `Unitres.pfs` catalogue plus `Merchandise`.
+on the current level) like `0x43e420`; `Change` switches the form to its
+production picker (`TCityScreen` mode 1) - the `B1CB..B6CB` activity pages
+documented in `docs/27_PRODUCTION_SCREEN.md`.
 
 `TIWindow`'s Enter button (`game_action` id 1004) calls `open_city_screen`,
 which reuses `open_structure` for the map lookup, snapshots the city values and
-sets `game_show_city`. The 48 px bar remains visible below the backdrop's
-432 px dialog.
+sets `game_show_city`. The 48 px bar below the 432 px dialog is the same live
+bar `render_game` draws on the overworld - it is never replaced by the capture.
 
 ## 5. Head-less verification
 
@@ -190,15 +193,15 @@ AoW.exe --root .. --start-map "Barondir Bay.HSM" --scen-human 0 `
   --city-wall "Stone Wall" --render bin/city_screen.png --no-music --no-cursor
 #   city_screen=11,12 city=1 name=[Gobba] race=[Goblins] level=1 art=1/1
 python tools/city_bench.py bin/UnitCreationRef.png bin/city_screen.png
-#   frame 638x472 mean|d| = 0.005/255 (100.00% similarity)
+#   frame 638x432 mean|d| = 0.006/255 (100.00% similarity)
 ```
 
 The overrides exist because the reference scenario is not part of the install
 (the same reason `--structure-*` exists for docs/25). `--structure-gold` sets
 the income line, `--city-level` the `Upgrade Level` line and `--city-wall` the
-wall line. The 0.005 residual is the RGB555 quantisation of the race portrait;
-the title, panel and queue bands are 0.000, and the bar band is 0.000 because
-the modal backdrop carries the captured bar.
+wall line. The 0.006 residual is the RGB555 quantisation of the race portrait;
+the title, panel and queue bands are 0.000. The bench stops at y=432: the live
+bar below the dialog is intentionally not part of the captured-art comparison.
 
 `build.ps1 -Test` runs the same render and fails if the bench's mean exceeds
 0.05. The click path is exercised by the head-less driver: while the city is
@@ -212,18 +215,23 @@ open, `--game-click X Y` hits the city controls first (`game_click=city ...`).
   captured Venice layout. The race face, labels, income, level, wall, queue
   and production *do* update; `MapViewUpdate`, the `CurrentActionImageDraw`
   card selection and the per-building city scenery are the remaining work.
-* The production queue is not read from the map (the port has no
-  `TUnitProductionList` parser): the five rows draw `<empty>` and `Change`
-  cycles a representative unit. `TProductionScreen` (the production picker)
-  is not implemented.
+* The production queue is read from the map now (`City.TCity` rw tag 0x12 ->
+  `TProductionControl`, see docs/27_PRODUCTION_SCREEN.md section 3.1) and the
+  overview's five rows draw it live for every non-reference city; the
+  reference backdrop keeps its captured `<empty>` rows for the pixel benchmark.
+* **Change** now switches the form to `TCityScreen` mode 1 - the production
+  picker with the `B1CB..B6CB` activity pages - implemented in
+  `docs/27_PRODUCTION_SCREEN.md`. The separate `TProductionScreen` form is
+  documented there too; the city path does not use it.
 * `Race Relation` / `Occupation Forces` are fixed to the capture's `Friendly` /
   `Weak`; the port has no diplomacy or occupation-force model yet.
-* The income breakdown (20 / 10 / 6) is the reference default;
-  `TCity.UpdateIncome` and the crop/farm income chain are not evaluated per
-  city.
-* The bar under the dialog is part of the static modal backdrop. It is frozen
-  until Exit/Escape, exactly like the original's modal `Dlg`, but it does not
-  repaint live while the screen is open.
+* The income breakdown (20 / 10 / 6) is the reference default. The engine-side
+  economy (`TCity.UpdateIncome`, crop/farm ownership and the +25% merchandise
+  rule) is now evaluated per city by `aow::compute_economy`
+  (`docs/28_ECONOMY.md`); the screen's labels still print the reference text.
+* The bar under the dialog is the live overworld bar: the captured backdrop is
+  clipped at y=432, so the bar keeps the same art, read-outs and turn state as
+  on the world map while the city screen is open.
 * Group/army placement on the generated city map
   (`OverviewUnit.PlaceOverviewUnit`) is not drawn.
 

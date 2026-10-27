@@ -564,6 +564,21 @@ int main(int argc, char** argv) {
                                                      0, s2, w2, h2, x2, y2, e2);
                 check(ok1 && ok2 && !s1.empty() && !s2.empty() && s1 != s2,
                       "the standing pose follows the army's facing");
+                // The production cards place the pose with the *frame's* own
+                // offsets only (`TCityScreen.PreDrawProductions`, docs/27
+                // section 3.3.1): the art is the same standing frame, but the
+                // sequence's xoff/yoff are not added - and every shipped
+                // standing pose carries (-16,-24), so the card anchor sits
+                // exactly that much further down and to the right.
+                std::vector<std::uint8_t> card;
+                int cw = 0, ch = 0, cvx = 0, cvy = 0;
+                std::string cerr;
+                const bool cok = aow::unit_pose_sprite_rgba(
+                    cat, root, *unit, 3, 0, 0, card, cw, ch, cvx, cvy, cerr);
+                check(cok && card == stand && cw == sw && ch == sh,
+                      "the card pose draws the same standing art");
+                check(cok && cvx - svx == 16 && cvy - svy == 24,
+                      "the card pose drops the sequence's (-16,-24) offset");
             }
         }
     }

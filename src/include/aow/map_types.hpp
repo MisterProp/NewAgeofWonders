@@ -81,10 +81,34 @@ constexpr std::uint32_t kMountainMoClassId = 0x20168;      // Mountain.TMountain
 // not a per-resource variant - see aow::crop_image_index.
 constexpr std::uint32_t kCropClassId = 0x2036a;            // Crops.TCrop
 constexpr std::uint32_t kCropResourceClassId = 0x2036b;    // Crops.TCropResource
+// Gems.TGems (0x203ae) - the gold pile. It is an `ILTer.TILTerrainMO` (not a
+// TPlayerStructure): an army walking onto its hex collects it.
+//   `Gems.TGems.Create@557c4f9c`       +0x20 (size class) = 2, +0x1c (amount) = 0
+//   `Gems.TGems.ReadWrite@557c4fdc`    rw tag 5 -> +0x1c amount (rwInteger)
+//                                      rw tag 6 -> +0x20 size class (1-byte blob)
+//   `Gems.TGems.GenerateGemsAmount@557c5010` recomputes the amount from the
+//                                      size class at the start of a scenario
+//   Size classes 1, 2, 3 are the small/medium/large piles; 4 means "random"
+//   (drawn once and replaced by 1..3). Shipped scenarios store only tag 6.
+constexpr std::uint32_t kGemsClassId = 0x203ae;            // Gems.TGems
 // Farm.TFarm (0x2036e) - the only shipped TPlayerCropStructure subclass. It is
 // the structure that owns/links the crop tiles around it (TCrop.LinkToCropOwner /
 // TPlayerCropStructure.LinkToCrops); its rw tag 5 is the farm's owner.
 constexpr std::uint32_t kFarmClassId = 0x2036e;            // Farm.TFarm
+// Mine.TMine (0x2037a) - a TPlayerStructure that pays a flat 10 gold a turn
+// (`Mine.TMine.GetIncome@557b43e4`). Its rw tag 0x14 (+0x3c) stores a status
+// byte whose bit 0 is `GetRazed@557b4640`.
+constexpr std::uint32_t kMineClassId = 0x2037a;            // Mine.TMine
+// PowerNode.TPowerNode (0x2019a) - flat 10 power (mana income) and rw tag 0x14
+// -> +0x3c bit 0 razed, exactly like a mine.
+constexpr std::uint32_t kPowerNodeClassId = 0x2019a;
+// PrdPlace.TProductionPlace (0x203ba) and its gold-paying subclasses. A
+// production place whose `GetMagicSphere` is not 8 is a magic node and uses a
+// TPlayerStructurePowerSource instead of a gold income source
+// (`PrdPlace.TProductionPlace.Create@557be10c`).
+constexpr std::uint32_t kProductionPlaceClassId = 0x203ba;  // PrdPlace.TProductionPlace
+constexpr std::uint32_t kShipyardClassId = 0x204be;         // Shipyard.TShipyard (base income 0)
+constexpr std::uint32_t kBuildersGuildClassId = 0x2092e;    // BldGuild.TBuildersGuild (10 gold)
 
 // The map-object classes that carry the placed units. A `TMapField`'s
 // `AoWE.TArmyHS` (0x20217) holds one army: its rw tag 10 is the `AoWE.TArmy`
@@ -151,6 +175,36 @@ struct MapUnit {
     std::int16_t move_points_left = -1;
 };
 
+// One entry of a city's `AoWE.TUnitProductionList` (what the production cards
+// at `TCityScreen.P1CB..P12CB` offer).
+//
+// Evidence: `AoWE.TUnitProductionList.Add@0x5575c60c` stores its two arguments
+// at `TUnitProduction+8` (the Unitres record id) and `+0xc` (a boolean flag),
+// and `AoWE.TUnitProduction.ReadWrite@0x5575c5b0` streams them as rw tag 0x14
+// (`rwInteger`) and rw tag 0x15 (`rwBool` - a *presence* flag, no payload).
+// The list itself is serialised by `TENode`/`TECustomNode.ReadWriteChildren`
+// as tag 1: a child table whose entries are `rwCreateEObject` records, each a
+// u32 `AoWE.TUnitProduction.ClassID` = 0x20299 followed by its own rw table.
+struct CityProductionUnit {
+    std::int32_t unit_id = 0;  // Unitres record tag (`TUnitProduction+8`)
+    bool flag = false;         // `TUnitProduction+0xc` (rw tag 0x15 presence)
+};
+
+// One item of a city's `AoWE.TProductionQueue` (the `QueueLB` rows).
+//
+// `AoWE.TProductionItem.ReadWrite@0x5575c6f0` streams `+8/+0xc/+0x10` as rw
+// tags 0x14/0x15/0x16. `TProductionItem.GetName`/`TProductionControl.
+// GetProductionName@0x5575de04` show what they mean: `+8` is the kind
+// (1 = produce, 2 = install/research), `+0xc` is the index into the city's
+// `TUnitProductionList`, and `+0x10` is the extra value the engine carries
+// for a queued item. The queue is a `TNode` child list too (tag 1), whose
+// records are `AoWE.TProductionItem.ClassID` = 0x20297 + a rw table.
+struct CityQueueItem {
+    std::int32_t kind = 0;   // `TProductionItem+8`  (rw tag 0x14)
+    std::int32_t index = 0;  // `TProductionItem+0xc` (rw tag 0x15)
+    std::int32_t extra = 0;  // `TProductionItem+0x10` (rw tag 0x16)
+};
+
 // One hexagon sprite (an `HSEngine.THexagonSprite` subclass) placed on a tile.
 struct MapHs {
     std::uint32_t tag = 0;       // field-table tag: 50 = terrain, 51+ = objects
@@ -166,6 +220,12 @@ struct MapHs {
     // (`TCity.SetWallType` writes +0x4c). Other classes leave these -1.
     std::int8_t race = -1;
     std::int8_t wall_type = -1;
+    // `Gems.TGems` (class 0x203ae) only: the pile's gold value (+0x1c, rw tag
+    // 5) and its size class (+0x20, rw tag 6). `TGems.Create` leaves 0 gold and
+    // size 2; the amount is (re)generated from the size when a scenario starts
+    // (`aow::generate_gems_amounts`), so a shipped map only stores the size.
+    std::int32_t gems_gold = 0;
+    std::uint8_t gems_size = 2;
     // `AoWE.TArmyHS` (class 0x20217) only: the army's units, in child order
     // (the lead unit - the one the engine draws - is `units.front()`), plus the
     // TUnitHS facing byte (rw tag 9). Empty for every other object class.
@@ -189,6 +249,28 @@ struct MapHs {
     // never stores - `TStructure.Create` leaves the build counter at -1 and no
     // shipped map writes rw tag 0xff). Bit 0 also suppresses the flag.
     std::uint8_t city_flags = 0;
+    // `AoWE.TPlayerStructure` subclasses that carry their own status byte:
+    //   Farm.TFarm   rw tag 0x14 -> +0x44  bit 0 = GetRazed@557b2b80
+    //   Mine.TMine   rw tag 0x14 -> +0x3c  bit 0 = GetRazed@557b4640
+    //   PowerNode.TPowerNode rw tag 0x14 -> +0x3c bit 0
+    //   TProductionPlace rw tag 0x0a -> +0x48 (1 = razed, GetRazed@557be558)
+    // `razed` is the resolved result. A razed structure is deactivated and
+    // unregistered from the owner's income list, so it pays nothing.
+    std::uint8_t structure_status = 0;
+    bool razed = false;
+    // --- runtime ownership state (never read from the map file) ------------
+    // `TPlayerStructure+0x32` (and `TCity+0x54`) - the flag *byte*
+    // `UpdateFlagID` computes and `Show` reads: 0x3f = draw no flag, 0x20 (plus
+    // the city pole bits) = the neutral flag, otherwise the owner's race id.
+    // See aow/structure_capture.hpp (`structure_flag_id`).
+    std::uint8_t flag_id = 0x3f;
+    // `TPlayerStructure+0x31` - the "seen by a player" marker SetPlayer clears
+    // before it re-runs `UpdatePlayerSeen`.
+    std::uint8_t seen_state = 0;
+    // `TStructure.GetBuilding` - true while a builder is constructing/rebuilding
+    // the structure. A scenario never stores one (`TStructure.Create` leaves the
+    // build counter at -1), so map-placed structures start false.
+    bool building = false;
     // `City.TCity` (class 0x20108) only: rw **tag 0xc** -> +0x48 is the city's
     // name, an AnsiString. `TCity.ReadWrite@557acbcc` streams it through
     // `TEReadStorageStream.rwString` (one length byte, 0xff => a u32 length,
@@ -200,11 +282,50 @@ struct MapHs {
     // map names its cities ("Venice" in Bloody Marauders).
     std::string city_name;
     // `City.TCity` (class 0x20108) only: `City.TCity.ReadWrite@557acbcc` rw
-    // **tag 0x10** writes +0x4d, the city's size/level byte (1..4).
-    // `TCity.UpdateFlagID@557ac8b0` packs it into the flag byte's pole-select
-    // bits: `race + (level - 1) * 0x40`, and the flag draw reads those two bits
-    // back out (`flagbyte >> 6`) to pick the flagpole sprite.
+    // **tag 0x10** writes +0x4d, the city's **upgrade level** (1..size, the
+    // `TCity.SetUpgradeLevel@557ac75c` field). It is NOT the city's hex size:
+    // that is `TCityResource+0x78`, built by `TCityResource.ActivateMsg` as the
+    // number of valid terrain-list entries (see docs/26_CITY_SCREEN.md).
+    // `TCity.UpdateFlagID@557ac8b0` packs this level into the flag byte's
+    // pole-select bits: `race + (level - 1) * 0x40`, and the flag draw reads
+    // those bits back out (`flagbyte >> 6`) to pick the flagpole sprite.
     std::uint8_t city_level = 0;
+    // `City.TCity` rw **tag 0x12** is the city's `AoWE.TProductionControl`
+    // object (`TCity.ReadWrite@557acbcc` calls `rwEObject`). Its own rw tags
+    // (`AoWE.TProductionControl.ReadWrite@5575dc18`):
+    //   0x14 -> +0x14 TProductionQueue     (the QueueLB rows)
+    //   0x15 -> +0x1c TUnitProductionList  (the P1CB..P12CB production cards)
+    //   0x16 -> +0x24 TProductionSettings  (the item currently being produced)
+    //   0x17 -> +0x20 `rwByte`  the production state (0 idle, 1 waiting for
+    //                           gold, 2 active; `NewTurn@5575dd00`)
+    //   0x18 -> +0x18 `rwBool`  the queue's LoopQueueBox
+    // The two child lists are serialised as tag 1 (rwChildren). The parser in
+    // map.cpp fills the fields below; they stay empty for non-city objects and
+    // for maps whose city has no production control.
+    std::vector<CityProductionUnit> production_units;
+    std::vector<CityQueueItem> production_queue;
+    // Runtime mirror of the settings object's TProductionItem-shaped triple
+    // (+8 paid gold, +0xc paid mana, +0x10 turns left). The original object is
+    // a `TProductionSettings` streamed with tags 0x0a..0x13
+    // (`TProductionSettings.ReadWrite@5575c8c4`); `parse_production` reads the
+    // meaningful ones into the scalar fields below and copies this triple.
+    CityQueueItem production_current;
+    bool production_current_present = false;
+    std::uint8_t production_state = 0;  // +0x20, tag 0x17
+    bool loop_queue = false;            // +0x18, tag 0x18
+    // --- runtime production progress -----------------------------------------
+    // `TProductionControl+0x24` is the object `ExecuteProduction@5575d118`
+    // fills while an item runs: +8 gold paid, +0xc mana paid, +0x10 turns left
+    // (a *signed byte*), +0x1c total turns, +0x1d owner player.
+    // `TProductionControl.NewTurn@5575dd00` decrements +0x10 once at the start
+    // of the owner's turn and `FUN_0043f574` reads that same +0x10 every time
+    // it refreshes the overview's ActiveActionTurns, so these fields are the
+    // single source of truth for the number the city screen shows. For a save
+    // loaded mid-production `parse_production` seeds them from rw tag 0x16.
+    std::int32_t production_turns_left = 0;   // +0x10, tag 0x0c
+    std::int32_t production_turns_total = 0;  // +0x1c, tag 0x0d
+    std::int32_t production_gold_paid = 0;    // +8,   tag 0x0a
+    std::int32_t production_mana_paid = 0;    // +0xc, tag 0x0b
     std::vector<MapUnit> units;
     std::vector<std::uint8_t> payload;  // raw sprite bytes
 
@@ -253,6 +374,18 @@ struct Map {
     std::uint32_t height = 0;     // container height (hexes)
     std::size_t level_count = 0;  // container level count
     std::string hss_file;         // TAoWHSMap tag 2 (HSS file name)
+    // TAoWHSMap rw **tag 0x13** -> +0x174: the scenario's day counter
+    // (`TPlayerControl.NewDay@55754da4` increments it). A fresh `.HSM`/`.CSM`
+    // omits the tag, which `rwInteger` reads back as 0; only a saved game
+    // carries the live day. The port's turn loop starts at day 1 (docs/14).
+    std::int32_t day = 0;
+    // TAoWHSMap rw **tag 0x1c** -> +0x230: the map's RNG state. `TAoWHSMap.
+    // Random@5577827c` copies it into Delphi's `RandSeed`, calls `System.Random`
+    // and stores the advanced value back; every random map decision (turn
+    // order, `Gems.TGems.GenerateGemsAmount`, city rebellions, ...) draws from
+    // this one sequence. Shipped maps do carry it (e.g. Tutorial 0x18e2d3b6),
+    // so the port replays the exact Borland `_RandInt` stream.
+    std::uint32_t rand_seed = 0;
     // The scenario's music playlist. TAoWHSMap holds two `Sound.TSonglist`
     // objects, each serialised as an EObject whose tag 10 is the
     // `TStringList.Text` (a u32 byte length followed by CRLF-separated song
@@ -304,6 +437,12 @@ const char* map_class_name(std::uint32_t class_id);
 // Ground, Gems/ManaCrystals/Crops - the latter three are `ILTer.TILTerrainMO`)
 // and never draws a flag. See docs/19_STRUCTURE_FLAGS.md.
 bool is_player_structure_class(std::uint32_t class_id);
+
+// True for `PrdPlace.TProductionPlace` and every subclass (Shipyard,
+// BuildersGuild, the six magic nodes, RandomNode). These are the structures
+// that register a gold income source (sphere 8) or a magic power source (a
+// node) when activated - see `PrdPlace.TProductionPlace.Create@557be10c`.
+bool is_production_place_class(std::uint32_t class_id);
 
 // Loads a `.HSM` / `.CSM` (or `.HSS`) file. Returns false and sets `error`.
 bool load_map(const std::string& path, Map& out, std::string& error);

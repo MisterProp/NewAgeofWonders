@@ -169,6 +169,95 @@ int main(int argc, char** argv) {
         }
     }
 
+    // City production controls (docs/27_PRODUCTION_SCREEN.md). City.TCity rw
+    // tag 0x12 -> TProductionControl; its tag 0x15 list feeds P1CB..P12CB and
+    // tag 0x14 the QueueLB. Bloody Marauders' Venice is the reference city in
+    // bin/QueueRef.png; the eight cards must be its Unitres ids in file order.
+    {
+        aow::Map m;
+        std::string err;
+        const std::string p =
+            (fs::path(root) / "Scenario/Custom/Bloody Marauders.hsm").string();
+        if (aow::load_map(p, m, err)) {
+            const aow::MapHs* venice = nullptr;
+            std::size_t with_production = 0;
+            for (const aow::MapLevel& lv : m.levels) {
+                for (const aow::MapTile& t : lv.tiles) {
+                    for (const aow::MapHs& hs : t.objects) {
+                        if (hs.class_id != aow::kCityClassId) continue;
+                        if (!hs.production_units.empty()) ++with_production;
+                        std::string name = hs.city_name;
+                        while (!name.empty() && name.back() == ' ') {
+                            name.pop_back();
+                        }
+                        if (name == "Venice") venice = &hs;
+                    }
+                }
+            }
+            check(with_production > 20,
+                  "Bloody Marauders: cities carry production controls");
+            if (venice != nullptr) {
+                const std::vector<std::int32_t> want = {0, 3, 250, 4,
+                                                        1, 2, 251, 254};
+                bool ids_ok = venice->production_units.size() == want.size();
+                for (std::size_t i = 0; ids_ok && i < want.size(); ++i) {
+                    ids_ok = venice->production_units[i].unit_id == want[i];
+                }
+                check(ids_ok, "Venice production cards == its Unitres ids");
+                check(venice->production_units.size() == 8,
+                      "Venice has eight production cards (four empty slots)");
+                check(venice->production_units.size() > 0 &&
+                          venice->production_units[0].flag &&
+                          venice->production_units[1].flag &&
+                          venice->production_units[2].flag &&
+                          !venice->production_units[3].flag,
+                      "Venice TUnitProduction+0xc flags (three researched)");
+                check(venice->production_queue.empty(),
+                      "Venice starts with an empty queue");
+                check(!venice->loop_queue, "Venice LoopQueueBox is unchecked");
+            } else {
+                check(false, "Bloody Marauders has a city named Venice");
+            }
+        } else {
+            check(false, "load Bloody Marauders.hsm (" + err + ")");
+        }
+    }
+
+    // A save's active production is a TProductionSettings object behind
+    // TProductionControl rw tag 0x16 (`TProductionSettings.ReadWrite
+    // @5575c8c4`): +8 paid gold / +0xc paid mana / +0x10 turns left /
+    // +0x1c total. Reading it as a TProductionItem (tags 0x14/0x15/0x16)
+    // yields all zeroes, which made the city screen's ActiveActionTurns show
+    // the total instead of the remaining turns. The shipped autosave has a
+    // city mid-production, so use it as the regression fixture.
+    {
+        aow::Map m;
+        std::string err;
+        const std::string p = (fs::path(root) / "Save/autosave.asg").string();
+        if (fs::exists(p) && aow::load_map(p, m, err)) {
+            std::size_t active = 0, bad = 0;
+            for (const aow::MapLevel& lv : m.levels) {
+                for (const aow::MapTile& t : lv.tiles) {
+                    for (const aow::MapHs& hs : t.objects) {
+                        if (hs.class_id != aow::kCityClassId) continue;
+                        if (hs.production_state != 2) continue;
+                        ++active;
+                        if (hs.production_gold_paid <= 0 ||
+                            hs.production_turns_total <= 0 ||
+                            hs.production_turns_left < 0 ||
+                            hs.production_turns_left >
+                                hs.production_turns_total) {
+                            ++bad;
+                        }
+                    }
+                }
+            }
+            check(active > 0, "autosave: a city is mid-production");
+            check(bad == 0,
+                  "autosave: TProductionSettings +8/+0x10/+0x1c parsed");
+        }
+    }
+
     // Placed armies + units (docs/13_UNITS_ON_MAP.md). Every map that carries an
     // AoWE.TArmyHS must parse its embedded AoWE.TArmy into a non-empty unit list,
     // and each unit must resolve to a sprite tag (TUnit rw tag 10 / hero tag 8).

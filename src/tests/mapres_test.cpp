@@ -240,6 +240,62 @@ int main(int argc, char** argv) {
               "city_body_race: no race libraries -> no race-specific body");
     }
 
+    // --- ILB reloading ------------------------------------------------------
+    // One IlbFile is reused for the selected unit's face library (R_Faces.ILB
+    // for race faces, UNITS.ILB for machines/monsters). An entry's blob_offset
+    // belongs to the file it was parsed from, so loading a second library must
+    // replace the directory - appending it made decode_rgb() read the new file
+    // at the old offsets and sheared the portrait.
+    {
+        const fs::path faces = fs::path(root) / "Images/Faces";
+        const std::string rf = (faces / "R_Faces.ILB").string();
+        const std::string uf = (faces / "UNITS.ILB").string();
+        std::string ierr;
+        aow::IlbFile fresh;
+        const bool fresh_ok = fresh.load(rf, ierr);
+        check(fresh_ok, "R_Faces.ILB loads (" + ierr + ")");
+        aow::IlbFile reuse;
+        std::string rerr;
+        const bool first = reuse.load(rf, rerr);
+        check(first, "R_Faces.ILB loads into the reusable object (" + rerr + ")");
+        check(reuse.entries().size() == fresh.entries().size(),
+              "the first load parses R_Faces.ILB's 12 race faces");
+        std::string uerr;
+        const bool units = reuse.load(uf, uerr);
+        check(units, "UNITS.ILB loads into the reusable object (" + uerr + ")");
+        check(reuse.entries().size() == 91,
+              "reloading replaces the ILB directory instead of appending");
+        std::string back_err;
+        const bool back = reuse.load(rf, back_err);
+        check(back, "R_Faces.ILB reloads (" + back_err + ")");
+        check(reuse.entries().size() == fresh.entries().size(),
+              "reloading R_Faces.ILB restores exactly its 12 entries");
+        // Decode the dwarf face (id 6) from the reused object and from a fresh
+        // one; they must be the same picture. With a leaked UNITS.ILB entry the
+        // lookup finds that stale entry first and decodes R_Faces bytes at its
+        // blob offset (the sheared portrait).
+        auto decode_id = [](aow::IlbFile& il, std::uint32_t id,
+                            std::vector<std::uint8_t>& px, std::uint32_t& w,
+                            std::uint32_t& h, std::string& e) {
+            for (std::size_t i = 0; i < il.entries().size(); ++i) {
+                if (il.entries()[i].index != id) continue;
+                return il.decode_rgb(i, px, w, h, e);
+            }
+            e = "no entry with the requested id";
+            return false;
+        };
+        std::vector<std::uint8_t> re_px, fr_px;
+        std::uint32_t re_w = 0, re_h = 0, fr_w = 0, fr_h = 0;
+        std::string re_err, fr_err;
+        const bool re_ok = decode_id(reuse, 6, re_px, re_w, re_h, re_err);
+        const bool fr_ok = decode_id(fresh, 6, fr_px, fr_w, fr_h, fr_err);
+        check(re_ok && fr_ok, "the dwarf race face decodes after the reloads");
+        check(re_ok && fr_ok && re_w == 103 && re_h == 128,
+              "the dwarf race face is 103x128");
+        check(re_ok && fr_ok && re_w == fr_w && re_h == fr_h && re_px == fr_px,
+              "a reused IlbFile decodes the same race face as a fresh one");
+    }
+
     aow::Map m;
     const std::string mp = (fs::path(root) / "Scenario/Custom/Tutorial.hsm").string();
     if (!aow::load_map(mp, m, err)) {

@@ -48,6 +48,9 @@
 
 namespace aow {
 
+struct MapResource;  // aow/map_resources.hpp
+struct UnitCatalog;  // aow/unit_catalog.hpp
+
 // AoWE.TPlayer.ClassID @ 0x557516c8.
 constexpr std::uint32_t kPlayerClassId = 0x20020;
 
@@ -68,7 +71,7 @@ enum PlayerRwTag : std::uint32_t {
     // 0x55750ea8 leaves it 0). Verified against the 9 campaign maps: the
     // independents carry 4, the human 0 and the AIs 1/2/3/6/7.
     kPlayerTagType = 0x3,
-    kPlayerTagGold = 0x5,         // +0xac  i32 current gold (default 250 = 0xfa)
+    kPlayerTagGold = 0x5,         // +0xac  i32 starting gold (default 250 = 0xfa)
     kPlayerTagBaseIncome = 0x6,   // +0xb0  i32 base income
     kPlayerTagUnknownA = 0xa,     // +0xa9?  u8
     kPlayerTagUnknownB = 0xb,     // +0xbc  object
@@ -103,12 +106,14 @@ enum MagicRwTag : std::uint32_t {
     kMagicTagResearchProgress = 0x18, // +0x38 i32
     kMagicTagEnchantments = 0x19,     // +0x3c object  TEnchantmentList
     kMagicTagByte = 0x1a,             // +0x44 u8
+    kMagicTagStartingMana = 0x1b,     // +0x18 i32 (StartNewMap seeds mana from it)
 };
 
 // TPlayer+0xa7 player behaviour/control type (map rw tag 0x3). 0 = local human;
 // the AI types are the difficulty levels - `TPlayer.UpdateIncome` (0x55751f88)
-// gives types 2, 3, 6 and 0xa an income bonus and `TPlayerControl.Setup`
-// (0x55754b94) treats 0 as a connected human. `TSetupControl.ListAvailablePlayers`
+// multiplies types 2/3/6/7 and adds +50/+100 to 6/7; `TAoWHSMap.StartNewMap`
+// gives 6 +250 and 7 +500 starting gold. `TPlayerControl.Setup` (0x55754b94)
+// treats 0 as a connected human. `TSetupControl.ListAvailablePlayers`
 // (0x557e1660) names the seven a host game offers, in the order
 // 0,1,2,3,6,7,4 = Human, CPU Squire, CPU Knight, CPU Lord, CPU King, CPU
 // Emperor, Independent (see docs/08_SCENARIO_SCREEN.md). The numeric values are
@@ -131,12 +136,30 @@ enum class PlayerType : std::uint8_t {
 // AoWE.TPlayerMagicControl - a player's magic (TPlayer+0x54).
 // ---------------------------------------------------------------------------
 struct PlayerMagic {
-    std::int32_t mana = 0;                 // +0x24 tag 0x14
+    std::int32_t mana = 0;                 // +0x24 tag 0x14 (live mana)
+    // +0x18 tag 0x1b (TPlayerMagicControl.ReadWrite@5577c748 line 33): the
+    // scenario's starting mana. `TAoWHSMap.StartNewMap@55777d68` seeds +0x24
+    // from it, then adds +250/+500 for CPU King/Emperor.
+    std::int32_t starting_mana = 0;
     std::int32_t power_to_research = 50;   // +0x2c tag 0x15 (0..100, default 50)
     std::int32_t current_research = 0;     // +0x34 tag 0x17
     std::int32_t research_progress = 0;    // +0x38 tag 0x18
     std::vector<std::int32_t> research_spells;  // +0x30 tag 0x16
     bool present = false;                  // the map carried a tag-0x1f object
+    // Runtime magic income (not serialised):
+    //   power_income = Σ registered TPowerSource.Power() (GetPower@5577ca00)
+    //   mana_income  = GetManaIncome@5577c95c = GetNetPowerToMana@5577cee4
+    // It is what the bar's "+N" mana read-out shows.
+    // `TPlayerMagicControl.NewTurn@5577cc2c` credits exactly this value (minus
+    // the upkeep below) at the start of every turn - including day 1, unlike the
+    // gold step.
+    std::int32_t power_income = 0;
+    std::int32_t mana_income = 0;
+    // `TPlayerMagicControl.GetManaUpkeep@5577c964`: the sum of every active
+    // enchantment's +0x10 (the TEnchantmentList at magic control +0x3c) plus
+    // `TGlobalMagicControl.GetEnchantmentUpkeep` for the player. Runtime only;
+    // the port does not parse enchantment lists yet, so it stays 0.
+    std::int32_t mana_upkeep = 0;
 
     // `TPlayerMagicControl.GetNetPowerToResearch` 0x5577cf80:
     //   round(net_power * power_to_research / 100)
@@ -172,6 +195,12 @@ struct Leader {
     std::int32_t hero_resource_index = -1;  // tag 8 (THero.Create leaves -1)
     std::string name;              // tag 10
     std::string nickname;          // tag 11
+    // `TLeader.ReadWrite@5578b470` rw tag 0x2e -> +0xa0, a TByteList of the
+    // leader's sphere picks (sphere ids). `TLeader.GetSpherePicks@5578b17c`
+    // counts the entries equal to a sphere id; a magic node's power depends on
+    // it (`TProductionPlace.GetPower@557be468`). Serialised body: one wrapper
+    // byte, u32 count, then that many sphere ids.
+    std::vector<std::uint8_t> sphere_picks;
 };
 
 // ---------------------------------------------------------------------------
@@ -186,10 +215,23 @@ struct Player {
     PlayerType type = PlayerType::Human;  // +0xa7 tag 0x3 (0 = human, 4 = independents)
     std::uint8_t color[3] = {0, 0, 0};  // +0x2d.. tags 0x14..0x16 (rwByte default 0)
 
-    std::int32_t gold = 250;         // +0xac tag 0x5  (Create default 0xfa)
+    // +0xac tag 0x5: the scenario's **starting** gold (Create default 0xfa).
+    // `TAoWHSMap.StartNewMap@55777d68` copies it into the live treasury with
+    // `TPlayer.SetGems` before the first turn.
+    std::int32_t start_gold = 250;
+    // +0xc4 tag 0x10: the live **gold treasury**. The routine is historically
+    // named `TPlayer.SetGems@55751f38` (it writes +0xc4), but +0xc4 is the
+    // number the bar shows and the number `TPlayerControl.NewTurn@557553c4`
+    // credits with income minus upkeep; `TPlayerStatistics`/`TTurnInfoItem+8`
+    // also read it as the player's gold. Absent in a scenario -> 0, then seeded
+    // from `start_gold` by StartNewMap.
+    std::int32_t gold = 0;
     std::int32_t base_income = 0;    // +0xb0 tag 0x6
+    // Sum of the registered TIncomeSource objects (cities, farms, mines and
+    // gold production places). `TPlayer.UpdateIncome@55751f88` starts from
+    // +0xb0 and adds each source's vtable+0x50 (`TIncomeSource.Income`).
+    std::int32_t building_income = 0;
     std::int32_t income = 0;         // +0xd0 (UpdateIncome result)
-    std::int32_t gems = 0;           // +0xc4 tag 0x10 (crystals; SetGems)
     std::int32_t army_upkeep = 0;    // +0xc8 (SetArmyUpkeep)
     std::int32_t magic_upkeep = 0;   // +0xcc (SetMagicUpkeep)
     std::int8_t  food_penalty = 0;   // +0x50 tag 0x1b (starvation counter)
@@ -283,10 +325,21 @@ struct GameState {
         return players.empty() ? 0 : static_cast<int>(players.size()) - 1;
     }
 
-    // Rebuild `income` from `base_income` (mirrors TPlayer.UpdateIncome
-    // 0x55751f88; the AI-difficulty multipliers are TODO(RE) - the two literal
-    // bonuses +50/+100 for types 6/0xa are applied).
+    // Rebuild `income` from `base_income` + `building_income`, then apply the
+    // AI-difficulty multiplier recovered from `TPlayer.UpdateIncome@55751f88`:
+    //   type 2 (CPU Knight)  round(x * 1.0)
+    //   type 3 (CPU Lord)    round(x * 2.0)
+    //   type 6 (CPU King)    round(x * 2.5) + 50
+    //   type 7 (CPU Emperor) round(x * 3.0) + 100
+    // The multipliers are the six floats at AoWEPACK 0x5575205c..0x55752064;
+    // `System.ROUND` is Delphi's round-to-nearest-even.
     void update_income(std::size_t player_index);
+
+    // `TAoWHSMap.StartNewMap@55777d68`: seed every player's live treasury from
+    // its starting gold (`start_gold` -> `gold`) and add the CPU starting-gold
+    // bonuses (CPU King +250, CPU Emperor +500). Called once when a scenario
+    // starts, before the first turn.
+    void start_new_map();
 
     // `TPlayerControl.NewDay` (0x55754da4) + `TAoWHSMap.GenerateNewTurnOrder`
     // (0x557782fc): advance the day and (re)create the turn order.
@@ -296,9 +349,12 @@ struct GameState {
     // scenario's first day, before any NewDay.
     void begin_day(std::uint32_t rng_seed);
 
-    // `TPlayerControl.NewTurn` (0x557553c4): run one player's turn start - credit
-    // income minus upkeep, clamp gold, bump the player's turn count. The day must
-    // already be advanced (the original skips the gold step on day 1).
+    // `TPlayerControl.NewTurn` (0x557553c4) + `TPlayerMagicControl.NewTurn`
+    // (0x5577cc2c): run one player's turn start - credit gold income minus
+    // upkeep, clamp gold, credit mana income minus enchantment upkeep, clamp
+    // mana, bump the player's turn count. The day must already be advanced (the
+    // original skips the *gold* step on day 1, but the magic message
+    // 0x20020002 is dispatched every turn, day 1 included).
     void begin_player_turn(std::size_t player_index);
 
     // The player whose turn is current (turn_order[turn_in_order], or 0xff).
@@ -336,11 +392,130 @@ struct GameState {
     std::size_t index_of(std::uint8_t player_index) const;
 };
 
-// Parses the player roster (TAoWHSMap tag 0x15) out of `map.region` and fills
-// `out`. `map` must have been loaded by load_map(). Also tallies each player's
-// placed armies/units from `map`. Returns false and sets `error` on a malformed
-// roster (a map with no roster still succeeds with zero players).
+// The per-turn gold economy recovered from AoWEPACK.dpl:
+//
+//   `TPlayer.UpdateIncome@55751f88`
+//     income = base_income + Σ(source.Income())
+//     then the CPU multiplier (see GameState::update_income).
+//
+//   Gold sources (each a TPlayerStructureIncomeSource wrapping its structure):
+//     * City (TCity.UpdateIncome@557abb94)
+//         size*5 + crop_count*2, +25% while idle or producing merchandise,
+//         doubled by the Gold Rush city enchantment (TCity+0x5c bit 1).
+//     * Farm (TPlayerCropStructure.UpdateIncome@557a6230)
+//         crop_count*2.
+//     * Mine (TMine.GetIncome@557b43e4)   flat 10.
+//     * Production place (TProductionPlace.GetBaseIncome@557be4e0 /
+//       GetIncome@557be500)   flat 10, +25% while idle or producing
+//       merchandise; Shipyard overrides the base to 0.
+//     A razed structure pays 0. Magic nodes have no gold source at all
+//     (Create@557be10c registers a TPlayerStructurePowerSource instead).
+//
+//   Upkeep (TArmy.UpdateUpkeep@5578cc08 -> TPlayer.SetArmyUpkeep@557520d4):
+//     * TUnit   (TAbstractUnit.GetUpkeep@5577fc64)  (resource level + 1) * 2,
+//               or 0 when ability 0x9b is present.
+//     * THero   (THero.GetUpkeep@557872c0)          5 + 2 * experience level.
+//     * TLeader (TLeader.GetUpkeep@5578b758)        0.
+//
+// `resources` is Release.hss's TMapObjectResourceList (needed for a city's
+// `TCityResource+0x78` size and for the crop-owner surrounding-hex tables);
+// `units` supplies a TUnit's Unitres.pfs level. Both may be null/empty, in
+// which case only `base_income` is used (cities/farms/mines cannot be sized).
+//
+// Callers normally use the overload below; this entry point recomputes the
+// static map economy from scratch (structures and armies placed in the map).
+void compute_economy(const Map& map, const std::vector<MapResource>& resources,
+                     const UnitCatalog* units, GameState& gs);
+
+// ---------------------------------------------------------------------------
+// Gems.TGems - the gold piles an army collects by walking onto their hex.
+//
+// The whole feature is four tiny methods of AoWEPACK.dpl (image base
+// 0x55700000):
+//
+//   Gems.TGems.Create@557c4f9c              amount(+0x1c) = 0, size(+0x20) = 2
+//   Gems.TGems.ReadWrite@557c4fdc           tag 5 = amount, tag 6 = size
+//   Gems.TGems.GenerateGemsAmount@557c5010  amount = f(size), see below
+//   Gems.TGems.MsgProc@557c50c4             on message 0x20020001 (NewDay) and
+//                                           day == 1 -> GenerateGemsAmount
+//   Gems.TGems.MapFieldMsgProc@557c52a0     on message 0x1102 (ArmyPlaced) ->
+//                                           ArmyEntered
+//   Gems.TGems.ArmyEntered@557c50f8         add the amount to the army owner,
+//                                           log, play GOLD.WAV, destroy the pile
+//
+// `TAoWHSMap.Random@5577827c` is Delphi's `System.Random(max)` seeded from the
+// map's own +0x230 (rw tag 0x1c): `System._RandInt` advances
+// `seed = seed * 0x08088405 + 1` and returns the high 32 bits of
+// `seed * range`. One draw per call; the map stores the advanced seed back.
+// ---------------------------------------------------------------------------
+
+// One `TAoWHSMap.Random(range)` draw (Borland `System._RandInt`): updates
+// `state` and returns 0..range-1. `range` 0 returns 0 (Delphi raises; no caller
+// passes 0).
+std::uint32_t delphi_random(std::uint32_t& state, std::uint32_t range);
+
+// `Gems.TGems.GenerateGemsAmount@557c5010`:
+//   size 4 (the editor's "random") -> size = Random(3) + 1, stored back
+//   size 1 -> amount = Random(25) + 25      (25..49)
+//   size 2 -> amount = Random(25) + 50      (50..74)
+//   size 3 -> amount = Random(50) + 100     (100..149)
+// Any other size leaves the amount untouched (returns the current amount; pass
+// 0 for a fresh pile). `state` is the map's RNG state.
+std::int32_t generate_gems_amount(std::int32_t size, std::uint32_t& state,
+                                  std::uint8_t& size_out,
+                                  std::int32_t current_amount = 0);
+
+// The first `TPlayerControl.NewDay@55754da4` (day becomes 1) dispatches
+// `0x20020001` to every map object; `Gems.TGems.MsgProc@557c50c4` answers it by
+// generating its amount. Walks the map the way the engine's message does -
+// level order, tile order, object placement order - drawing from
+// `map.rand_seed` (which is advanced). Returns the number of piles updated.
+int generate_gems_amounts(Map& map);
+
+// One `Gems.TGems.ArmyEntered@557c50f8` result, for the caller's event log /
+// sound / message. `amounts` is in placement order (one entry per pile on the
+// hex - normally one).
+struct GoldPickup {
+    int player = -1;                 // the collecting army's owner (0 = none)
+    std::vector<int> amounts;        // each pile's gold
+    int total() const {
+        int t = 0;
+        for (int a : amounts) t += a;
+        return t;
+    }
+    bool picked() const { return !amounts.empty(); }
+};
+
+// `Gems.TGems.MapFieldMsgProc@557c52a0` -> `ArmyEntered`: the army owned by
+// `player` has just been placed on (level, x, y), so every gold pile there is
+// collected. The original:
+//   * ignores the pile when the army's owner is 0 (the independents);
+//   * adds the pile's amount to that player's treasury (`TPlayer.SetGems`).
+//     AoW1 has no separate "gems" currency - `+0xc4` IS the gold field - so the
+//     amount lands in `Player::gold` (docs/28_ECONOMY.md);
+//   * logs `AoWE.GoldFoundRStr` ("%s gold pieces found") at the hex for that
+//     player and plays `SFX\EVENTS\GOLD.WAV` when that player is the seated one
+//     or can see the hex (`TAoWHSMap.Watching@55775b88`);
+//   * then destroys the pile (`vmtDestroy`, the class-reference -4 slot).
+// The caller owns the sound/message; this function adds the gold and removes
+// the objects. Nothing happens for an unknown player (the original's
+// `TPlayerList.GetPlayers` would return nil).
+GoldPickup gems_army_entered(Map& map, GameState& gs, std::size_t level, int x,
+                             int y, int player);
+
+// Parses the player roster (TAoWHSMap tag 0x15) out of `map.region`, tallies
+// each player's placed armies/units, computes the building income + army upkeep
+// from `map`, and runs the StartNewMap gold seeding pass. `map` must have been
+// loaded by load_map(). Returns false and sets `error` on a malformed roster (a
+// map with no roster still succeeds with zero players).
 bool load_game_state(const Map& map, GameState& out, std::string& error);
+
+// Same, with the Release.hss resource table and unit catalog so the full
+// building/upkeep economy is evaluated. Passing an empty resource list is the
+// light path (base income only).
+bool load_game_state(const Map& map, const std::vector<MapResource>& resources,
+                     const UnitCatalog* units, GameState& out,
+                     std::string& error);
 
 // The race id of every roster entry, in roster order (entry 0 is the
 // independents) - `AoWE.TPlayer` rw **tag 2** -> +0xa5, the byte

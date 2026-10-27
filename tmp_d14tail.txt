@@ -1,0 +1,8 @@
+﻿  0x2e - are read; skill points, personality, ... are still unparsed).
+* The magic-control researched-spell `TIntegerList` (tag 0x16) body.
+* City enchantment state (`TCity+0x58`, rw tag 0x1d) - the Gold Rush flag
+  (`TCity+0x5c` bit 1) is not parsed, so a scenario that starts with Gold Rush
+  already cast is not doubled yet. The base income / merchandise rules are
+  implemented in `docs/28_ECONOMY.md`.
+* The map's own day value / RNG seed (the port starts at day 1 with a caller
+  seed).

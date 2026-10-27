@@ -117,6 +117,55 @@ int main(int argc, char** argv) {
     check(high_level, ".ahl list 'High Level' present");
     check(special, ".ahl list 'Special' present");
 
+    // --- the Unitres ability list (tag 25 -> TUnitResource+0x38) -------------
+    // A unit created at runtime by a city copies this list
+    // (`TUnit.SetUnitResource`); `GetMoveTypes` derives walk/fly/water from it.
+    // An empty list makes `MovePointTables[0]` (all 0xFF) freeze the whole
+    // army, so every shipped unit must carry one.
+    {
+        std::size_t no_ability = 0;
+        std::size_t short_mask = 0;
+        for (const aow::UnitEntry& u : cat.units) {
+            if (u.ability_count == 0) ++no_ability;
+            if (u.ability_mask.size() < (u.ability_count + 7) / 8) {
+                ++short_mask;
+            }
+        }
+        check(no_ability == 0, "every Unitres record carries its ability list");
+        check(short_mask == 0, "every ability mask covers ability_count bits");
+        const aow::UnitEntry* archer = find_id(cat, 54);
+        check(archer != nullptr && archer->ability_count == 23 &&
+                  !archer->ability_mask.empty() &&
+                  (archer->ability_mask[0] & 0x05) == 0x05,
+              "Lizardman Archer tag-25 list = 23 abilities, walk|water");
+        const aow::UnitEntry* slug = find_id(cat, 60);
+        check(slug != nullptr && slug->ability_count == 74 &&
+                  !slug->ability_mask.empty() &&
+                  (slug->ability_mask[0] & 0x11) == 0x11,
+              "Giant Slug tag-25 list = 74 abilities, walk|cave");
+        // Human Priest is the reference for the unit page's ability list:
+        // Walking, Magic Strike, Strike, Turn Undead I, Healing, Dispel Magic I,
+        // Magic Bolts. The ids are Ability.pfs tag-10 (Turn Undead 38, Healing
+        // 47, Dispel Magic 60, Magic Bolts 121).
+        const aow::UnitEntry* priest = find_id(cat, 1);
+        const auto has_bit = [priest](int id) {
+            return priest != nullptr && id >= 0 &&
+                   static_cast<std::size_t>(id / 8) < priest->ability_mask.size() &&
+                   (priest->ability_mask[static_cast<std::size_t>(id / 8)] &
+                    (1u << (id & 7))) != 0;
+        };
+        check(priest != nullptr && priest->ability_count == 122 &&
+                  has_bit(0) && has_bit(20) && has_bit(21) && has_bit(38) &&
+                  has_bit(47) && has_bit(60) && has_bit(121),
+              "Human Priest abilities = walk, magic strike, strike, turn undead, "
+              "healing, dispel magic, magic bolts");
+        check(priest != nullptr && priest->ability_levels.size() > 121 &&
+                  priest->ability_levels[38] == 1 &&
+                  priest->ability_levels[60] == 1 &&
+                  priest->ability_levels[32] == 0,
+              "Human Priest Turn Undead I / Dispel Magic I levels from tag 25");
+    }
+
     // --- the race labels (docs/09 sec. 4.1) ---------------------------------
     // `race_label` is the data's race order; `race_label_plural` is what the
     // Events banner's `Race` label shows - `AoWE.RaceNamesPluralRStr[race]`,

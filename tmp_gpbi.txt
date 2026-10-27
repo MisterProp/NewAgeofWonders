@@ -1,0 +1,3 @@
+﻿6499: const aow::Player* p = game_player_by_index(mv_gs, pick.player);
+7921: static const aow::Player* game_player_by_index(const aow::GameState& gs,
+8154: const aow::Player* seat = game_player_by_index(mv_gs, mv_human);

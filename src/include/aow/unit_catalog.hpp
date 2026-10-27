@@ -87,6 +87,20 @@ struct UnitEntry {
     const UnitGraphics* gfx = nullptr;    // resolved sprite (nullptr if missing)
     std::string race_name;                // resolved race label
     std::string race_lib;                 // RACES\R*.ILB (empty for monsters)
+    // `AoWE.TUnitResource` rw tag 25 (0x19) -> +0x38: the unit type's
+    // TAbilityOwner/TCustomAbilityList. `TUnit.SetUnitResource` copies it into
+    // the created unit, and `TAbstractUnit.GetMoveTypes` reads ability 0
+    // (walk), 1/0xa5 (fly), 2/0x17 (water), ... from it. A produced unit that
+    // omitted it folded an all-0xFF move table into its army. Stored in the
+    // same packed form as MapUnit: LSB-first, ability_count bits.
+    std::uint32_t ability_count = 0;
+    std::vector<std::uint8_t> ability_mask;
+    // Per-ability level, indexed by ability id (0..255). `TAbilityOwner.ReadWrite`
+    // serialises a TAbilityData object for each multi-level ability and the
+    // level lives at its tag 10; `ListAbilities` asks `TAbility.GetLevel(owner)`
+    // and `TTurnUndeadAbility.GetName` etc. append " I".." IV" from it.
+    // 0 means the ability carries no level (also the default for absent data).
+    std::vector<std::uint8_t> ability_levels;
 };
 
 // One `.ahl` leader/special unit list.
@@ -95,6 +109,21 @@ struct LeaderList {
     std::string name;             // embedded label, e.g. "High Level"
     std::uint16_t tag14 = 0;      // header u16 at +4 (observed 0x14 = 20)
     std::vector<std::uint8_t> raw;  // the whole file
+};
+
+// THeroResource's skill block (Herores.pfs rw tags 15..20). A hero/leader
+// placed on the map carries a THeroResource index (MapUnit::resource), so this
+// is what `TUnitInfoDlg.ShowUnitResource` / the Unit window read for its
+// stats. See pfs_types.hpp (HeroResource) and docs/10_UNIT.md.
+struct HeroStats {
+    std::uint8_t attack = 0;
+    std::uint8_t defense = 0;
+    std::uint8_t damage = 0;
+    std::uint8_t hits = 0;
+    std::uint8_t moves = 0;
+    std::uint8_t resistance = 0;
+    std::uint8_t hero_class = 0;  // THeroResource tag 13
+    std::string name;             // THeroResource tag 10
 };
 
 // The whole roster of the game.
@@ -114,6 +143,7 @@ struct UnitCatalog {
     // movement allowance (tag 19, +0x28 = SetUnitMoves +0x6e). A placed hero
     // refills its move points from this at turn start; see docs/15_MOVEMENT.md.
     std::map<std::uint32_t, std::uint8_t> hero_moves;
+    std::map<std::uint32_t, HeroStats> hero_stats;  // Herores.pfs skill block
     std::size_t gfx_missing = 0;          // units whose gfx_index found nothing
 
     // The sprite for a UnitResource.gfx_index (matches UnitGraphics.res_index).
@@ -121,6 +151,8 @@ struct UnitCatalog {
     // The sprite for a hero/leader resource index (a Herores.pfs record tag),
     // or nullptr when unknown.
     const UnitGraphics* find_hero_gfx(std::uint32_t hero_index) const;
+    // The Herores.pfs skill block for a hero-resource index, or nullptr.
+    const HeroStats* find_hero_stats(std::uint32_t hero_index) const;
     // Units whose race_id == id (use 255 for monsters).
     std::vector<const UnitEntry*> units_of_race(std::uint8_t race_id) const;
 };

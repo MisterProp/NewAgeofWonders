@@ -860,11 +860,16 @@ Head-less (`--game-click 513 141 --game-click 220 216` selects the hero army at
 * **`EventLbl` colour.** The DFM declares `TextColor = clBlack` for
   "Event History" even though it sits on the olive body; the replica keeps the
   declared colour rather than the pale sage the other banner labels use.
-* **Gold / mana numbers.** `WGoldPnl`/`WManaPnl` show the player's stockpile and
-  income; the replica seeds `140`/`10` and `250`/`10` (the values the reviewed
-  screen shows). The turn loop now credits income/upkeep in the roster
-  (`GameState::begin_player_turn`, docs/22), but the read-outs are not yet bound
-  to it - TODO(RE).
+* **Gold / mana numbers.** `WGoldPnl`/`WManaPnl` show the seated player's live
+  `Player::gold`, `Player::magic.mana` and the **net per-turn** value
+  (`Scene::game_live_stats`). The gold net is `income - upkeep` (army + magic),
+  the mana net is `magic.mana_income` (already net of the research share). A
+  non-negative net draws the DFM's green `+N`; a negative net draws red `-N`.
+  The mana total is credited by the recovered `TPlayerMagicControl.NewTurn`
+  step in `GameState::begin_player_turn` (day 1 included), so the green number
+  is actually added to `Player::magic.mana` every turn. The `140`/`10` and
+  `250`/`10` seeds are only the pre-load fallbacks when no roster is seated.
+  The economy behind the figures is recovered in `docs/28_ECONOMY.md`.
 * **Scanner click.** The `Scanner` unit is in `AOWTools.dpl`, which is **not** in
   the Ghidra project, so `TScanner`'s own mouse handling could not be read. The
   replica's minimap click uses the recovered camera side (the engine's

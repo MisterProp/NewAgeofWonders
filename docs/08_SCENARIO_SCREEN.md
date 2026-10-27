@@ -361,7 +361,9 @@ Flags: `--screen title|gtype|scenario`, `--scen-frame N` (0 = all fogged,
 `kScenGlowFrames` = fully lit), `--scen-maps` (open the "Select a Map..." picker
 in the render), `--scen-pick <name>` (confirm a map: lights its races and sets
 each `R*PlayerCB` from the map), `--scen-dd N` (open race cell N's PlayerCB
-drop-down in the render), `--hover N` (0..2 = the three buttons).
+drop-down in the render), `--hover N` (0..2 = the three buttons). The Settings
+panel has its own hooks (`--scen-playmode`, `--scen-turntime`, `--scen-turns`,
+`--scen-checks`, `--scen-mode-dd`, `--scen-click X Y`) - see section 11.6.
 
 ## 8. Known deviations / open items
 
@@ -608,4 +610,210 @@ and the shipped ILBs:
 Remaining difference: the 16-bit palette dithering of the source captures and
 the engine's font antialiasing (the port draws flat-ink glyphs, so a caption has
 more full-bright pixels than the capture).
+
+## 11. The Settings panel is live (Turns / Duration / Miscellaneous)
+
+`SettingsPnl` used to be painted as a static picture. Every control on it is now
+a real, clickable control driven by the same state the engine keeps in
+`TSetupSettings`, with the DFM's own geometry and art.
+
+### 11.1 The component table (TSCENSETUP.dfm, panel-relative)
+
+```
+ PlayModeCB     (10,25) 114x18   TAOWComboBox  Age8, NumberVisible 2,
+                                 ItemHeight 13, ILEIndex 26 (ScenEBut skin)
+                                 ILTnIndex 4 (blank1) / ILTsIndex 16 (TextLBSel)
+                                 OnChange = PlayModeCBChange
+ TurnTimeSl     (15,87) 50x11    TAOWHScrollBar Min 0 Max 20 Small/Large = 1
+                                 ILIndexBack 49 (ScenSlid track) ILIndexTab 52
+                                 OnChange = TurnTimeSlChange
+ TurnTimeVal    (70,87)          TAOWLabel Age8s clGray   (FUN_00412778)
+ TurnsSl        (15,116) 50x11   TAOWHScrollBar Min 0 Max 40
+                                 OnChange = TurnsSlChange
+ TurnsVal       (70,117)         TAOWLabel Age8s clGray   (FUN_004128b4)
+ LeadersOnMapCB (15,162) 12x12   TAOWCheckBox  ILIndexUp 47 / Down 48 / Lit 49
+ CustomizeLeaders (15,177)       (each with a separate Age8s clGray TAOWLabel at
+ AlliedVictoryCB  (15,192)        x = 30, y = box + 2)
+ Exploration      (15,207)
+```
+
+### 11.2 The handlers (published-method table entries)
+
+The DFM only stores handler *names*; each name resolves through the form's
+`MethodEntry {u16 Size; void* Code; ShortString Name}` table, which is how the
+addresses below were found (`tools/ghidra/find_handlers.py`). The decompilations
+live in `re/scenset/` (handlers + the AoWEPACK setters) and
+`re/scenset/widgets/` (TAOWHScrollBar / TAOWCheckBox / TAOWComboBox):
+
+| handler | AoW.exe | what it does |
+|---|---|---|
+| `PlayModeCBChange` | 0x004129e8 | `Items.GetObject(ItemIndex)` -> `hSetPlayMode` (AoWEPACK 0x557e2028) |
+| `TurnTimeSlChange` | 0x0041285c | `hSetTurnTimeLimitation(setup, TurnTimeSl.Position)` then `FUN_00412778` |
+| `TurnsSlChange` | 0x004129a8 | `hSetTurnLimitation(setup, Position == 0 ? 0 : Position * 10)` then `FUN_004128b4` |
+| `LeadersOnMapCBChange` | 0x00412b04 | `hSetLeadersOnMap(setup, Checked)` + `FUN_00455dfc 1/2` |
+| `CustomizeLeadersChange` | 0x00412b48 | `hSetCustomizeLeaders` + the same sound |
+| `AlliedVictoryCBChange` | 0x00412b8c | `hSetAlliedVictory` + the same sound |
+| `ExplorationChange` | 0x00412bd0 | `hSetExplorationEnabled` + the same sound |
+
+* `hSetPlayMode` stores the value in `TSetupSettings+0x24` (1 = classic,
+  2 = simultaneous) and, when switching *to* simultaneous in a local game, walks
+  the player list resetting every slot after the first non-AI one - so exactly
+  one race stays Human.
+* `hSetTurnLimitation` / `hSetTurnTimeLimitation` (0x557e1e5c / 0x557e1e88)
+  store `+0x30` / `+0x34` and call `TSetupControl.UpdateSettings`.
+* `FUN_00455dfc` is the click sound: mode 1 = `Sfx\Int\Btn5.wav` (turned on),
+  mode 2 = `Sfx\Int\Btn6.wav` (turned off).
+* The refresh `FUN_00411460` writes the record back into the controls:
+  `PlayModeCB.ItemIndex = Items.IndexOfObject(+0x24)`,
+  `TurnTimeSl.SetFPos(+0x34)`, `TurnsSl.SetFPos(+0x30 / 10)`, then calls the two
+  label helpers and sets each checkbox's `Checked` from `+0x2a/+0x25/+0x26/+0x27`.
+
+### 11.3 The value labels
+
+`FUN_00412778` (TurnTimeVal) and `FUN_004128b4` (TurnsVal) format the labels
+from the resourcestrings:
+
+```
+ TurnTimeVal: Position == 0 -> LowerCase(Translate(NoTimerRStr))  = "no timer"
+             otherwise     -> Format(Translate(XMinutesRStr), [Position])
+                              XMinutesRStr = "%s minutes"  -> "5 minutes"
+ TurnsVal:    Position == 0 -> LowerCase(Translate(NoLimitRStr))  = "no limit"
+             otherwise     -> Format(LowerCase(Translate(XTurnsRStr)),
+                                     [Position * 10])
+                              XTurnsRStr = "%s turns"     -> "120 turns"
+```
+
+The port reproduces the same strings, including the engine's untranslated
+plural (position 1 reads "1 minutes").
+
+### 11.4 The widgets
+
+* **PlayModeCB** (`TAOWComboBox.Draw` / `CheckMouseDown`, AoWInterface.dpl
+  0x0040eb64 / 0x0040f824): the closed field is the TitleM `ScenEBut` 3-piece
+  with the caption 6 px in; a click drops the list down directly under the
+  field - 2 rows of 13 px, the body `GenericT 4` (blank1) and the hovered row
+  `GenericT 16` (TextLBSel), captions in `TextColor` 15134446 / `TextSelColor`
+  clWhite. Clicking a row selects it (fires `OnChange`); clicking anywhere else
+  only closes the list.
+* **The sliders** (`TAOWHScrollBar`, aowInt.dpl): `SetSize` (0x5981e8f0) makes
+  the thumb travel `WinWidth - thumbWidth`, and `Draw` (0x5981ebc4) places it at
+  `middle * Position / Range`; `CheckMouseDown` (0x5981f4d0) steps Position by
+  `SmallChange` (1) when the press is left/right of the thumb and arms the drag
+  when it is on it, `CheckMouseMove` (0x5981fa5c) maps the pointer onto
+  Position. The port's `slider_thumb_x` / `scen_slider_down` / `scen_slider_move`
+  are that transcription, so a click moves one step and the thumb follows the
+  pointer while dragged.
+* **The checkboxes** (`TAOWCheckBox.Draw` 0x0040c26c): `NGCBox.BMP` id 47
+  (unchecked square), 48 (checked, blue glow) and 49 (`ILIndexLit`, the same
+  square with a slightly brighter interior) which is drawn while the pointer is
+  over the box. `CheckMouseUp` fires `OnChange` only when the release is still
+  over the box, which is what the port does (the label beside a box is a
+  separate `TAOWLabel` and does not toggle it - as in the original).
+
+### 11.5 What a click writes
+
+| control | hit code | effect |
+|---|---|---|
+| PlayModeCB field | -5000 | drops the list down |
+| PlayModeCB row | -5100 / -5101 | `scen_play_mode` = 1 / 2 (hSetPlayMode) |
+| click-away while open | -5200 | closes the list |
+| TurnTimeSl / TurnsSl | -5010 / -5011 | one step per click, drag while held |
+| the four boxes | -5020..-5023 | toggles `scen_check[i]` + Btn5/Btn6 |
+
+`Start!` logs the record the game starts with, e.g.
+
+```
+scenario: start -> game (map=... towns=23 players=4 turns=120 turns
+  turnTime=5 minutes mode=Classic leaders=1 customize=0 allied=0 exploration=1)
+```
+
+### 11.6 Head-less hooks
+
+```
+--scen-playmode 1|2   --scen-turntime 0..20   --scen-turns 0..40
+--scen-checks 1001    --scen-mode-dd          --scen-click X Y (repeatable)
+--scen-drag X Y X2
+```
+
+`--scen-click` runs the same `scen_hit` -> `scen_slider_down` / `scen_action`
+paths the window's mouse handlers take, and `--scen-drag` adds a thumb press
+followed by `scen_slider_move(X2)`, so the smoke test can pin the whole
+interaction; the render then prints
+
+```
+scen_set mode=2 turntime=0 turns=0 checks=1001 mode_dd=0 chk=12 lit=12
+```
+
+(`chk` / `lit` echo the decoded NGCBox 48 / 49 sizes, so a missing
+`ILIndexLit` entry fails the build). The default render is byte-identical to the
+pre-pass one: same art, same positions - only the values can now change.
+
+### 11.7 What is stored vs. what the port's game loop enforces
+
+The controls write the same record the engine's `TSetupSettings` holds
+(`scen_play_mode`, `scen_turn_time`, `scen_turns`, `scen_check[]`), and `Start!`
+logs it. Two pieces of *gameplay* are still open items, not menu bugs:
+
+* the port's turn loop always runs simultaneous turns, so `Classic` is recorded
+  but does not yet switch `TTurnPlayerControl` to the sequential order;
+* the per-turn timer and the turn limit are recorded but not enforced by the
+  port's turn loop (`TAoWHSMap.EnableTurnTimer` / `GetTurnTimeLeft` are the
+  engine's side of that).
+
+The original also leaves the race `R*PlayerCB` combos alone when the mode flips -
+it only re-points the Human through the reset pass described in 11.2.
+
+## 12. Font rendering - the 0x02 bitmap faces advance by their slot width
+
+Every string on this screen except the title is a class-`0x02` bitmap face:
+
+| run | font | CharacterDistance |
+|-----|------|:----------------:|
+| title `Scenario: <map>` / orb captions | `AoW15WhiteGrey` (0x16) | 0 |
+| race names `R*Lbl` | `Age10s` | 1 |
+| `R*PlayerCB` values, the Settings panel's labels / combo / slider values | `Age8s` | 0 |
+| `Scenario` / `Exit` / `Start!` captions | `Age10s` | 1 |
+| "Select a Map..." dialog text | `Age10` | 1 |
+
+`TImageLibraryFont.GetTextWidth` (`Ilpack.dpl` `0x552142a0`) steps by
+`image width (+0x20) + CharacterDistance`; the per-face distance is in
+`re/dfm_all/TFONTMODULE.txt`. The port therefore keeps
+`advance = IlbEntry::width` (the descriptor's slot width) in `decode_glyph` and
+only adds the face's CharacterDistance when it lays a run out - **the RLE
+rectangle (`IlbEntry::rle_w`) is the glyph's ink box, not its pen step**.
+
+This was the font regression this screen measured: the Unit-window pass changed
+`decode_glyph` to `advance = rle_w` for *every* 0x02 face, which happens to
+compensate for the Unit window's own mis-declared Age8 distance (+1 in the port
+instead of the DFM's 0) but squeezed every Age8s run here by exactly one pixel
+per glyph. `R*PlayerCB`'s "CPU Squire" lost 10 px and the Settings
+"Simultaneous" lost 11 px, so the glyph cells overlapped and the black glyph
+backgrounds ate the neighbouring strokes. The fix restores the slot advance
+globally, takes Age8 out of the +1 group (`font_tracking`), and leaves the Unit
+window pinning `tracking = 0` at its own draw sites (the sandbox: that screen's
+spacing can be changed without touching this one, and vice versa). See
+docs/30_UNIT_WINDOW.md sec. 7.
+
+Benchmark against `bin/FontRef.png` (the shipped capture; the closest map in
+this install, `Bloody Marauders.hsm`, lights the same four races - Humans as
+the Human, Dark Elves / Halflings / Dwarves as CPU Squire - so only the map name
+in the title differs):
+
+```powershell
+AoW.exe --root <game> --rgb555 --screen scenario --scen-frame 90 \
+        --scen-pick "Bloody Marauders.hsm" --no-music --no-cursor \
+        --render bin\scen_final.png
+python tools/scen_bench.py bin/FontRef.png bin/scen_final.png
+```
+
+| area | mean \|d\| /255 | share of >32 pixels |
+|------|------:|------:|
+| whole 634x466 capture | **4.18 (1.64 %)** | 2.90 % |
+| title band excluded | 3.36 (1.32 %) | - |
+| race cells + settings | 3.85 (1.51 %) | - |
+
+The remaining delta is the title text (a different map name), the race-portrait
+glow phase and the usual RGB555 rounding - the font runs themselves sit within
+1-2 px of the capture ("CPU Squire" / "Normal" / "Simultaneous" regions compare
+at ~0.9/255).
 

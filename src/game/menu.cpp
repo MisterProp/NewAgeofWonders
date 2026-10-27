@@ -72,6 +72,7 @@
 #include "aow/mapviz.hpp"
 #include "aow/movement.hpp"
 #include "aow/openmpt.hpp"
+#include "aow/structure_capture.hpp"
 #include "aow/pfs_types.hpp"
 #include "aow/playlist.hpp"
 #include "aow/png.hpp"
@@ -401,6 +402,36 @@ constexpr int kScenGridX = 10, kScenGridY = 39;  // SidesPnl WinLeft/WinTop
 constexpr int kScenCellW = 156, kScenCellH = 66;
 constexpr int kScenColDx = 164, kScenRowDy = 70;
 constexpr int kScenSetX = 500, kScenSetY = 40, kScenSetW = 134, kScenSetH = 430;
+// --- SettingsPnl's own children (assets/dfm/AoW/TSCENSETUP.dfm, all panel
+// relative). The panel is the TAOWPanel at (500,40) 134x430; every control
+// below is a real component of the form with its declared geometry:
+//
+//   PlayModeCB  (10,25) 114 wide  TAOWComboBox, Age8, NumberVisible 2,
+//                                ItemHeight 13, items = TObject(1) "Classic" /
+//                                TObject(2) "Simultaneous" (hSetPlayMode takes
+//                                that value: 1 = classic, 2 = simultaneous)
+//   TurnTimeSl  (15,87)  50x11    TAOWHScrollBar Min 0 Max 20 (minutes)
+//   TurnsSl     (15,116) 50x11    TAOWHScrollBar Min 0 Max 40 (x10 turns)
+//   TurnTimeVal (70,87)  TurnsVal (70,117)  Age8s clGray value labels
+//   the four TAOWCheckBox 12x12 faces at (15,162/177/192/207) + Age8s labels
+//   at (30,164/179/194/209).
+constexpr int kSetModeX = 10, kSetModeY = 25, kSetModeW = 114;
+constexpr int kSetModeItemH = 13;    // PlayModeCB.ItemHeight
+constexpr int kSetModeRows = 2;      // PlayModeCB.NumberVisible
+constexpr int kSetSlX = 15, kSetSlW = 50, kSetSlH = 11;
+constexpr int kSetTurnTimeSlY = 87, kSetTurnsSlY = 116;
+constexpr int kSetTurnTimeMax = 20;  // TurnTimeSl.Max: minutes 0..20
+constexpr int kSetTurnsMax = 40;     // TurnsSl.Max: 0 == no limit, else x10
+constexpr int kSetValX = 70, kSetTurnTimeValY = 87, kSetTurnsValY = 117;
+constexpr int kSetChkX = 15, kSetChkSize = 12;
+constexpr int kSetChkY[4] = {162, 177, 192, 207};   // the four checkboxes
+constexpr int kSetChkLblX = 30;
+constexpr int kSetChkLblY[4] = {164, 179, 194, 209};  // their labels
+// The settings handlers themselves (published-method table entries): every
+// checkbox calls TSetupControl.hSetX(Checked) and then FUN_00455dfc 1 (on, i.e.
+// Sfx\Int\Btn5.wav) or 2 (off, Sfx\Int\Btn6.wav) - AoW.exe 0x00412b04..
+// 0x00412bd0. The two sliders are 0x0041285c (TurnTimeSlChange) and
+// 0x004129a8 (TurnsSlChange); the combo is 0x004129e8 (PlayModeCBChange).
 constexpr int kScenBtnX = 510, kScenBtnY0 = 385;   // PickScenario/Exit/Start
 constexpr int kScenBtnW = 114, kScenBtnH = 24, kScenBtnPitch = 27;
 // The map picker's FileLB list: lh / ItemHeight (141 / 17) rows are visible.
@@ -525,6 +556,10 @@ constexpr std::uint32_t kSliderBack = 49, kSliderTab = 52;
 // bin/RaceSelectorRef2.png (template match mean 0.95 / 1.18).
 constexpr std::uint32_t kChkOffId = 41, kChkOnId = 42;
 constexpr std::uint32_t kNgcBoxOff = 47, kNgcBoxOn = 48;  // GenericI NGCBox
+constexpr std::uint32_t kNgcBoxLit = 49;   // NGCBox's ILIndexLit (hover)
+// PlayModeCB's list textures (TSCENSETUP.dfm): ILTextureNormal GenericT 4
+// (blank1, kBlankTexId) and ILTextureSelected GenericT 16 (TextLBSel.BMP).
+constexpr std::uint32_t kLbSelTexId = 16;
 // The player-list column headers (PlayerListSort "Players" / AOWButton1 "Ping"
 // / PreferredRaceSort "Pref. Race") are TAOWButtons whose
 // ILIndexUp = ILIndexDown = 52 and ILIndexLit = 49, i.e. TitleM's ScenCol.BMP
@@ -637,6 +672,17 @@ constexpr int kTbTurnAnimStart = 11;    // TAOWTurnButton.Create: +0x128 = 0xb
 constexpr int kTbTurnGlowFrames = 11;   // frames 0..10 (Update mode 2 stops at 10)
 constexpr int kTbTurnRaceStride = 7;    // frames per race block
 constexpr int kTbTurnNoRace = 12;       // the form maps a -1 race to block 12
+// The single-player day handler (AoW.exe 0x0044ece8) stores LastPlayer = -1
+// when the day rolls over. Update then starts at Frame = 7*(-1) = -7, i.e.
+// library frame 11-7 = 4, and walks: the 6-frame glow tail (4..9), the 11-frame
+// glow block (0..10) and the 6-frame landing on the seat's block (5..0).
+// That is 23 window Updates at the game's 30 fps (~0.77 s) - one rotation.
+constexpr int kTbTurnDayAnimFrames = 23;
+// The port has no strategic AI, so an AI seat ends instantly where the original
+// spends its turn. Hold each seat for the button's own change span while the
+// button keeps showing its Checked glow, so the "turn ended" still is visible
+// until every seat ended and the one rotation at the new day begins.
+constexpr int kGameAiTurnHoldFrames = kTbTurnDayAnimFrames;
 // The in-game hit-test ids (Scene::game_hit): 0..4 the five task tabs, 5/6 the
 // scanner tabs, 7 the NextButton (TBNextButtonClick), 8 the scanner's minimize,
 // 9 the TurnButton (TAOWTurnButton); the Party floater's own ids are 100+.
@@ -687,6 +733,9 @@ constexpr int kTbResTotRox = 23, kTbResSignRox = 16, kTbResIncRox = 1,
 // inside the 21 px read-out panel (WGTLbl box 3, WGILbl box 1).
 constexpr int kTbResTotTop = 5, kTbResIncTop = 9;
 constexpr std::uint8_t kTbIncomeR = 119, kTbIncomeG = 255, kTbIncomeB = 119;
+// A net loss uses Delphi's clRed (TColor 0x0000FF -> RGB 255,0,0) so the
+// income box reads as a warning, matching the engine's "only costs" state.
+constexpr std::uint8_t kTbCostR = 255, kTbCostG = 0, kTbCostB = 0;
 
 // --- the World Map floater (TSWindow.ScannerWindow: 200x216, right/top) ----
 constexpr int kFloatW = 200, kFloatH = 216;
@@ -847,6 +896,96 @@ constexpr std::uint32_t kPartyPanelTex = 14;
 constexpr const char* kPartyStatusText[5] = {"Unruly", "Unrest", "Stable",
                                              "Content", "Cheerful"};
 
+// ------------------------------------------------- the Unit info window
+// `TUnitWindow` (`AoW.exe`, DFM `assets/dfm/AoW/TUNITWINDOW.dfm`) - the modal
+// floater the Party window opens when a unit's portrait is clicked (the party
+// frame's `Unit1FrameMouseDown@0x00406040` files the clicked unit into the
+// world-map selection and calls `FUN_00407db8`, the window's whole refresh).
+// The window is the DFM's 420x417 `UnitWin` at the display's centre
+// (awCenter/ahCenter), `Masked = True`, `Priority = 300`, with the Title/tabs/
+// body/stat panel/right frame and the Disband/Close footer.
+//
+// Every handler was recovered from the form's published-method table in
+// `AoW.exe.orig` (pooled with the DFM strings around 0x00406b00); it uses the
+// same `<u16><u32 addr><u8 len><name>` records as TControlWin:
+//
+//   UnitWindowCreate 0x00409c60   UnitWinUpdate   0x00409c68
+//   UnitWinShow      0x0040a10c   UnitTabChange   0x0040a0b4
+//   UnitWinMouseDown 0x0040a0c4   UnitWinKeyDown  0x0040abd4
+//   CloseClick       0x0040a144   DisbandBtnClick 0x0040aaa8
+//   FrLShPreDraw     0x0040a214   FrRShPreDraw    0x0040a2a0
+//   PreDrawAbilityItem 0x00407ba8 T1AbilityLBMouseDown 0x0040ab2c
+//
+// and the refresh writes the component fields the component table at
+// 0x00406430 publishes (real offset = published - 4):
+//   0x170 UnitName, 0x174 UnitFrRight, 0x178/0x17c/0x180/0x184/0x188/0x18c
+//   stat icons, 0x190..0x1a4 stat labels, 0x1b8 Level, 0x1cc RightFramePnl,
+//   0x1d0 MoraleLbl, 0x1d4/0x1d8 upkeep, 0x1ec RelationIcn, 0x1f0 RelationV,
+//   0xe0/0xe4 TypeIcn/TypeV, 0xd0/0xd4 AAlignment/AAlignmentLbl,
+//   0x20c XP, 0x210/0x214 PNext/PPrev, 0x74/0x94/0x98 ability lists.
+//
+// The data behind each read-out (FUN_00407db8):
+//   Level  = "Level " + GetLevel()                 (resourcestring 65507)
+//   Exp    = "Exp (" + GetExperience() + "/" + GetNextLevelExperience() + ")"
+//   Type   = Unit / Creature / Machine / Hero / Leader   (65533/65531/65532/
+//            65535/65534), icon UnitWin 21/22/23
+//   Align  = TAlignmentRStr[GetAlignment & 0x7f], icon RelWin 31..35
+//   Rel    = TStatusRStr[GetPlayerRelation], icon RelWin 11..14
+//   Morale = "Morale: " + TMoraleRStr[GetMorale] (Terrible..High)
+//   Stats  = GetAttack/Defense/Damage/Resistance and Hits/HP, Moves/MovePoints
+//   Abilities = TAbstractUnit.ListAbilityInfo@0x5577fa50 -> name/type/source,
+//               sorted by name.
+constexpr const char* kUnitWinIlb = "Int\\UnitWin.ILB";  // IntGfxMod.UnitWin
+constexpr const char* kRelWinIlb = "Int\\Scenes\\RelFr.ILB";  // IntGfxMod.RelWin
+constexpr int kUnitWinW = 420;   // UnitWin.WinWidth  (design)
+constexpr int kUnitWinH = 417;   // UnitWin.WinHeight (design)
+// UnitWin's own GenericF frame is DialogFr.BMP (ids 32..39).
+constexpr std::uint32_t kUnitWinFrameBase = 32;
+// UnitFrameLeft / UnitFrRight / FrLSh / FrRSh in Int\UnitWin.ILB.
+constexpr std::uint32_t kUnitWinLeftFrame = 44;
+constexpr std::uint32_t kUnitWinRightFrame = 45;
+constexpr std::uint32_t kUnitWinShade = 46;
+// TypeIcn choices: DFM default 21; the refresh uses 21 Creature / 22 Machine /
+// 23 Unit-Hero-Leader.
+constexpr std::uint32_t kUnitWinTypeCreature = 21;
+constexpr std::uint32_t kUnitWinTypeMachine = 22;
+constexpr std::uint32_t kUnitWinTypeUnit = 23;
+// AAlignment (RelWin 31..35) and RelationIcn (RelWin 11..18; the four status
+// faces are 11..14 - Hostile / Wary / Polite / Friendly).
+constexpr std::uint32_t kUnitWinAlignBase = 31;
+constexpr std::uint32_t kUnitWinRelationBase = 11;
+// UnitTab's TAOWTabPanel skin: CeltDeco 67/70, three pieces per state.
+constexpr std::uint32_t kUnitTabDown = 67;
+constexpr std::uint32_t kUnitTabUp = 70;
+// The three column headers are GenericB 85/91/88 (up/lit/down).
+constexpr std::uint32_t kUnitHeaderUp = 85;
+constexpr std::uint32_t kUnitHeaderLit = 91;
+constexpr std::uint32_t kUnitHeaderDown = 88;
+// The foot buttons are GenericB 19/25/22 (CeltDeco button skin).
+constexpr std::uint32_t kUnitButtonUp = 19;
+constexpr std::uint32_t kUnitButtonLit = 25;
+constexpr std::uint32_t kUnitButtonDown = 22;
+// TAlignmentRStr - index is `GetAlignment & 0x7f`. Values from AoWEPACK's
+// RT_STRING: 65295 Pure Good, 65264 Good, 65265 Pure Neutral, 65268 Neutral,
+// 65266 Evil, 65267 Pure Evil; 6 is the "None" state (hidden).
+constexpr const char* kUnitAlignmentText[7] = {
+    "Pure Good", "Good", "Pure Neutral", "Neutral",
+    "Evil", "Pure Evil", "None"};
+// TMoraleRStr (65269 High, 65270 Terrible, 65271 Poor, 65272 Okay): the array
+// is indexed by `MoraleValueToMorale` (0 = worst .. 4 = best).
+constexpr const char* kUnitMoraleText[5] = {"Terrible", "Poor", "Okay", "Good",
+                                            "High"};
+// TStatusRStr - the four race-relation captions.
+constexpr const char* kUnitRelationText[4] = {"Hostile", "Wary", "Polite",
+                                              "Friendly"};
+// The ability type captions (TAbilityTypeRStr: 65317 Movement, 65318 Combat,
+// 65319 Enchantment, 65320 Secret).
+constexpr const char* kAbilityTypeMovement = "Movement";
+constexpr const char* kAbilityTypeCombat = "Combat";
+constexpr const char* kAbilityTypeMagic = "Magic";
+constexpr const char* kAbilityTypeSecret = "Secret";
+constexpr const char* kAbilitySourceInherent = "Inherent";
+
 // ------------------------------------------------- the in-game screen layout
 // A component's `Alignment.*` block, exactly as the DFM stores it. The engine's
 // AoWComp.TAoWComponent.ReAlignComp (AoWInterface.dpl 0x00401f2c) turns this
@@ -926,11 +1065,17 @@ inline AowBox aow_realign(const AowAlign& a, int px, int py, int pw, int ph) {
 // object code's blit calls.
 struct Sprite {
     bool ok = false;
-    std::uint32_t w = 0, h = 0;
+    std::uint32_t w = 0, h = 0;   // visual (RLE-cropped) size
+    // Descriptor slot/cell size. The engine lays a 9-slice out by these, then
+    // places the cropped visual inside the cell with base+shift; e.g. DialogFr
+    // 32 is a 22x22 slot whose 18x22 art sits at x+4, and the left edge 35 is
+    // a 22x184 slot holding a 9x184 strip at x+13.
+    std::uint32_t slot_w = 0, slot_h = 0;
     std::vector<std::uint8_t> rgba;
     // The engine blits a sprite so that its visual box lands at
-    // (x + base_x, y + base_y); see aow/ilb.hpp.
+    // (x + base_x + shift_x, y + base_y + shift_y); see aow/ilb.hpp.
     std::int32_t base_x = 0, base_y = 0;
+    std::int32_t shift_x = 0, shift_y = 0;
     std::uint32_t advance = 0;  // descriptor width (bitmap-font advance)
     // Colour key: class 0x16 (TSprite16) sprites carry no mask, so their
     // background is the palette's entry 0. The cursor art is delivered that
@@ -1255,6 +1400,38 @@ public:
         }
     }
 
+    // TShadow / ShadowBlendTable blit: every non-transparent source pixel
+    // darkens the destination to 75 % (`GFXE.GenerateShadowBlendTable` with
+    // full strength, the same 0.75 factor as the 16-bit TShadow routine:
+    // `(dst >> 1 & 0x7bef) + ((dst & 0xe79c) >> 2)`). UnitWin image 46 is the
+    // FrLSh/FrRSh frame shadow: a dithered light mask whose transparent centre
+    // leaves the face alone and whose ring is the portrait's vignette.
+    void blit_shadow(const Sprite& s, int x, int y) {
+        if (!s.ok) return;
+        const int dx0 = x + s.base_x + s.shift_x;
+        const int dy0 = y + s.base_y + s.shift_y;
+        for (std::uint32_t sy = 0; sy < s.h; ++sy) {
+            const int dy = dy0 + static_cast<int>(sy);
+            if (dy < 0 || dy >= h_) continue;
+            for (std::uint32_t sx = 0; sx < s.w; ++sx) {
+                const int dx = dx0 + static_cast<int>(sx);
+                if (dx < 0 || dx >= w_) continue;
+                const std::uint8_t* p =
+                    &s.rgba[(static_cast<std::size_t>(sy) * s.w + sx) * 4];
+                if (p[3] == 0) continue;
+                std::uint8_t* d =
+                    &px_[(static_cast<std::size_t>(dy) * w_ + dx) * 4];
+                // ShadowBlendTable[s][dst] = round(dst * s / 31): the mask's
+                // intensity (a light-grey dither, 222..255) scales the
+                // destination, so the vignette is a 0..13 % darkening.
+                const int f = p[2];   // BGRA: red is the grey level
+                d[0] = static_cast<std::uint8_t>(d[0] * f / 255);
+                d[1] = static_cast<std::uint8_t>(d[1] * f / 255);
+                d[2] = static_cast<std::uint8_t>(d[2] * f / 255);
+            }
+        }
+    }
+
     // Stretch-blit `s` (nearest neighbour) into the rect (x,y,w,h). Used for the
     // Scenario screen's 9-slice panel frames.
     void blit_stretch(const Sprite& s, int x, int y, int w, int h) {
@@ -1419,6 +1596,62 @@ std::string acp_from_w(const std::wstring& w) {
     return s;
 }
 
+// --- TCityScreen's unit detail page (`FUN_0043c43c` cases 7/8) -------------
+// Selecting one of the twelve P1CB..P12CB cards shows `UnitPnl` instead of the
+// activity page (`FUN_0043c43c` hides UpgradePnl/MigratePnl and shows UnitPnl).
+// The page is drawn live from the same DFM controls the original uses:
+//
+//   control          game rect       frame / body
+//   UnitPnl          23,227 594x130  (fills the page above the queue band)
+//   UnitLbl          (centred 320, 233)
+//   UPicturePnl      33,237 90x110   GenericF 105 over GenericT 18
+//   UPictureFramePnl 35,238 87x107   GenericF 113 over GenericT 19
+//   UFace            37,240 83x103   TAbstractUnit.ShowFace (stretched)
+//   UStatPnl        143,256 166x91   GenericF 105 over GenericT 17
+//   UStatFr1        145,257 81x57    GenericF 113 (left stat column)
+//   UStatFr2        226,257 82x57    GenericF 113 (right stat column)
+//   UInfoFr         145,314 163x31   GenericF 113 (alignment / level)
+//   AbilPnl         331,256 166x91   GenericF 105 over GenericT 17
+//   UAbilitiesLB    333,257 163x88   GenericF 113, ItemHeight 16
+//   UCostPnl        517,237 90x110   GenericF 105 over GenericT 17
+//   CostFr          519,238 87x54    GenericF 113
+//   TurnsFr         519,292 87x53    GenericF 113
+//
+// These are the DFM's ReAlignComp results with ActivityPnl at (11,162): the
+// shipped 640x480 screen draws the mode-1 band two pixels above the DFM's
+// WinTop (the page texture's phase, measured on assets/cityprod1.bmp, is
+// (11,162)). The frame lines of bin/UnitsSelectionRef.png land exactly on the
+// rects above (game = ref + (3,-1), the capture's crop origin), which is the
+// benchmark this page is matched against.
+constexpr int kUnitPageX = 23, kUnitPageY = 227;
+constexpr int kUnitPageW = 594, kUnitPageH = 130;
+// TImageLibraryFont.SetColor uses the DFM's TextColor 9415072 = 0x8FA9A0
+// (TColor is BGR): every Age8/Age10s caption on the page is this warm grey.
+constexpr std::uint8_t kUnitTextR = 160;
+constexpr std::uint8_t kUnitTextG = 169;
+constexpr std::uint8_t kUnitTextB = 143;
+// UAbilitiesLB: text starts at BorderWidth 10 + the 3 px FrGoldD frame, rows
+// are ItemHeight 16 (BorderHeight 4 + the frame).
+constexpr int kUnitAbilX = 346, kUnitAbilY = 264, kUnitAbilDy = 16;
+// UAbilitiesLB is a TAOWListBox with VScrollBar T2SBar: 88 px tall, rows of 16,
+// so five rows fit and the bar (VanishWhenFull) appears for longer lists. The
+// bar is the DFM's (AbilPnl + 148,1) 17x88 rect and names GenericS 86..93
+// (NGVsb2.BMP: dec up/down, inc up/down, thumb top/middle/bottom, track).
+constexpr int kUnitAbilRows = 5;
+constexpr int kUnitAbilSbX = 481, kUnitAbilSbY = 258;
+constexpr int kUnitAbilSbW = 17, kUnitAbilSbH = 88;
+// The six TAOWImage cells, in control order: attack, defense, moves, damage,
+// resistance, hits. UAttackIcon/UDefenseIcon are at UStatPnl+(12,3)/(12,20),
+// UMovesIcon at (8,37), UDamageIcon/UResistanceIcon/UHitsIcon at
+// (91,3)/(91,20)/(91,37). These are the DFM's ReAlignComp positions; the
+// sprite's own class shift (`base`) then lands its visual box exactly where
+// bin/UnitsSelectionRef.png draws it.
+constexpr int kUnitIconX[6] = {155, 155, 151, 234, 234, 234};
+constexpr int kUnitIconY[6] = {259, 276, 293, 259, 276, 293};
+// Labels are awCenter in UStatP1 (42 px at +32) / UStatP2 (36 px at +120).
+constexpr int kUnitStatLblX[2] = {196, 281};
+constexpr int kUnitStatLblY[3] = {264, 281, 298};
+
 // The UI thread hands the audio thread a new song list through this (it is
 // defined below, after `App g`, which owns the shared music state).
 void set_music_playlist(std::vector<std::string> songs);
@@ -1506,7 +1739,8 @@ struct Scene {
     Sprite scen_combo[3];            // GenericE 21..23 NGCmb    (dark combo+arrow)
     Sprite scen_col[3];              // TitleM 52..54 ScenCol (list headers)
     Sprite scen_chated[3];           // TitleM 23..25 ScenEd  (chat input)
-    Sprite scen_ngcbox[2];           // GenericI 47/48 NGCBox (checkbox off/on)
+    Sprite scen_ngcbox[3];           // GenericI 47/48/49 NGCBox (off/on/lit)
+    Sprite scen_lbsel_tex;           // GenericT 16 TextLBSel (combo list line)
     Sprite scen_blank_tex;           // GenericT 4 blank1 (list / chat bodies)
     // The race cells' R*PlayerIcon: IntGfxMod.PlyrIcns keeps six TImageNodes
     // (one per TPlayerType), each with the aura layer + the glyph layer that
@@ -1543,6 +1777,21 @@ struct Scene {
     // The DFM ships all four unchecked; the engine's setup settings default
     // "Leaders on map" and "Exploration" to on, which is what the shipped
     // capture shows (checked = GenericI 48, the blue box).
+    int scen_chk_hover = -1;  // the checkbox under the pointer (lit face 49)
+    int scen_chk_press = -1;  // the checkbox held down right now
+    // --- SettingsPnl's live state (TScenSetup + TSetupSettings) -------------
+    // TSetupSettings+0x24 holds the play mode hSetPlayMode writes (1 = classic,
+    // 2 = simultaneous); the scenario screen opens in simultaneous turns, which
+    // is what the shipped capture's PlayModeCB reads.
+    int scen_play_mode = 2;
+    bool scen_mode_dd = false;   // PlayModeCB's list is dropped down
+    int scen_mode_dd_hover = -1; // the hovered row (0 Classic / 1 Simultaneous)
+    // TSetupSettings+0x34 / +0x30: TurnTimeSl.Position (minutes) and TurnsSl's
+    // Position (the turn limit is x10, so 40 -> 400 turns).
+    int scen_turn_time = 0;
+    int scen_turns = 0;
+    int scen_drag_slider = -1;   // 0 = TurnTimeSl, 1 = TurnsSl (thumb drag)
+    int scen_drag_grab = 0;      // mouse offset inside the thumb
     bool scen_maps_open = false;       // the "Select a Map..." dialog
     std::vector<std::string> scen_maps;  // Scenario\Custom\*.HSM file names
     int scen_map_sel = -1;             // the picker opens with nothing selected
@@ -1581,13 +1830,14 @@ struct Scene {
     // exactly like the class indexes it (+0x140 / AnimStart + 7*CurPlayer + 6).
     std::vector<Sprite> tb_turn_frames;
     // --- TAOWTurnButton state (AOWTools.dpl "TurnButton", instance +0x144) ---
-    int tb_turn_cur = kTbTurnNoRace;   // +0x118 CurPlayer (a RACE id; 12 = none)
-    int tb_turn_last = kTbTurnNoRace;  // +0x11c LastPlayer
+    int tb_turn_cur = kTbTurnNoRace;   // +0x118 CurPlayer - the SEATED seat's race
+    int tb_turn_last = kTbTurnNoRace;  // +0x11c LastPlayer; -1 forces one rotation
     int tb_turn_mode = 0;              // +0x124 the animation state (0..3)
     int tb_turn_start = kTbTurnAnimStart;  // +0x128 AnimStart
     bool tb_turn_animating = false;    // +0x120 Animating
     bool tb_turn_checked = false;      // +0x13c Checked ("turn ended")
     int tb_turn_frame = 0;             // +0x140 Frame
+    int tb_turn_ai_hold = 0;           // port-only pacing for the un-simulated AI
     bool tb_next_down = false;         // TBNextButton held down (+0x110 = -1)
     // TPlayer+0xb4 - the army index `TAoWHSMap.SelectNextArmy` continues from.
     int tb_next_index = -1;
@@ -1631,6 +1881,59 @@ struct Scene {
     Sprite party_center[3];       // GenericI 6/8/7
     Sprite party_help[3];         // GenericI 59/61/60
     Sprite party_btn[3][3];       // GenericB 76/82/79 (3 pieces each)
+    // --- the Unit info window (TUnitWindow) ---------------------------------
+    // `IntGfxMod.UnitWin` = Int\UnitWin.ILB: the two 118x143 portrait frames
+    // (44 left face frame, 45 right unit frame), the transparent shade (46) and
+    // the TypeIcn art (21/22/23).
+    aow::IlbFile unitwin_il;
+    Sprite unitwin_frame[8];       // GenericF 32..39 DialogFr
+    Sprite unitwin_body;           // GenericT 2  UnitWin body texture
+    Sprite unitwin_tex17;          // GenericT 17 TextOld1 (T2 cards / T2Text)
+    Sprite unitwin_tex18;          // GenericT 18 TextOld2 (T2Memo body)
+    Sprite unitwin_tex7;           // GenericT 7  RightFramePnl body
+    Sprite unitwin_tex21;          // GenericT 21 the ability list body
+    Sprite unitwin_gold_frame[8];  // GenericF 113..120 FrGoldD
+    Sprite unitwin_thin_frame[8];  // GenericF 105..112 FrThinD
+    Sprite unitwin_left_frame;     // UnitWin 44
+    Sprite unitwin_right_frame;    // UnitWin 45
+    Sprite unitwin_shade;          // UnitWin 46
+    Sprite unitwin_type_icon[3];   // UnitWin 21/22/23
+    Sprite unitwin_align_icon[5];  // RelWin 31..35
+    Sprite unitwin_relation[8];    // RelWin 11..18
+    Sprite unitwin_move_icon;      // IconMove 0 (UMovesIcon, 32x17)
+    Sprite unitwin_stat_icon[5];   // Icons 0..4 (attack/defense/damage/res/hits)
+    Sprite unitwin_upkeep_gold;    // TBWin 51
+    Sprite unitwin_upkeep_mana;    // TBWin 52
+    Sprite unitwin_title_icon;     // WinTIcon 3
+    Sprite unitwin_close[3];       // GenericI 0/2/1
+    Sprite unitwin_tab[2][3];      // CeltDeco 67..69 down / 70..72 up
+    Sprite unitwin_header[3][3];   // GenericB 85/91/88 (3 pieces)
+    Sprite unitwin_button[3][3];   // GenericB 19/25/22 Disband/Close
+    Sprite unitwin_list_sel;       // Menus 8   selected ability row
+    Sprite unitwin_celt_knot;      // CeltDeco 3 27x27 knot
+    Sprite unitwin_celt_line;      // CeltDeco 55 7x27 left cap of the band
+    Sprite unitwin_celt_mid;       // CeltDeco 56 100x27 braid tile
+    Sprite unitwin_celt_right;     // CeltDeco 57 7x27 right cap of the band
+    Sprite unitwin_line;           // CeltDeco 1 100x27 UnitLine1/2
+    // `Int\Scenes\CTrans.ILB` = IntGfxMod.CampaignTrans: the 12x9 PNext/PPrev
+    // arrows (23/24 up/down previous, 25/26 up/down next).
+    aow::IlbFile ctrans_il;
+    Sprite unitwin_pprev[2];
+    Sprite unitwin_pnext[2];
+    // T2SBar's NGVsb2 pieces (GenericS 94..101): dec up/down, inc up/down,
+    // track and thumb. The memo's scroll bar (visible in the reference).
+    Sprite unitwin_sb[8];
+    // The selected unit's own art. `unitwin_face` is the 103x128 portrait from
+    // the unit-gfx record's image library; `unitwin_sprite` is the 64x64
+    // standing pose drawn in the right frame (`TAbstractUnit.ShowUnit`).
+    aow::IlbFile unitwin_face_il;
+    std::string unitwin_face_path;
+    Sprite unitwin_face;
+    int unitwin_face_key = -2;     // UnitEntry id the face was decoded for
+    Sprite unitwin_sprite;
+    int unitwin_sprite_key = -2;   // MapUnit id/slot the sprite was decoded for
+    int unitwin_sprite_vx = 0;     // frame offsets relative to the ShowUnit anchor
+    int unitwin_sprite_vy = 0;
     // --- the Structure window (TIWindow) art -------------------------------
     // TIWINDOW.dfm names: InfoWin (GenericF/GenericT), the four title buttons
     // (GenericI), SIcon (WinTIcon 2), CeltFrame (CeltDeco 22), MainBtn
@@ -1664,7 +1967,46 @@ struct Scene {
     Sprite iwin_prod_orb;         // ProdWin 4    39x37
     Sprite iwin_relation[kStructureRelationCount];  // RelFr 11..18 faces
     Sprite iwin_plaque_tex;       // GenericT 14  name-plaque parchment
-    // --- the City screen (TCityScreen) art ---------------------------------
+    // --- TCityScreen's production cards (`PreDrawProductions`) --------------
+    // `PreDrawProductions` (AoW.exe 0x43d950) fills a small draw-info record
+    // ({facing, 0, 0, 0, 0, 0}) and hands it to the selected `TUnitProduction`'s
+    // sprite draw together with the anchor `(rect.Left - 4, rect.Top - 4)`. The
+    // record's first byte is the facing the unit-art sequence resolves: **3**
+    // for a "produce" item (`TUnitProduction+0xc <> 0`) and **5** for an
+    // "install" item - the same 3 `AoWE.TUnitHS.Create@0x55783da4` leaves in
+    // `TUnitHS+0x14`, which is AoW's towards-the-viewer pose. The port used to
+    // pass direction 1 (the away-facing pose), so every card showed the unit's
+    // back. See docs/27_PRODUCTION_SCREEN.md §3.3.1.
+    static constexpr int kCityCardFaceProduce = 3;  // 0x43d9f5 record byte 0
+    static constexpr int kCityCardFaceInstall = 5;  // 0x43da4f record byte 0
+    // The P1CB..P12CB control rects: ActivityPnl (WinLeft 11, WinTop 164) plus
+    // the checkbox's own WinLeft/WinTop (P1CB 2/0, P2CB 53/0 -> a 51 px pitch).
+    static constexpr int kCityCardX = 13;
+    static constexpr int kCityCardY = 164;
+    static constexpr int kCityCardPitch = 51;
+    // `PreDrawProductions` builds its rect 2 px above that control: the
+    // reference capture places the 52x64 RelFr 42 checkbox art at
+    // (cell.x, cell.y - 2) and the 48x60 CityWin 4/5 face at (cell.x + 2,
+    // cell.y) - the handler's own +2,+2 - and the art is not clipped to the
+    // 52x52 control (its frame reaches cell.y + 62).
+    static constexpr int kCityCardRaise = 2;
+    // The sprite anchor inside the cell: `Show(Left - 4, Top - 4)`; the frame's
+    // own base+shift rides on top (`CityCardArt::vx/vy`). The reference capture
+    // lands `HMNAR209` (facing 3, shift (25,25)) on `cell + (21,19)` - exactly
+    // `cell + (-4,-6) + (25,25)` - and HMNAR209's own sequence offsets
+    // (-16,-24) are *not* applied there.
+    static constexpr int kCityCardUnitDx = 4;
+    static constexpr int kCityCardUnitDy = 4;
+    // The "install" branch's second pass: `TSprite16.ShowBlended` with
+    // `GFXE.TLookupBlendTableCollection100.GetLookupTables(AlphaBlendTable,
+    // 0x2d)` - the 45 % alpha-blend table (`GenerateLookupTables` maps index i
+    // to table `i * count / 100`; `GenerateAlphaBlendTable` fills each entry
+    // with `round(src * p + dst * (1 - p))` per 5-bit channel).
+    // `PreDrawProductions` re-draws the CityWin frame-5 face over the card with
+    // it: the pale wash over a unit that is not installed yet.
+    static constexpr int kCityCardInstallBlend = 45;  // 0x2d = 45 %
+
+// --- the City screen (TCityScreen) art ---------------------------------
     // `Int\Scenes\CityWin.ILB` supplies the dialog skin (CityBg), the celtic
     // frame, the city shadows, the separator bar, the three picture cards and
     // the current-action card; `Images\Faces\R_Faces.ILB` holds one 103x128
@@ -1681,9 +2023,61 @@ struct Scene {
     Sprite city_income_pic;       // CityWin 60 Is-Income 48x60
     Sprite city_ench_pic;         // CityWin 61 Is-Ench 48x60
     Sprite city_action_pic;       // CityWin 40 Is-Merch 48x60
+    // The production cards (`P1CB..P12CB`): the base TAOWCheckBox draws
+    // RelFr 42 (up) / 43 (lit+down) and `PreDrawProductions` overlays the
+    // CityWin card face - frame 4 for a `TUnitProduction+0xc` entry, frame 5
+    // for the other kind, frame 62 (Is-Empty) when GetItem() returns 0.
+    Sprite city_activity_pic[6];  // CityWin 40..46 (B1CB..B6CB cards)
+    Sprite city_card_frame[2];    // CityWin 4 / 5 (the two card faces)
+    Sprite city_card_empty;       // CityWin 62 Is-Empty
+    Sprite city_card_up;          // RelFr 42 (unchecked)
+    Sprite city_card_sel;         // RelFr 43 (checked)
+    Sprite city_queue_clean;      // assets/cityqueue.bmp (QueueLB w/o <empty>)
+    Sprite city_queue_sel_tex;    // Menus 8 (selected row texture)
+    aow::IlbFile relfr_il;        // Int\Scenes\RelFr.ILB (RelWin)
     Sprite city_body_tex;         // GenericT 17 TextOld1 (tile)
     Sprite city_body_tex2;        // GenericT 18 TextOld2 (tile)
     Sprite city_check[3];         // GenericI 47/49/48 unchecked/lit/down
+    // The production/change page's six activity backdrops
+    // (assets/cityprod1..6.bmp; tools/city_prod_bg.py). The original draws
+    // this page from CityWin.ILB over the generated city map, so - like the
+    // overview backdrop - the port carries the six reference captures.
+    Sprite city_prod_frame[6];    // B1CB..B6CB pages, 640x480
+    // The unit detail page (`FUN_0043c43c` cases 7/8). Its controls are drawn
+    // live: the green page body (GenericT 2), TextOld1/2 panel bodies
+    // (GenericT 17/18/19), the FrThinD/FrGoldD frames (GenericF 105..120), the
+    // six stat icons (Int\Icons.ILB 0..4), the move-type icon (IconMove.ILB)
+    // and the unit's Unitgfx face. See the kUnit* block above.
+    Sprite city_page_tex;         // GenericT 2  MainFloaterSet (page body)
+    Sprite city_panel_tex3;       // GenericT 19 (UPictureFramePnl body)
+    Sprite city_unit_frame[8];    // GenericF 105..112 FrThinD
+    Sprite city_unit_gold_frame[8];    // GenericF 113..120 FrGoldD
+    Sprite city_unit_icon[5];     // Int\Icons.ILB 0..4 (atk/def/dmg/res/hits)
+    Sprite city_unit_abil_sb[8];  // GenericS 86..93 NGVsb2 (UAbilitiesLB bar)
+    int city_unit_abil_top = 0;   // first visible row of UAbilitiesLB
+    aow::IlbFile city_unit_face_il;  // the selected unit's FACES library
+    std::string city_unit_face_path;
+    Sprite city_unit_face;        // the selected unit's face (103x128)
+    // The unit id `city_unit_face` was decoded for, -1 when none. The cache
+    // cannot key on `city_unit_page.unit_id`: by the time the face is loaded
+    // that field already names the *newly* checked card, which made every
+    // selection after the first keep the previous unit's portrait.
+    int city_unit_face_id = -1;
+    // Everything `FUN_0043c43c` writes into the UnitPnl controls, resolved for
+    // the checked card (`city_prod_sel`). `city_unit_page_refresh` rebuilds it.
+    struct CityUnitPage {
+        bool valid = false;
+        int unit_id = -1;
+        std::string title;        // "Produce "/"Install " + UnitRes.GetUnitName
+        int attack = 0, defense = 0, damage = 0;
+        int resistance = 0, hits = 0, moves = 0;
+        int move_icon = 0;        // FUN_004541b0(GetMoveTypes)
+        int cost = 0, turns = 0;  // UnitProductionGold / UnitProductionTime
+        std::string alignment;    // TAlignmentRStr[alignment & 0x7f]
+        int level = 0, upkeep = 0;  // Level X / Upkeep Y
+        std::vector<std::string> abilities;  // ListAbilities -> UAbilitiesLB
+    };
+    CityUnitPage city_unit_page;
     aow::IlbFile rfaces_il;       // Images\Faces\R_Faces.ILB
     Sprite city_race_face[12];    // R_Faces 0..11 (103x128)
     std::vector<Sprite> move_icons;  // Int\IconMove.ILB, all 20 entries
@@ -1753,6 +2147,13 @@ struct Scene {
     int mv_merge_x = -1, mv_merge_y = -1;
     std::size_t mv_merge_stay = 0;        // units left behind at the origin
     aow::MapHs mv_merge_moving;           // the party that is walking
+    // The arriving army's `TArmyHS.PlaceOnMap` (map field message 0x1102) is
+    // delivered when the walk reaches its destination, not when the move starts:
+    // `TMoveArmyTE.FinishMove@0x55747fbc` runs at the end of the transition, so
+    // a building under the army keeps its owner and its flag for the whole walk
+    // and is claimed only once the unit has arrived (`mv_finish_arrival`).
+    bool mv_arrive_pending = false;
+    int mv_arrive_x = -1, mv_arrive_y = -1;
     std::vector<std::uint8_t> game_draw;  // game_px + the overlay (RGBA)
     // The level's *contents* layer, kept alongside the flat `game_px` so the
     // move-selection marker can put the hex's contents back over its far wall
@@ -1791,6 +2192,10 @@ struct Scene {
     std::string game_leader = "Nicolo";        // the leader's name
     std::string game_race = "Humans";          // his race
     int game_day = 1;                          // the turn counter ("Day 1")
+    // The day NEWTURN.WAV was last played for. The sound belongs to the start of
+    // the new-day rotation (the day handler), so the later hand-over to the
+    // human's seat on the same day must not play it a second time.
+    int game_newturn_sound_day = 0;
     int game_gold = 140, game_gold_income = 10;
     int game_mana = 250, game_mana_income = 10;
     int game_level = 0;                        // the level the scanner shows
@@ -1813,6 +2218,51 @@ struct Scene {
     int party_hover = -1;            // hovered party control (kParty*), or -1
     int party_pressed = -1;          // the pressed button
     bool party_guard = false;        // PGuard.Checked (TArmy+0x28 bit 0)
+    // --- the Unit info window (TUnitWindow) ---------------------------------
+    // `FUN_00407db8` fills every control from the selected unit; this is the
+    // resolved copy the renderer draws (the port has no widget tree). One row
+    // is what `TAbstractUnit.ListAbilityInfo` appends to the three listboxes.
+    struct UnitWindowAbility {
+        std::string name;
+        std::string type;
+        std::string source;
+    };
+    struct UnitWindowData {
+        bool valid = false;
+        int slot = -1;
+        std::string name;          // UnitName
+        std::string description;   // T2Memo
+        std::string type;          // TypeV
+        std::string alignment;     // AAlignmentLbl
+        std::string relation;      // RelationV
+        std::string morale;        // MoraleLbl (empty on a Machine)
+        int type_icon = 0;         // 0..2 -> UnitWin 21/22/23
+        int align_icon = 0;        // 0..4 -> RelWin 31..35
+        int relation_icon = 0;     // 0..7 -> RelWin 11..18
+        int attack = 0, defense = 0, damage = 0, resistance = 0;
+        int hits = 0, max_hits = 0, moves = 0, max_moves = 0;
+        int level = 0, experience = 0, next_level_experience = 0;
+        int upkeep = 0;
+        bool upkeep_mana = false;  // icon 52 instead of 51
+        int move_icon = 0;         // IconMove id
+        bool show_type = true;
+        bool show_relation = true;
+        bool show_morale = true;
+        bool is_hero = false;
+        std::vector<UnitWindowAbility> abilities;
+    };
+    bool game_show_unit = false;     // UnitWin.Visible
+    int game_unit_tab = 0;           // UnitTab.Index (0 Abilities, 1 Info)
+    int game_unit_slot = -1;         // the party slot the window was opened on
+    UnitWindowData unit_win;         // the resolved unit page
+    int unitwin_hover = -1;          // hovered control id, or -1
+    int unitwin_pressed = -1;        // pressed control id
+    int unitwin_abil_sel = -1;       // T1AbilityLB.Index
+    int unitwin_abil_top = 0;        // first visible ability row
+    mutable int unitwin_memo_top = 0;  // T2Memo first visible line (T2SBar)
+    mutable std::vector<std::string> unitwin_memo_lines;  // wrapped T2Memo rows
+    mutable int unitwin_memo_total = 0;                   // T2SBar.Max
+    bool unitwin_disband_armed = false;  // the Disband confirmation is up
 
     // --- the Structure floater (TIWindow / `IWindow`) -----------------------
     // Clicking a selectable building opens the 200x216 `InfoWin` reproduced from
@@ -1870,6 +2320,43 @@ struct Scene {
     std::string city_wall = "Stone Wall";
     int city_queue_sel = -1;               // QueueLB.Selected (255 = none)
     bool city_repeat = false;              // LoopQueueBox.Checked
+    // TCityScreen's +0x2cc display mode: 0 = overview, 1 = production picker,
+    // 2 = queue editor. `city_change` keeps the picker up for both 1 and 2;
+    // `city_queue_edit` is the original's `+0x2cc == 2`.
+    bool city_change = false;
+    bool city_queue_edit = false;
+    int city_activity = 0;                 // B1CB..B6CB Tag (0..5)
+    // The selected production card (`TCityScreen+0x2c4`) and the city's own
+    // production model (City.TCity rw tag 0x12, parsed by the map loader).
+    int city_prod_sel = -1;
+    std::vector<aow::CityProductionUnit> city_prod_units;
+    std::vector<aow::CityQueueItem> city_queue;
+    std::vector<std::string> city_prod_names;
+    std::vector<std::string> city_queue_names;
+    bool city_loop = false;
+    // The TCity object the open city screen was shown for (its MapHs in
+    // game_state_map). Production edits are written back here so closing and
+    // re-opening the screen - and the turn loop - see the same queue.
+    aow::MapHs* city_map_hs = nullptr;
+    // The live `TProductionControl+0x20` state and the `+0x24` progress fields
+    // (see aow::MapHs::production_turns_*). 0 = idle, 1 = waiting for the
+    // player's gold (ExecuteProduction declined), 2 = executing.
+    std::uint8_t city_prod_state = 0;
+    std::int32_t city_prod_turns_left = 0;
+    std::int32_t city_prod_turns_total = 0;
+    std::int32_t city_prod_gold_paid = 0;
+    std::int32_t city_prod_mana_paid = 0;
+    // A card's decoded standing pose, drawn exactly the way
+    // `PreDrawProductions` draws it: at the engine's own sprite anchor
+    // (`Show(Left - kCityCardUnitDx, Top)` plus the sequence's xoff/yoff and the
+    // frame's base+shift), clipped to the 52x52 control. Built once when the
+    // city opens so the page render never decodes a unit sprite.
+    struct CityCardArt {
+        Sprite s;
+        int vx = 0;   // anchor offset from (cell.x - kCityCardUnitDx, cell.y)
+        int vy = 0;
+    };
+    std::vector<CityCardArt> city_card_art;
     int city_pressed = -1;                 // pressed control id
     int city_hover = -1;                   // hovered control id
 
@@ -2028,6 +2515,10 @@ struct Scene {
             const aow::IlbEntry& e = ilb.entries()[static_cast<std::size_t>(p)];
             out.base_x = e.base_x;
             out.base_y = e.base_y;
+            out.slot_w = e.width;
+            out.slot_h = e.height;
+            out.shift_x = e.xshift;
+            out.shift_y = e.yshift;
             out.advance = e.width;
             if (e.has_color_key) {
                 // `decode_rgb` already dropped the class-0x16 key, so keep the
@@ -2154,6 +2645,10 @@ struct Scene {
             const aow::IlbEntry& e = ilb.entries()[p];
             out.base_x = e.base_x;
             out.base_y = e.base_y;
+            out.slot_w = e.width;
+            out.slot_h = e.height;
+            out.shift_x = e.xshift;
+            out.shift_y = e.yshift;
             out.advance = e.width;
             set_key(out);
             return true;
@@ -2183,6 +2678,15 @@ struct Scene {
             // 0x02 glyph keys out the ink whenever the glyph's (0,0) pixel
             // happens to be opaque (which is why 'm', 'T', 'y' and 'p' of "Game
             // Type" used to vanish).
+            //
+            // The pen step stays the descriptor slot width (`e.width`, the
+            // TLibraryImage advance that TImageLibraryFont.GetTextWidth adds
+            // CharacterDistance to); the RLE rectangle (`e.rle_w`) is the ink
+            // box, not the advance. Advancing by `e.rle_w` here changes every
+            // 0x02 face at once and visibly squeezed the Scenario screen's
+            // Age8s labels ("CPU Squire", "Simultaneous") by a pixel per glyph.
+            // Faces that need a different step pin their CharacterDistance at
+            // the draw site instead (see draw_game_unit_tabs).
             if (e.class_id == 0x02) out.has_key = false;
             return true;
         };
@@ -2313,6 +2817,9 @@ struct Scene {
             decode_id(generict_il, kListTexId, scen_list_tex);        // Text2Lb17
             decode_id(generict_il, kInfoTexId, scen_info_tex);        // TextOld1
             decode_id(generict_il, kInfo2TexId, scen_info2_tex);      // TextOld2
+            // PlayModeCB's ILTextureSelected: GenericT 16 = TextLBSel.BMP, the
+            // light row the combo paints over its dropped-down list.
+            decode_id(generict_il, kLbSelTexId, scen_lbsel_tex);
             {
                 const std::string mn = (base / "Int" / "Menus.ILB").string();
                 if (menus_il.load(mn, err)) {
@@ -2354,6 +2861,11 @@ struct Scene {
             decode_id(generics_il, 101, scen_ngvsb[4]);
             for (int i = 0; i < 6; ++i) {
                 decode_id(generics_il, kSliderBack + i, scen_slider[i]);
+            }
+            // TCityScreen's UAbilitiesLB VScrollBar (T2SBar) names GenericS 86..93.
+            for (int i = 0; i < 8; ++i) {
+                decode_id(generics_il, static_cast<std::uint32_t>(86 + i),
+                          city_unit_abil_sb[i]);
             }
             // The Settings panel's turn-mode combo (PlayModeCB) names
             // ILFrame/ILEdit = IntGfxMod.TitleScreen: TitleM's ScenEBut 26/27/28
@@ -2473,6 +2985,23 @@ struct Scene {
             if (uniticons_il.load(ui, err)) {
                 decode_layers(uniticons_il, 7, scen_icon_size);   // globe + glow
                 decode_layers(uniticons_il, 8, scen_icon_towns);  // castle + glow
+                // `IntGfxMod.UnitIcons` ids 0..4 are the six unit-stat icons
+                // TCityScreen's UAttackIcon..UHitsIcon name: sword, shield,
+                // star (damage), ankh (resistance), heart (hits). They are
+                // class-0x11 RLE sprites whose visual box sits at anchor +
+                // base + class shift, so fold the shift in like the shields.
+                for (int i = 0; i < 5; ++i) {
+                    decode_id(uniticons_il, static_cast<std::uint32_t>(i),
+                              city_unit_icon[i]);
+                    const int p =
+                        pos_of(uniticons_il, static_cast<std::uint32_t>(i));
+                    if (p >= 0 && city_unit_icon[i].ok) {
+                        const aow::IlbEntry& e =
+                            uniticons_il.entries()[static_cast<std::size_t>(p)];
+                        city_unit_icon[i].base_x += e.xshift;
+                        city_unit_icon[i].base_y += e.yshift;
+                    }
+                }
             }
             decode_layers(menu_il, 10, scen_icon_players);        // leader face
             // The race crest shields (Int\ShieldsM.ILB, 40x53): ids 0..11 are
@@ -2624,9 +3153,11 @@ struct Scene {
                     decode_id(generici_il, kScanHelpArt[i], scan_help[i]);
                 }
                 // The Scenario screen's 12x12 checkboxes (NGCBox.BMP 47 off /
-                // 48 checked) - the art the shipped capture shows.
+                // 48 checked / 49 lit) - the DFM's ILIndexUp/Down/Lit, and the
+                // art the shipped capture shows.
                 decode_id(generici_il, kNgcBoxOff, scen_ngcbox[0]);
                 decode_id(generici_il, kNgcBoxOn, scen_ngcbox[1]);
+                decode_id(generici_il, kNgcBoxLit, scen_ngcbox[2]);
             }
             const std::string cw = (base / "Int" / "Scenes" / "CityWin.ILB").string();
             if (citywin_il.load(cw, err)) {
@@ -2643,13 +3174,43 @@ struct Scene {
                 decode_id(citywin_il, 40, city_action_pic);  // Is-Merch
                 decode_id(citywin_il, 60, city_income_pic);  // Is-Income
                 decode_id(citywin_il, 61, city_ench_pic);    // Is-Ench
+                // B1CB..B6CB activity cards (TCityScreen's ActivityPnl2).
+                for (std::uint32_t i = 0; i < 6; ++i) {
+                    decode_id(citywin_il, 40 + i, city_activity_pic[i]);
+                }
+                // P1CB..P12CB card faces: 4 (kind 4) / 5 (other kind) and
+                // 62 Is-Empty when TUnitProductionList.GetItem() is null.
+                decode_id(citywin_il, 4, city_card_frame[0]);
+                decode_id(citywin_il, 5, city_card_frame[1]);
+                decode_id(citywin_il, 62, city_card_empty);
             }
+            // RelWin (`Int\Scenes\RelFr.ILB`) frames 42/43 are the
+            // TAOWCheckBox art behind each production card.
+            {
+                const std::string rf =
+                    (base / "Int" / "Scenes" / "RelFr.ILB").string();
+                if (relfr_il.load(rf, err)) {
+                    decode_id(relfr_il, 42, city_card_up);
+                    decode_id(relfr_il, 43, city_card_sel);
+                }
+            }
+            // QueueLB's selected-row texture (`ILTextureSelected = Menus 8`).
+            if (menus_il.entries().empty()) {
+                const std::string mn = (base / "Int" / "Menus.ILB").string();
+                menus_il.load(mn, err);
+            }
+            decode_id(menus_il, 8, city_queue_sel_tex);
             if (generict_il.entries().empty()) {
                 const std::string gt = (base / kGenericTIlb).string();
                 generict_il.load(gt, err);
             }
             decode_id(generict_il, 17, city_body_tex);   // TextOld1
             decode_id(generict_il, 18, city_body_tex2);  // TextOld2
+            // The unit detail page (`FUN_0043c43c` cases 7/8): the green page
+            // body is the same MainFloaterSet tile, UPictureFramePnl uses
+            // TextLb17, and every panel is TextOld1.
+            decode_id(generict_il, 2, city_page_tex);    // MainFloaterSet
+            decode_id(generict_il, 19, city_panel_tex3); // TextLb17
             decode_id(generici_il, 47, city_check[0]);   // NGCBox off
             decode_id(generici_il, 49, city_check[1]);   // NGCBox lit
             decode_id(generici_il, 48, city_check[2]);   // NGCBox down
@@ -2688,6 +3249,41 @@ struct Scene {
                     }
                 }
             }
+            // The six production/change pages (tools/city_prod_bg.py). They are
+            // the B1CB..B6CB activity pages of TCityScreen mode 1; the reference
+            // captures are 1:1 but cropped/shifted, so the tool registers them
+            // onto the 01 frame and writes six full 640x480 BMPs.
+            {
+                char exe[MAX_PATH] = {0};
+                GetModuleFileNameA(nullptr, exe, MAX_PATH);
+                const fs::path exe_dir = fs::path(exe).parent_path();
+                for (int i = 0; i < 6; ++i) {
+                    const std::string name =
+                        "cityprod" + std::to_string(i + 1) + ".bmp";
+                    const fs::path cands[] = {
+                        base / "assets" / name,
+                        base / "port" / "assets" / name,
+                        exe_dir / "assets" / name,
+                        exe_dir / ".." / "assets" / name,
+                        exe_dir / ".." / "port" / "assets" / name,
+                    };
+                    for (const fs::path& p : cands) {
+                        if (load_bmp24(p.string(), city_prod_frame[i])) break;
+                    }
+                }
+                // The QueueLB box without the capture's five `<empty>` rows
+                // (tools/city_prod_bg.py's clean_queue patch).
+                const fs::path qcands[] = {
+                    base / "assets" / "cityqueue.bmp",
+                    base / "port" / "assets" / "cityqueue.bmp",
+                    exe_dir / "assets" / "cityqueue.bmp",
+                    exe_dir / ".." / "assets" / "cityqueue.bmp",
+                    exe_dir / ".." / "port" / "assets" / "cityqueue.bmp",
+                };
+                for (const fs::path& p : qcands) {
+                    if (load_bmp24(p.string(), city_queue_clean)) break;
+                }
+            }
             const std::string ei = (base / "Int" / "EventIcn.ILB").string();
             if (eventicn_il.load(ei, err)) decode_id(eventicn_il, 0, event_icon);
             // The floater 9-slice (GenericF 0..7 MainFloaterSetR) and its body
@@ -2706,6 +3302,11 @@ struct Scene {
                 decode_id(genericf_il, kMapFrameBase + i, map_frame[i]);
                 decode_id(genericf_il, kEventPnlFrameBase + i, event_pnl_frame[i]);
                 decode_id(genericf_il, kEventCellFrameBase + i, event_cell_frame[i]);
+                // TCityScreen's unit detail page: UStatPnl/AbilPnl/UCostPnl
+                // name GenericF 105 (FrThinD) and the inset stat/picture/cost
+                // boxes name GenericF 113 (FrGoldD).
+                decode_id(genericf_il, kThinFrameBase + i, city_unit_frame[i]);
+                decode_id(genericf_il, kGoldFrameBase + i, city_unit_gold_frame[i]);
             }
             decode_id(generict_il, 2, float_body);
             decode_id(generict_il, 17, event_body_tex);
@@ -2788,6 +3389,138 @@ struct Scene {
                 // Unit{n}Gge's art: GenericT 4 (the track) and 5 (the fill).
                 decode_id(generict_il, 4, party_gauge[0]);
                 decode_id(generict_il, 5, party_gauge[1]);
+            }
+            // --- the Unit info window (TUnitWindow) ----------------------------
+            // Its own library (Int\UnitWin.ILB 44/45/46 and 21..23), the
+            // DialogFr frame (GenericF 32..39), the FrGoldD/FrThinD panels and
+            // the GenericT bodies 2/7/17/21 - the same art the party and city
+            // screens already load. The tabs/headers/buttons use CeltDeco and
+            // GenericB three-piece skins; RelWin supplies the alignment rings
+            // and the relation faces.
+            {
+                if (generict_il.entries().empty()) {
+                    generict_il.load((base / kGenericTIlb).string(), err);
+                }
+                if (genericb_il.entries().empty()) {
+                    genericb_il.load((base / kGenericBIlb).string(), err);
+                }
+                if (generici_il.entries().empty()) {
+                    generici_il.load((base / "Int" / "GenericI.ILB").string(),
+                                     err);
+                }
+                if (celldeco_il.entries().empty()) {
+                    celldeco_il.load((base / kCeltDecoIlb).string(), err);
+                }
+                if (menus_il.entries().empty()) {
+                    menus_il.load((base / "Int" / "Menus.ILB").string(), err);
+                }
+                if (uniticons_il.entries().empty()) {
+                    uniticons_il.load((base / kUnitIconsIlb).string(), err);
+                }
+                if (tbwin_il.entries().empty()) {
+                    tbwin_il.load((base / "Int" / "TBWin.ILB").string(), err);
+                }
+                if (iconmove_il.entries().empty()) {
+                    iconmove_il.load((base / kIconMoveIlb).string(), err);
+                }
+                if (titleicon_il.entries().empty()) {
+                    titleicon_il.load((base / kWinTIconIlb).string(), err);
+                }
+                const std::string uw = (base / kUnitWinIlb).string();
+                if (unitwin_il.load(uw, err)) {
+                    decode_id(unitwin_il, kUnitWinLeftFrame,
+                              unitwin_left_frame);
+                    decode_id(unitwin_il, kUnitWinRightFrame,
+                              unitwin_right_frame);
+                    decode_id(unitwin_il, kUnitWinShade, unitwin_shade);
+                    decode_id(unitwin_il, kUnitWinTypeCreature,
+                              unitwin_type_icon[0]);
+                    decode_id(unitwin_il, kUnitWinTypeMachine,
+                              unitwin_type_icon[1]);
+                    decode_id(unitwin_il, kUnitWinTypeUnit,
+                              unitwin_type_icon[2]);
+                }
+                for (int i = 0; i < 8; ++i) {
+                    decode_id(genericf_il, kUnitWinFrameBase + i,
+                              unitwin_frame[i]);
+                    decode_id(genericf_il, kGoldFrameBase + i,
+                              unitwin_gold_frame[i]);
+                    decode_id(genericf_il, kThinFrameBase + i,
+                              unitwin_thin_frame[i]);
+                }
+                decode_id(generict_il, 2, unitwin_body);
+                decode_id(generict_il, 7, unitwin_tex7);
+                decode_id(generict_il, 17, unitwin_tex17);
+                decode_id(generict_il, 18, unitwin_tex18);
+                decode_id(generict_il, 21, unitwin_tex21);
+                decode_id(titleicon_il, 3, unitwin_title_icon);
+                for (int i = 0; i < 3; ++i) {
+                    decode_id(generici_il, kPartyCloseArt[i], unitwin_close[i]);
+                }
+                for (int p = 0; p < 3; ++p) {
+                    decode_id(celldeco_il, kUnitTabDown + p,
+                              unitwin_tab[0][p]);
+                    decode_id(celldeco_il, kUnitTabUp + p, unitwin_tab[1][p]);
+                }
+                const std::uint32_t hdr[3] = {kUnitHeaderUp, kUnitHeaderLit,
+                                              kUnitHeaderDown};
+                for (int st = 0; st < 3; ++st) {
+                    for (int p = 0; p < 3; ++p) {
+                        decode_id(genericb_il, hdr[st] + p,
+                                  unitwin_header[st][p]);
+                    }
+                }
+                const std::uint32_t btn[3] = {kUnitButtonUp, kUnitButtonLit,
+                                              kUnitButtonDown};
+                for (int st = 0; st < 3; ++st) {
+                    for (int p = 0; p < 3; ++p) {
+                        decode_id(genericb_il, btn[st] + p,
+                                  unitwin_button[st][p]);
+                    }
+                }
+                decode_id(menus_il, 8, unitwin_list_sel);
+                decode_id(celldeco_il, 3, unitwin_celt_knot);
+                decode_id(celldeco_il, 55, unitwin_celt_line);
+                decode_id(celldeco_il, 1, unitwin_line);
+                for (int i = 0; i < 5; ++i) {
+                    decode_id(uniticons_il, static_cast<std::uint32_t>(i),
+                              unitwin_stat_icon[i]);
+                }
+                decode_id(iconmove_il, 0, unitwin_move_icon);
+                decode_id(tbwin_il, 51, unitwin_upkeep_gold);
+                decode_id(tbwin_il, 52, unitwin_upkeep_mana);
+                // BCeltL is a frHorizLine: CeltDeco 55 (left cap) + tiled 56
+                // (100x27 braid) + 57 (right cap), exactly DrawILLh's three
+                // images (ILIndexLine 55, +1, +2).
+                decode_id(celldeco_il, 56, unitwin_celt_mid);
+                decode_id(celldeco_il, 57, unitwin_celt_right);
+                // T2SBar: GenericS 94..101 (ILIndexDecUp..ILIndexTab).
+                for (std::uint32_t i = 0; i < 8; ++i) {
+                    if (generics_il.entries().empty()) {
+                        generics_il.load((base / "Int" / "GenericS.ILB").string(),
+                                         err);
+                    }
+                    decode_id(generics_il, 94 + i, unitwin_sb[i]);
+                }
+                // PNext/PPrev: CampaignTrans 23/25 (up) and 24/26 (down).
+                if (ctrans_il.load((base / "Int" / "Scenes" / "CTrans.ILB").string(),
+                                   err)) {
+                    decode_id(ctrans_il, 23, unitwin_pprev[0]);
+                    decode_id(ctrans_il, 24, unitwin_pprev[1]);
+                    decode_id(ctrans_il, 25, unitwin_pnext[0]);
+                    decode_id(ctrans_il, 26, unitwin_pnext[1]);
+                }
+                if (relfr_il.entries().empty()) {
+                    relfr_il.load((base / kRelWinIlb).string(), err);
+                }
+                for (int i = 0; i < 5; ++i) {
+                    decode_id(relfr_il, kUnitWinAlignBase + i,
+                              unitwin_align_icon[i]);
+                }
+                for (int i = 0; i < 8; ++i) {
+                    decode_id(relfr_il, kUnitWinRelationBase + i,
+                              unitwin_relation[i]);
+                }
             }
             // The Events banner's race crests - ShieldsM ids 13..25 (RShield's
             // `CurrentImage = race + 13`) - and the FACERES.PFS face list the
@@ -3056,6 +3789,8 @@ struct Scene {
         mv_merge_x = mv_merge_y = -1;
         mv_merge_stay = 0;
         mv_merge_moving = aow::MapHs();
+        mv_arrive_pending = false;
+        mv_arrive_x = mv_arrive_y = -1;
         game_status.clear();
         game_draw.clear();   // the next refresh recopies the whole canvas
         mv_dirty = false;
@@ -3065,6 +3800,11 @@ struct Scene {
         party_sel = 0;
         party_focus = -1;
         party_hover = party_pressed = -1;
+        // The Unit info window follows the selection.
+        game_show_unit = false;
+        game_unit_slot = -1;
+        unitwin_hover = unitwin_pressed = -1;
+        unitwin_disband_armed = false;
         mv_refresh_draw();
     }
 
@@ -3079,6 +3819,25 @@ struct Scene {
             if (p.index == mv_human) return &p;
         }
         return nullptr;
+    }
+
+    // The four bar read-outs: WGoldPnl's total/income and WManaPnl's total/
+    // income. They are the seated player's live `Player::gold`, `Player::income`,
+    // `Player::magic.mana` and `Player::magic.mana_income` (the values the turn
+    // loop and compute_economy maintain). The `game_*` members remain the
+    // pre-load reference seeds used when no roster is seated yet.
+    void game_live_stats(int& gold, int& gold_income, int& mana,
+                         int& mana_income) const {
+        gold = game_gold;
+        gold_income = game_gold_income;
+        mana = game_mana;
+        mana_income = game_mana_income;
+        const aow::Player* p = game_seat();
+        if (p == nullptr) return;
+        gold = p->gold;
+        gold_income = p->income;
+        mana = p->magic.mana;
+        mana_income = p->magic.mana_income;
     }
 
     // A FACERES.PFS `image_lib` is an engine library name ("FACES\L_FACES.ILB");
@@ -3177,10 +3936,23 @@ struct Scene {
         mv_ready = false;
         if (game_state_map.levels.empty()) return;
         std::string err;
-        aow::load_game_state(game_state_map, mv_gs, err);
+        // The catalog is needed for TUnit upkeep (the Unitres level is not in
+        // the map); load it before the economy pass. game_res is the map's
+        // Release.hss resource list, which gives a city its TCityResource size
+        // and the crop-owner surrounding-hex tables.
         aow::load_unit_catalog(root_dir, mv_cat, err);
+        // Resolve the tile terrain first: a farm's `CropsEnabled`/income pass
+        // reads the hex terrain (terrain 5 disables its crops), exactly like
+        // TILTerrainMO.Activate@5570358c.
         aow::fill_tile_terrain(game_state_map,
                                static_cast<std::size_t>(game_level), game_res);
+        aow::load_game_state(game_state_map, game_res, &mv_cat, mv_gs, err);
+        // The first `TPlayerControl.NewDay` (day becomes 1) sends 0x20020001 to
+        // the map; `Gems.TGems.MsgProc` answers it with GenerateGemsAmount, so
+        // every gold pile gets its value from its stored size class now, using
+        // the map's own RNG seed (docs/28_ECONOMY.md). Run it after the game
+        // state exists (the amount is map data; the treasury is not touched).
+        aow::generate_gems_amounts(game_state_map);
         // The engine links Cursors.ilb at start-up (TAoWWHSSet.Create); doing it
         // here too means the first hover of the session is already warm.
         std::string oerr;
@@ -4172,6 +4944,70 @@ struct Scene {
         blit_btn3(cv, scen_scenebut, x, y, w, 18);
         text_at(cv, fs, x + 6, y + 3, s, r, g, b, false, false);
     }
+    // --- the Settings panel's controls ---------------------------------------
+    // PlayModeCB's two items. hSetPlayMode (AoWEPACK 0x557e2028) stores the
+    // value 1 for classic turns and 2 for simultaneous ones, and the refresh
+    // (AoW.exe 0x00411460) picks the row with `Items.IndexOfObject(mode)`, so
+    // the list is Classic (TObject(1)) then Simultaneous (TObject(2)). The
+    // captions are the AoWE ClassicRStr / SimultaneousRStr resourcestrings.
+    static int set_mode_value(int row) { return row == 0 ? 1 : 2; }
+    static const char* set_mode_name(int mode) {
+        return mode == 1 ? "Classic" : "Simultaneous";
+    }
+    // TurnTimeVal: FUN_00412778 - Position 0 reads the lowercase NoTimerRStr
+    // ("no timer"), otherwise Format(XMinutesRStr = "%s minutes", Position).
+    static std::string set_turn_time_text(int pos) {
+        if (pos <= 0) return "no timer";
+        return std::to_string(pos) + " minutes";
+    }
+    // TurnsVal: FUN_004128b4 - Position 0 reads the lowercase NoLimitRStr
+    // ("no limit"), otherwise Format(lowercase(XTurnsRStr = "%s turns"),
+    // Position * 10) - TurnsSlChange hands hSetTurnLimitation `Position * 10`.
+    static std::string set_turns_text(int pos) {
+        if (pos <= 0) return "no limit";
+        return std::to_string(pos * 10) + " turns";
+    }
+    // PlayModeCB's dropped-down list (TAOWComboBox): NumberVisible 2 rows of
+    // ItemHeight 13 directly under the 18 px field, the body the DFM's
+    // ILTextureNormal GenericT 4 (blank1) and the hovered/selected line its
+    // ILTextureSelected GenericT 16 (TextLBSel). Geometry mirrors scen_hit.
+    AowBox set_mode_list_rect() const {
+        return AowBox{kScenSetX + kSetModeX, kScenSetY + kSetModeY + kScenComboH,
+                      kSetModeW, kSetModeRows * kSetModeItemH};
+    }
+    void draw_mode_list(Canvas& cv) const {
+        const AowBox lr = set_mode_list_rect();
+        if (scen_blank_tex.ok) {
+            fill_tex(cv, scen_blank_tex, lr.x, lr.y, lr.w, lr.h);
+        } else {
+            cv.fill(lr.x, lr.y, lr.w, lr.h, 12, 12, 20, 255);
+        }
+        // The lit row: the hovered one, else the combo's own value (a
+        // TAOWComboBox paints its selected line highlighted).
+        const int hi = scen_mode_dd_hover >= 0
+                           ? scen_mode_dd_hover
+                           : (scen_play_mode == 1 ? 0 : 1);
+        for (int i = 0; i < kSetModeRows; ++i) {
+            const int ry = lr.y + i * kSetModeItemH;
+            const bool hot = hi == i;
+            if (hot && scen_lbsel_tex.ok) {
+                const int tw = static_cast<int>(scen_lbsel_tex.w);
+                const int th = static_cast<int>(scen_lbsel_tex.h);
+                for (int oy = ry; oy < ry + kSetModeItemH; oy += th) {
+                    for (int ox = lr.x; ox < lr.x + lr.w; ox += tw) {
+                        cv.blit(scen_lbsel_tex, ox, oy, kAlphaFull, lr.x, ry,
+                                lr.x + lr.w, ry + kSetModeItemH);
+                    }
+                }
+            }
+            // TextColor 15134446 (238,238,230); TextSelColor clWhite.
+            const std::uint8_t tr = hot ? 255 : 238;
+            const std::uint8_t tg = hot ? 255 : 238;
+            const std::uint8_t tb = hot ? 255 : 230;
+            text_at(cv, glyphs8, lr.x + 6, ry + (kSetModeItemH - 12) / 2,
+                    set_mode_name(set_mode_value(i)), tr, tg, tb, false, false);
+        }
+    }
     // The race PlayerCB drop-down list: 7 rows at ItemHeight 15 directly under
     // the 98x18 field, its body the GenericT 4 (blank1) texture and the lit row
     // the GenericT 16 (TextLBSel) one - the ILTextureNormal / ILTextureSelected
@@ -4246,8 +5082,10 @@ struct Scene {
     // TAOWCheckBox: the 12x12 NGCBox.BMP face (GenericI 47 empty / 48 checked) -
     // the same square, gold-bevelled box the shipped capture shows. It is a
     // class-0x11 sprite (masked), so blit it whole.
-    void draw_check(Canvas& cv, int x, int y, bool on) const {
-        const Sprite& s = scen_ngcbox[on ? 1 : 0];
+    // `lit` paints the ILIndexLit face (49) - TAOWCheckBox's hover state.
+    void draw_check(Canvas& cv, int x, int y, bool on, bool lit) const {
+        const int which = lit ? 2 : (on ? 1 : 0);
+        const Sprite& s = scen_ngcbox[which];
         if (s.ok) {
             cv.blit(s, x, y, kAlphaFull, 0, 0, disp_w, disp_h);
         } else if (scen_chk[on ? 1 : 0].ok) {
@@ -4255,16 +5093,30 @@ struct Scene {
             cv.blit(f, x, y, kAlphaFull, 0, 0, disp_w, disp_h);
         }
     }
+    // The thumb width (its three pieces) and the travel the engine allows it:
+    // TAOWHScrollBar.SetSize makes +0x130 the track's middle width and Draw
+    // slides the thumb over `middle - thumbMiddle`, i.e. the whole widget minus
+    // the thumb - so at Position 0 the thumb sits on the left edge and at Max
+    // its right edge is on the widget's right edge.
+    int slider_thumb_w() const {
+        return static_cast<int>(scen_slider[3].w) +
+               static_cast<int>(scen_slider[4].w) +
+               static_cast<int>(scen_slider[5].w);
+    }
+    int slider_thumb_x(int x, int w, int pos, int max) const {
+        const int span = w - slider_thumb_w();
+        if (span <= 0 || max <= 0) return x;
+        if (pos < 0) pos = 0;
+        if (pos > max) pos = max;
+        return x + (span * pos + max / 2) / max;
+    }
     // A TAOWHScrollBar (ILIndexBack = GenericS 49 ScenSlid 3-piece track,
-    // ILIndexTab = GenericS 52 3-piece thumb).
-    void draw_slider(Canvas& cv, int x, int y, int w, int pos) const {
-        blit_btn3(cv, scen_slider, x, y, w, 11);      // track (49/50/51)
+    // ILIndexTab = GenericS 52 3-piece thumb), thumb placed from `pos / max`.
+    void draw_slider(Canvas& cv, int x, int y, int w, int pos, int max) const {
+        blit_btn3(cv, scen_slider, x, y, w, kSetSlH);      // track (49/50/51)
         const int tw = static_cast<int>(scen_slider[4].w);   // thumb middle
         const int lw = static_cast<int>(scen_slider[3].w);
-        const int rw = static_cast<int>(scen_slider[5].w);
-        const int span = w - (lw + tw + rw);
-        int tx = x + (span > 0 ? span * pos / 100 : 0);
-        if (tx < x) tx = x;
+        const int tx = slider_thumb_x(x, w, pos, max);
         cv.blit(scen_slider[3], tx, y, kAlphaFull, 0, 0, disp_w, disp_h);
         cv.blit(scen_slider[4], tx + lw, y, kAlphaFull, 0, 0, disp_w, disp_h);
         cv.blit(scen_slider[5], tx + lw + tw, y, kAlphaFull, 0, 0, disp_w,
@@ -4572,36 +5424,40 @@ struct Scene {
         const int sx = kScenSetX, sy = kScenSetY;
         text_at(cv, glyphs8, sx + 10, sy + 10, "Turns ", 192, 192, 192, false,
                 false);
-        draw_setcombo(cv, sx + 10, sy + 25, 114, "Simultaneous", glyphs8, 200,
-                      200, 195);
+        // PlayModeCB shows the row its TSetupSettings+0x24 value maps to
+        // (hSetPlayMode 1 = classic / 2 = simultaneous). Its caption is the
+        // combo's TextColor 15134446 rendered over the grey ScenEBut field.
+        draw_setcombo(cv, sx + kSetModeX, sy + kSetModeY, kSetModeW,
+                      set_mode_name(scen_play_mode), glyphs8, 200, 200, 195);
         text_at(cv, glyphs8, sx + 10, sy + 55, "Duration", 192, 192, 192, false,
                 false);
         draw_group(cv, sx + 10, sy + 70, 114, 65);
         text_at(cv, glyphs8, sx + 15, sy + 75, "Turn Time", 128, 128, 128, false,
                 false);
-        draw_slider(cv, sx + 15, sy + 87, 50, 0);
-        text_at(cv, glyphs8, sx + 70, sy + 87, "no timer", 128, 128, 128, false,
-                false);
+        draw_slider(cv, sx + kSetSlX, sy + kSetTurnTimeSlY, kSetSlW,
+                    scen_turn_time, kSetTurnTimeMax);
+        text_at(cv, glyphs8, sx + kSetValX, sy + kSetTurnTimeValY,
+                set_turn_time_text(scen_turn_time), 128, 128, 128, false, false);
         text_at(cv, glyphs8, sx + 15, sy + 105, "Turns", 128, 128, 128, false,
                 false);
-        draw_slider(cv, sx + 15, sy + 116, 50, 0);
-        text_at(cv, glyphs8, sx + 70, sy + 117, "no limit", 128, 128, 128, false,
-                false);
+        draw_slider(cv, sx + kSetSlX, sy + kSetTurnsSlY, kSetSlW, scen_turns,
+                    kSetTurnsMax);
+        text_at(cv, glyphs8, sx + kSetValX, sy + kSetTurnsValY,
+                set_turns_text(scen_turns), 128, 128, 128, false, false);
         text_at(cv, glyphs8, sx + 10, sy + 142, "Miscellaneous", 192, 192, 192,
                 false, false);
         draw_group(cv, sx + 10, sy + 155, 114, 70);
-        draw_check(cv, sx + 15, sy + 162, scen_check[0]);
-        text_at(cv, glyphs8, sx + 30, sy + 164, "Leaders on map", 128, 128, 128,
-                false, false);
-        draw_check(cv, sx + 15, sy + 177, scen_check[1]);
-        text_at(cv, glyphs8, sx + 30, sy + 179, "Customize leaders", 128, 128,
-                128, false, false);
-        draw_check(cv, sx + 15, sy + 192, scen_check[2]);
-        text_at(cv, glyphs8, sx + 30, sy + 194, "Allied victory", 128, 128, 128,
-                false, false);
-        draw_check(cv, sx + 15, sy + 207, scen_check[3]);
-        text_at(cv, glyphs8, sx + 30, sy + 209, "Exploration", 128, 128, 128,
-                false, false);
+        // The four checkboxes: NGCBox 47 (up) / 48 (down, i.e. checked) / 49
+        // (lit) - TAOWCheckBox draws Lit while the pointer is over the box.
+        static const char* const kSetChkText[4] = {
+            "Leaders on map", "Customize leaders", "Allied victory",
+            "Exploration"};
+        for (int i = 0; i < 4; ++i) {
+            const bool lit = scen_chk_hover == i || scen_chk_press == i;
+            draw_check(cv, sx + kSetChkX, sy + kSetChkY[i], scen_check[i], lit);
+            text_at(cv, glyphs8, sx + kSetChkLblX, sy + kSetChkLblY[i],
+                    kSetChkText[i], 128, 128, 128, false, false);
+        }
 
         // The three bottom buttons (PickScenarioBtn / ExitGame / StartBtn) are
         // TAOWButton with ILButton = IntGfxMod.TitleScreen, ILIndexUp = 32,
@@ -4827,6 +5683,9 @@ struct Scene {
         // The open race PlayerCB drop-down, on the very top (it overlaps the
         // rows below it, exactly like an opened TAOWComboBox list).
         if (scen_dd_gi >= 0) draw_pc_drop(cv, scen_dd_gi);
+        // PlayModeCB's drop-down is an opened TAOWComboBox: it floats over the
+        // controls below the field (PriorityOpened), so it is painted last.
+        if (scen_mode_dd && !scen_maps_open) draw_mode_list(cv);
 
         if (cursor_on && cursor.ok) cv.blit_keyed(cursor, mouse_x, mouse_y);
         return cv;
@@ -4969,12 +5828,14 @@ struct Scene {
     // Age10s / Age10). `center` centres on x, `keyed` draws the glyph's own
     // pre-shaded ink instead of tinting its coverage with (r,g,b) - the same
     // choice TImageLibraryFont makes between its stored layers and SetColor.
-    // TFontModule.CharacterDistance per face (AoW.exe TFontModule @0x0040383c):
-    // Age10 / Age10s / Age8 advance one extra pixel per glyph, Age8s and the
-    // AoW15WhiteGrey shell face do not. TImageLibraryFont.GetTextWidth / SetText
-    // add this distance to the image's +0x20 width for every character.
+    // TFontModule's CharacterDistance (re/dfm_all/TFONTMODULE.txt): Age10 and
+    // Age10s carry 1, Age8 / Age8s / AoW15WhiteGrey carry 0. TImageLibraryFont.
+    // GetTextWidth/SetText add this distance to the image's +0x20 width for
+    // every character. (Age8 must not be in the +1 group: its glyph slot is
+    // already one pixel wider than the ink, and the Unit window's captions -
+    // measured against bin/InfoMenuRef*.png - need the slot width unchanged.)
     int font_tracking(const std::vector<Glyph>& fs) const {
-        if (&fs == &glyphs10b || &fs == &glyphs10 || &fs == &glyphs8b) return 1;
+        if (&fs == &glyphs10b || &fs == &glyphs10) return 1;
         return kFontTracking;
     }
     int glyph_advance(const std::vector<Glyph>& fs, unsigned char c) const {
@@ -4994,7 +5855,13 @@ struct Scene {
                  const std::string& s, std::uint8_t r, std::uint8_t g,
                  std::uint8_t b, bool center, bool keyed,
                  int tracking = -1, bool key_black = false) const {
-        int pen = center ? x - text_w(fs, s) / 2 : x;
+        // Honour an explicit CharacterDistance override when centring too: the
+        // Unit window's Age8 captions pass 0 (see draw_game_unit_tabs), and a
+        // centre that used the face's default advance would shift them left by
+        // half the per-glyph difference.
+        const int total = tracking < 0 ? text_w(fs, s)
+                                       : text_w_track(fs, s, tracking);
+        int pen = center ? x - total / 2 : x;
         for (unsigned char c : s) {
             const Glyph& gl = fs[c];
             if (gl.ok) {
@@ -5011,20 +5878,28 @@ struct Scene {
     }
 
     // One gold / mana read-out: the stockpile total (FontModule.TBarNumber,
-    // clBlack) right-aligned rox 23 on the panel, the "+" sign (Age8) at rox 16
-    // and the per-turn income (Age8) centred in the 16 px box inset rox 1. Both
-    // the sign and the income use the DFM's green TextColor 0x77FF77.
+    // clBlack) right-aligned rox 23 on the panel, the sign (Age8) at rox 16 and
+    // the **net per-turn value** (income - upkeep) centred in the 16 px box
+    // inset rox 1. A non-negative value is the DFM's green TextColor 0x77FF77
+    // with a "+"; a negative net (only costs, no gains) is red with a "-".
     void draw_readout(Canvas& cv, const AowBox& p, const std::string& total,
-                      const std::string& inc) const {
+                      int net) const {
         const int tre = p.x + p.w - kTbResTotRox;
         text_at(cv, glyphsTb, tre - text_w(glyphsTb, total), p.y + kTbResTotTop,
                 total, 0, 0, 0, false, false);
+        const bool negative = net < 0;
+        const char* sign = negative ? "-" : "+";
+        const int r = negative ? kTbCostR : kTbIncomeR;
+        const int g = negative ? kTbCostG : kTbIncomeG;
+        const int b = negative ? kTbCostB : kTbIncomeB;
+        char value[32];
+        std::snprintf(value, sizeof(value), "%d", negative ? -net : net);
         const int sre = p.x + p.w - kTbResSignRox;
-        text_at(cv, glyphs8b, sre - text_w(glyphs8b, "+"), p.y + kTbResIncTop,
-                "+", kTbIncomeR, kTbIncomeG, kTbIncomeB, false, false);
+        text_at(cv, glyphs8b, sre - text_w(glyphs8b, sign), p.y + kTbResIncTop,
+                sign, r, g, b, false, false);
         const int ice = p.x + p.w - kTbResIncRox - kTbResIncW / 2;
-        text_at(cv, glyphs8b, ice, p.y + kTbResIncTop, inc, kTbIncomeR,
-                kTbIncomeG, kTbIncomeB, true, false);
+        text_at(cv, glyphs8b, ice, p.y + kTbResIncTop, value, r, g, b, true,
+                false);
     }
 
     // A 9-slice frame. `fr` is TL,T,TR,L,R,BL,B,BR; `cx`/`cy` are the corner
@@ -5204,6 +6079,7 @@ struct Scene {
             }
             scen_dd_gi = -1;      // a fresh map closes any open drop-down
             scen_dd_hover = -1;
+            scen_mode_dd = false; // ...and PlayModeCB's list (s.refresh)
             if (have_roster) {
                 std::printf("scenario: %s roster", name.c_str());
                 for (const aow::Player& p : gs.players) {
@@ -5240,6 +6116,99 @@ struct Scene {
             }
         }
         scen_ptype[race] = type;
+    }
+
+    // hSetPlayMode (AoWEPACK 0x557e2028): store the mode for TSetupSettings
+    // +0x24. Switching to simultaneous turns then walks the player list and
+    // resets every slot after the first one that is not AI-controlled - in this
+    // port's per-race model that leaves exactly the first Human race Human and
+    // puts the others back to the map's default type (a default-human slot
+    // becomes CPU1, the same rule scen_choose_type applies).
+    void scen_set_play_mode(int mode) {
+        if (mode != 1 && mode != 2) mode = 2;
+        if (mode == scen_play_mode) return;
+        scen_play_mode = mode;
+        if (mode != 2) return;
+        bool seen_human = false;
+        for (int gi = 0; gi < kScenRaceCount; ++gi) {
+            const int r = kScenGridRace[gi];
+            if (!scen_available[r]) continue;
+            if (scen_ptype[r] != static_cast<int>(aow::PlayerType::Human)) {
+                continue;
+            }
+            if (!seen_human) {
+                seen_human = true;
+                continue;
+            }
+            scen_ptype[r] =
+                (scen_ptype_default[r] ==
+                 static_cast<int>(aow::PlayerType::Human))
+                    ? static_cast<int>(aow::PlayerType::AI1)
+                    : scen_ptype_default[r];
+        }
+    }
+
+    // --- the two Duration sliders -------------------------------------------
+    // TurnTimeSlChange (AoW.exe 0x0041285c) calls hSetTurnTimeLimitation with
+    // TurnTimeSl.Position (0 = no timer, else minutes); TurnsSlChange
+    // (0x004129a8) calls hSetTurnLimitation with Position * 10 (0 = no limit).
+    void scen_slider_set(int which, int pos) {
+        if (which == 0) {
+            if (pos < 0) pos = 0;
+            if (pos > kSetTurnTimeMax) pos = kSetTurnTimeMax;
+            if (pos == scen_turn_time) return;
+            scen_turn_time = pos;
+            std::printf("scenario: turn time -> %s\n",
+                        set_turn_time_text(pos).c_str());
+        } else {
+            if (pos < 0) pos = 0;
+            if (pos > kSetTurnsMax) pos = kSetTurnsMax;
+            if (pos == scen_turns) return;
+            scen_turns = pos;
+            std::printf("scenario: turn limit -> %s\n",
+                        set_turns_text(pos).c_str());
+        }
+        std::fflush(stdout);
+    }
+    int scen_slider_value(int which) const {
+        return which == 0 ? scen_turn_time : scen_turns;
+    }
+    int scen_slider_max(int which) const {
+        return which == 0 ? kSetTurnTimeMax : kSetTurnsMax;
+    }
+    // TAOWHScrollBar.CheckMouseDown (aowInt.dpl 0x5981f4d0): a press left of
+    // the thumb steps Position down by SmallChange, right of it up by
+    // SmallChange (the DFM sets both Small/LargeChange to 1), and a press on
+    // the thumb arms the drag (+0x154 = the offset inside it).
+    void scen_slider_down(int which, int mx) {
+        const int pos = scen_slider_value(which);
+        const int x0 = kScenSetX + kSetSlX;
+        const int tx = slider_thumb_x(x0, kSetSlW, pos, scen_slider_max(which));
+        if (mx > tx + slider_thumb_w()) {
+            scen_slider_set(which, pos + 1);
+        } else if (mx < tx) {
+            scen_slider_set(which, pos - 1);
+        } else {
+            scen_drag_slider = which;
+            scen_drag_grab = mx - tx;
+        }
+    }
+    // CheckMouseMove (0x5981fa5c): Position = ((x - grab) * Range) /
+    // trackMiddle + Min, clamped to Min..Max+1-NumberVisible. The port maps the
+    // pointer over the same travel the thumb is drawn on, so the thumb follows
+    // the pointer exactly.
+    void scen_slider_move(int mx) {
+        if (scen_drag_slider < 0) return;
+        const int which = scen_drag_slider;
+        const int max = scen_slider_max(which);
+        const int span = kSetSlW - slider_thumb_w();
+        if (span <= 0) return;
+        // `span * pos / max` is how slider_thumb_x() places the thumb, so this
+        // is its exact inverse: the thumb stays under the pointer.
+        int pos = ((mx - scen_drag_grab - (kScenSetX + kSetSlX)) * max +
+                   span / 2) /
+                  span;
+        scen_slider_set(which, pos);
     }
 
     // Scenario hit test: 0..2 = the three buttons; negative = a map-list row
@@ -5310,6 +6279,56 @@ struct Scene {
                     y0 + 25 <= y && y < y0 + 25 + kScenComboH) {
                     return -4000 - gi;
                 }
+            }
+            // --- the Settings panel's live controls --------------------------
+            // A dropped-down PlayModeCB list swallows the click first, exactly
+            // like the race combos: a row selects the mode, anything else only
+            // closes the list.
+            if (scen_mode_dd) {
+                const AowBox lr = set_mode_list_rect();
+                if (lr.x <= x && x < lr.x + lr.w && lr.y <= y &&
+                    y < lr.y + lr.h) {
+                    return -5100 - (y - lr.y) / kSetModeItemH;
+                }
+                return -5200;
+            }
+            // PlayModeCB's closed field (10,25) 114x18.
+            if (kScenSetX + kSetModeX <= x &&
+                x < kScenSetX + kSetModeX + kSetModeW &&
+                kScenSetY + kSetModeY <= y &&
+                y < kScenSetY + kSetModeY + kScenComboH) {
+                return -5000;
+            }
+            // The two TAOWHScrollBars: -5010 TurnTimeSl, -5011 TurnsSl.
+            const int slx = kScenSetX + kSetSlX;
+            const int slw = kSetSlW, slh = kSetSlH;
+            if (slx <= x && x < slx + slw) {
+                const int tty = kScenSetY + kSetTurnTimeSlY;
+                if (tty <= y && y < tty + slh) return -5010;
+                const int tsy = kScenSetY + kSetTurnsSlY;
+                if (tsy <= y && y < tsy + slh) return -5011;
+            }
+            // The four TAOWCheckBoxes (12x12 - their labels are separate
+            // TAOWLabels and do not toggle the box): -5020..-5023.
+            for (int i = 0; i < 4; ++i) {
+                const int cx = kScenSetX + kSetChkX;
+                const int cy = kScenSetY + kSetChkY[i];
+                if (cx <= x && x < cx + kSetChkSize && cy <= y &&
+                    y < cy + kSetChkSize) {
+                    return -5020 - i;
+                }
+            }
+        }
+        return -1;
+    }
+    // The checkbox index under (x, y), or -1.
+    int scen_chk_at(int x, int y) const {
+        for (int i = 0; i < 4; ++i) {
+            const int cx = kScenSetX + kSetChkX;
+            const int cy = kScenSetY + kSetChkY[i];
+            if (cx <= x && x < cx + kSetChkSize && cy <= y &&
+                y < cy + kSetChkSize) {
+                return i;
             }
         }
         return -1;
@@ -5477,7 +6496,14 @@ struct Scene {
                     // The path is done. `TMoveArmyTE.FinishMove` runs now: for
                     // a merge the incoming units join the destination army only
                     // at this moment, and the destination becomes the selection.
-                    if (mv_merge_pending) mv_finish_merge();
+                    // A plain move's `PlaceOnMap` (the 0x1102 ArmyPlaced event,
+                    // which claims an undefended building) runs now too, so the
+                    // structure kept its old owner for the whole transition.
+                    if (mv_merge_pending) {
+                        mv_finish_merge();
+                    } else {
+                        mv_finish_arrival();
+                    }
                     mv_anim = false;
                     mv_hide_level = mv_hide_x = mv_hide_y = -1;
                     mv_render_level();
@@ -5502,9 +6528,16 @@ struct Scene {
         game_resolve_hover();
         game_update_move_cursor();
         game_update_cursor();
-        // The party floater's own hover: its title-bar and foot buttons light
+        // The Party floater's own hover: its title-bar and foot buttons light
         // up while the pointer is over them (TAOWBaseButton's ILIndexLit).
-        party_hover = game_show_party ? party_hit_test(mouse_x, mouse_y) : -1;
+        // TUnitWindow is Masked/Priority 300 and modal: while it is up it owns
+        // the pointer and the party below takes no hover.
+        unitwin_hover =
+            game_show_unit ? unit_window_hit_test(mouse_x, mouse_y) : -1;
+        party_hover = (game_show_party && !game_show_unit)
+                          ? party_hit_test(mouse_x, mouse_y)
+                          : -1;
+        game_modal_open = game_show_unit || game_show_city;
         // The Structure floater's title-bar / foot buttons light up on hover
         // (TAOWBaseButton's ILIndexLit), the same one-frame update.
         game_struct_hover =
@@ -5625,9 +6658,24 @@ struct Scene {
     // answers `1` - what the engine shows for an army that cannot join.
     int game_move_action(int x, int y) {
         const aow::MapHs* a = army_on_hex(x, y);
-        if (a == nullptr) return 0;
-        if (mv_human == 0xff) return 1;
-        return a->owner == mv_human ? 3 : 1;
+        if (a != nullptr) {
+            if (mv_human == 0xff) return 1;
+            return a->owner == mv_human ? 3 : 1;
+        }
+        // `TAoWMapField.GetMoveAction@55771ddc` sends message 0x1101 to every
+        // sprite on the field, so a structure answers too. The port used to
+        // check armies only, which left the crossed-swords pointer off an
+        // enemy/independent city. `TPlayerStructure.GetMoveAction@55761620` /
+        // `TCity.GetMoveAction@557ad0d4` decide (a neutral non-city answers 0:
+        // walking in claims it).
+        if (const aow::MapHs* s = structure_on_hex(x, y)) {
+            if (mv_human != 0xff &&
+                aow::is_player_structure_class(s->class_id) &&
+                aow::structure_move_action(*s, mv_human) == 1) {
+                return 1;
+            }
+        }
+        return 0;
     }
 
     // AoWE.TSelectedArmy.UpdateMoveCursor@0x55793440: the *selected army's*
@@ -5761,6 +6809,12 @@ struct Scene {
                         static_cast<int>(added),
                         static_cast<int>(target->units.size()));
             std::fflush(stdout);
+            // The arriving party is placed on the hex too (TArmyHS.PlaceOnMap
+            // runs for the merged selection), so an unowned/contested structure
+            // under the merged army updates its owner and a gold pile there is
+            // collected (`Gems.TGems.MapFieldMsgProc` answers the same 0x1102).
+            game_gems_army_update(dest_x, dest_y);
+            game_structure_army_update(dest_x, dest_y, true);
         } else if (game_level >= 0 &&
                    static_cast<std::size_t>(game_level) <
                        game_state_map.levels.size()) {
@@ -5788,6 +6842,129 @@ struct Scene {
         mv_merge_x = mv_merge_y = -1;
         mv_merge_stay = 0;
         mv_select(dest_x, dest_y);
+    }
+
+    // `TMoveArmyTE.FinishMove@0x55747fbc` on a plain (non-merge) walk: the
+    // sprite has reached the destination, so the army is *placed* now and the
+    // field's 0x1102 message (`TStructure.MapFieldMsgProc@5575f730` ->
+    // `TPlayerStructure.ArmyPlaced` -> `UpdatePlayer@55760980`) runs - an
+    // undefended, unowned (or independent) structure under the army changes
+    // hands at this moment, not when the move was ordered. Runs from
+    // `game_update`'s walk tick when the animation finishes, or straight away
+    // when the path is degenerate (no walk at all).
+    void mv_finish_arrival() {
+        if (!mv_arrive_pending) return;
+        mv_arrive_pending = false;
+        const int x = mv_arrive_x, y = mv_arrive_y;
+        mv_arrive_x = mv_arrive_y = -1;
+        // The field's 0x1102 reaches every object on the hex: a gold pile is
+        // destroyed and paid out (`Gems.TGems.ArmyEntered`), then the ownable
+        // structures re-evaluate their owner (`TPlayerStructure.UpdatePlayer`).
+        game_gems_army_update(x, y);
+        game_structure_army_update(x, y, true);
+    }
+
+    // `Gems.TGems.MapFieldMsgProc@557c52a0` answering the field's 0x1102
+    // (ArmyPlaced) message: every gold pile on the hex the placed army stands on
+    // is collected (`Gems.TGems.ArmyEntered@557c50f8`). The original adds the
+    // pile's amount to the army owner's treasury (`TPlayer.SetGems`), writes a
+    // `TLocationTextEventLog` with `AoWE.GoldFoundRStr` ("%s gold pieces found")
+    // at the hex, plays `SFX\EVENTS\GOLD.WAV` when the seated player is that
+    // owner or can see the hex (`TAoWHSMap.Watching`, radius 0 here), and then
+    // destroys the object. Returns true when a pile was collected.
+    bool game_gems_army_update(int x, int y) {
+        if (!mv_ready || game_level < 0 || game_state_map.levels.empty() ||
+            mv_human == 0xff) {
+            return false;
+        }
+        const std::size_t level = static_cast<std::size_t>(game_level);
+        const aow::GoldPickup pick = aow::gems_army_entered(
+            game_state_map, mv_gs, level, x, y, static_cast<int>(mv_human));
+        if (!pick.picked()) return false;
+        // `TAoWHSMap.Watching@55775b88` at radius 0: the hex is watched when the
+        // army belongs to the seated player, or the seated player's explored bit
+        // is set on it (`TAoWMapField.GetExplored@55771bf4`).
+        bool watching = pick.player == static_cast<int>(mv_human);
+        if (!watching) {
+            const aow::MapLevel& lv = game_state_map.levels[level];
+            if (x >= 0 && y >= 0 &&
+                static_cast<std::uint32_t>(x) < lv.width &&
+                static_cast<std::uint32_t>(y) < lv.height) {
+                const aow::MapTile& tile =
+                    lv.tiles[static_cast<std::size_t>(y) * lv.width +
+                             static_cast<std::size_t>(x)];
+                watching = (tile.explored & (1u << (mv_human & 0x1f))) != 0;
+            }
+        }
+        if (watching) play_game_sfx("SFX\\EVENTS\\GOLD.WAV");
+        const aow::Player* p = game_player_by_index(
+            mv_gs, static_cast<std::uint8_t>(pick.player));
+        for (int amount : pick.amounts) {
+            std::printf("game_gold=%d,%d player=%d amount=%d total=%d gold=%d\n",
+                        x, y, pick.player, amount, pick.total(),
+                        p ? p->gold : 0);
+            // The event logbook entry is shown to the player it belongs to.
+            if (pick.player == static_cast<int>(mv_human)) {
+                game_say(std::to_string(amount) + " gold pieces found");
+            }
+        }
+        std::fflush(stdout);
+        // The pile's object is gone; the caller re-renders the level (the walk
+        // tick / the degenerate move path both call mv_render_level right after
+        // the finished move, exactly where the original destroys the object).
+        return true;
+    }
+
+    // `TStructure.MapFieldMsgProc@5575f730` message 0x1102 -> the structure's
+    // `ArmyPlaced` (+0x174) -> `TPlayerStructure.UpdatePlayer@55760980`: after a
+    // party is placed on (or lifted from) a hex, every ownable structure covering
+    // that hex looks at the armies standing on its own hexes and takes the sole
+    // owner (owner -1 when two players' armies share a multi-hex city). This is
+    // how walking onto an unowned mine claims it, without a battle.
+    bool game_structure_army_update(int x, int y, bool arriving = false) {
+        if (!mv_ready || game_level < 0 || game_state_map.levels.empty()) {
+            return false;
+        }
+        const std::vector<aow::StructureRef> refs = aow::structures_at(
+            game_state_map, static_cast<std::size_t>(game_level), x, y, game_res);
+        if (refs.empty()) return false;
+        const std::vector<std::uint8_t> races =
+            aow::map_player_races(game_state_map);
+        bool changed = false;
+        std::string text;
+        for (const aow::StructureRef& r : refs) {
+            // With no combat model the port must not run the ArmyPlaced pass
+            // while a defender still stands on the building: the original
+            // resolves the battle (and removes the defender) before the winner
+            // is placed, so only the winner ever reaches UpdatePlayer.
+            if (arriving &&
+                aow::structure_has_foreign_army(game_state_map, r, mv_human,
+                                                game_res)) {
+                continue;
+            }
+            const aow::StructureChange ch = aow::structure_update_player(
+                game_state_map, r, races, game_res);
+            if (!ch.changed) continue;
+            changed = true;
+            if (!ch.text.empty()) text = ch.text;
+            const aow::MapHs* hs = aow::structure_object(game_state_map, r);
+            std::printf("game_structure_owner=%d,%d owner=%d old=%d flag=0x%x\n",
+                        x, y,
+                        hs ? static_cast<int>(
+                                 static_cast<std::int8_t>(hs->structure_owner))
+                           : -1,
+                        ch.old_owner, hs ? static_cast<int>(hs->flag_id) : 0);
+        }
+        if (!changed) return false;
+        // SetPlayer re-registers income/power sources; the port recomputes the
+        // whole economy from the map (docs/28_ECONOMY.md).
+        aow::compute_economy(game_state_map, game_res, &mv_cat, mv_gs);
+        if (game_show_structure) open_structure(x, y);
+        if (!text.empty()) game_say(text);
+        std::printf("game_capture=%d,%d player=%d\n", x, y,
+                    static_cast<int>(mv_human));
+        std::fflush(stdout);
+        return true;
     }
 
     // Relocates the selected army to the path's destination and re-renders the
@@ -5913,6 +7090,10 @@ struct Scene {
                 party_focus = moved.units.empty() ? -1 : 0;
             }
         }
+        // `TArmyHS.PlaceOnMap`/the army removal path tell the field's structures
+        // that the party on the source hex changed (TCity.ArmyRemoved ->
+        // UpdatePlayer); a city two players now share becomes contested.
+        game_structure_army_update(src_x, src_y);
         // Each travelling unit pays the path's cost from its own pool
         // (`TAbstractUnit.MovePointCost@0x55780848` is charged step by step, so
         // the whole party spends the same amount - the value the Party window's
@@ -5951,6 +7132,17 @@ struct Scene {
             mv_use_army(mv_merge_moving, src_x, src_y);
         } else {
             to.objects.push_back(std::move(moved));
+            // The army's *data* reaches the hex now (the resting copy is hidden
+            // while its sprite walks), but the field's 0x1102 (ArmyPlaced) event
+            // belongs to `TMoveArmyTE.FinishMove`, which runs when the walk
+            // arrives: an undefended/unowned structure under the army therefore
+            // keeps its old owner and flag for the whole transition and is only
+            // claimed on arrival (`mv_finish_arrival`, from game_update's walk
+            // tick). The level rendered below is drawn without the arriving
+            // army and with the building still on its previous owner.
+            mv_arrive_pending = true;
+            mv_arrive_x = dest_x;
+            mv_arrive_y = dest_y;
             // The moved army now sits on the destination hex; walk its *sprite*
             // across the path (aow/unit_anim.hpp) while the resting copy is
             // hidden.
@@ -6019,6 +7211,7 @@ struct Scene {
                 mv_hide_level = mv_hide_x = mv_hide_y = -1;
                 mv_render_level();
             } else {
+                mv_finish_arrival();  // no walk: the army has arrived at once
                 mv_hide_level = mv_hide_x = mv_hide_y = -1;
                 mv_render_level();
                 // TSelectedArmy follows the army it just moved.
@@ -6164,6 +7357,12 @@ struct Scene {
     // Returns false when the key is not one of the map's. Shared by the window
     // procedure and the head-less `--game-key` hook so the two cannot drift.
     bool game_key(int vk) {
+        // `UnitWinKeyDown@0x40abd4`: VK_ESCAPE (0x1b) hides the Unit window.
+        if (game_show_unit && vk == 0x1b) {
+            unit_window_close();
+            return true;
+        }
+        if (game_show_unit) return true;  // modal: no map shortcuts
         if (vk == 'C') {
             game_center_selection();
             return true;
@@ -6632,6 +7831,385 @@ struct Scene {
         return 4;                                      // psCheerful
     }
 
+    // -------------------------------------------- the Unit info window data
+    // `TAbstractUnit.GetAbilityType` (the subclass override; the base returns
+    // 0) picks the TAbilityTypeRStr caption. The shipped captions are Movement
+    // / Combat / Magic / Enchantment / Secret. The two abilities the party
+    // reference shows are Walking (0 -> Movement) and Fire Musket (45 ->
+    // Combat), and the groups below reproduce the concrete ability classes'
+    // overrides (movement abilities, combat strikes/shots, enchantments and
+    // status effects).
+    static const char* unit_ability_type(int id) {
+        if (id >= 0 && id <= 5) return kAbilityTypeMovement;      // walk/fly/swim
+        if (id == 23 || id == 59 || id == 66) return kAbilityTypeMovement;
+        if ((id >= 14 && id <= 45) || (id >= 86 && id <= 90) ||
+            (id >= 111 && id <= 122) || id == 57 || id == 58 || id == 61 ||
+            id == 62 || id == 65) {
+            return kAbilityTypeCombat;
+        }
+        if ((id >= 46 && id <= 56) || (id >= 68 && id <= 77) || id == 99 ||
+            id == 100 || id == 101 || id == 109) {
+            return kAbilityTypeMagic;
+        }
+        return kAbilityTypeSecret;
+    }
+
+    // The Unitres record behind a party unit. Heroes use their own runtime
+    // fields instead (the map stores a THeroResource index, not a Unitres tag).
+    const aow::UnitEntry* unit_window_entry(const aow::MapUnit& u) const {
+        if (u.is_hero) return nullptr;
+        return city_unit_entry(u.resource);
+    }
+
+    // `MoraleValueToMorale@0x5575ad64`: <21 -> 0, 21..40 -> 1, 41..60 -> 2,
+    // 61..80 -> 3, >=81 -> 4 (Terrible .. High).
+    static int unit_morale_index(std::uint8_t value) {
+        if (value < 21) return 0;
+        if (value < 41) return 1;
+        if (value < 61) return 2;
+        if (value < 81) return 3;
+        return 4;
+    }
+
+    // `FUN_00407db8`: resolve the selected unit into every control's content.
+    // For a TUnit the name/stats/description/abilities come from the Unitres
+    // record joined to the runtime ability mask; a hero falls back to the
+    // map object's own name/level/experience.
+    void unit_window_refresh() {
+        UnitWindowData d;
+        d.slot = game_unit_slot;
+        const aow::MapUnit* mu = party_unit(game_unit_slot);
+        if (mu == nullptr) {
+            unit_win = UnitWindowData();
+            game_show_unit = false;
+            return;
+        }
+        const aow::UnitEntry* e = unit_window_entry(*mu);
+        d.valid = true;
+        d.is_hero = mu->is_hero;
+        if (e != nullptr) {
+            d.name = e->display_name.empty()
+                         ? ("Unit " + std::to_string(e->id))
+                         : e->display_name;
+            d.description = e->description;
+            if (e->unit_type == 1) {
+                d.type = "Creature";
+                d.type_icon = 0;   // UnitWin 21
+            } else if (e->unit_type == 2) {
+                d.type = "Machine";
+                d.type_icon = 1;   // UnitWin 22
+            } else {
+                d.type = "Unit";
+                d.type_icon = 2;   // UnitWin 23
+            }
+            const int a = e->alignment & 0x7f;
+            d.alignment = (a >= 0 && a < 7) ? kUnitAlignmentText[a] : "Neutral";
+            // AAlignment: 0 -> 31, 1 -> 32, 2/3 -> 33, 4 -> 34, 5 -> 35;
+            // alignment 6 is "None" and the control is hidden.
+            static const int kAlignIcon[7] = {0, 1, 2, 2, 3, 4, 0};
+            d.align_icon = (a >= 0 && a < 7) ? kAlignIcon[a] : 2;
+            d.level = e->level;
+            d.attack = static_cast<int>(e->attack);
+            const int morale = unit_morale_index(mu->morale);
+            // TAbstractUnit.GetDefense/GetResistance morale modifiers
+            // (MoraleDefenseModifier / MoraleResistanceModifier, docs/10_UNIT.md).
+            static const int kMoraleDef[5] = {-2, -1, 0, 0, 0};
+            static const int kMoraleRes[5] = {-2, -1, 0, 0, 0};
+            const int def = static_cast<int>(e->defense) + kMoraleDef[morale];
+            const int res = static_cast<int>(e->resistance) + kMoraleRes[morale];
+            d.defense = std::max(1, std::min(10, def));
+            d.damage = static_cast<int>(e->damage);
+            d.resistance = std::max(1, std::min(10, res));
+            d.max_hits = e->hit_points;
+            d.hits = e->hit_points;
+            d.max_moves = e->moves;
+            d.moves = std::max(
+                0, static_cast<int>(aow::unit_move_points_left(mv_cat, *mu)));
+            const std::array<bool, 256> has =
+                aow::decode_ability_bitmap(mu->ability_mask, mu->ability_count);
+            d.upkeep = has[0x9b] ? 0 : (e->level + 1) * 2;
+        }
+        if (e != nullptr) {
+            // The ability list comes from the runtime ability mask (the map
+            // stores it per unit); a map that omitted it falls back to the
+            // resource list.
+            const std::vector<std::uint8_t>& mask =
+                mu->ability_mask.empty() ? e->ability_mask : mu->ability_mask;
+            const std::uint32_t count =
+                mu->ability_mask.empty() ? e->ability_count : mu->ability_count;
+            const std::array<bool, 256> bits =
+                aow::decode_ability_bitmap(mask, count);
+            for (int i = 0; i < static_cast<int>(count) && i < 256; ++i) {
+                if (!bits[static_cast<std::size_t>(i)]) continue;
+                const char* name = city_ability_name(i);
+                if (name == nullptr) continue;
+                const int lvl = static_cast<std::size_t>(i) <
+                                        e->ability_levels.size()
+                                    ? e->ability_levels[static_cast<std::size_t>(i)]
+                                    : 0;
+                UnitWindowAbility row;
+                if (i == 50 && lvl > 0) {
+                    row.name = "Transport (" + std::to_string(lvl) + " units)";
+                } else {
+                    row.name = std::string(name) +
+                               city_ability_level_suffix(i, lvl);
+                }
+                row.type = unit_ability_type(i);
+                row.source = kAbilitySourceInherent;
+                d.abilities.push_back(std::move(row));
+            }
+        } else {
+            // A hero: `THero.GetName` / `GetLevel` / `GetExperience`; no
+            // Unitres stats are available here, so show the leader-style name
+            // and the map object's own level.
+            d.name = mu->name.empty() ? "Hero" : mu->name;
+            if (!mu->nickname.empty()) d.name += " " + mu->nickname;
+            d.type = mu->class_id == aow::kMapLeaderClassId ? "Leader" : "Hero";
+            d.type_icon = 2;
+            d.alignment = "Neutral";
+            d.align_icon = 2;
+            d.level = mu->unit_level;
+            d.experience = static_cast<int>(mu->experience);
+            // THeroResource's skill block (Herores.pfs tags 15..20). A hero's
+            // map object carries the hero-resource index in `resource`.
+            const aow::HeroStats* hs =
+                mu->resource >= 0
+                    ? mv_cat.find_hero_stats(static_cast<std::uint32_t>(mu->resource))
+                    : nullptr;
+            if (hs != nullptr) {
+                d.attack = hs->attack;
+                d.defense = hs->defense;
+                d.damage = hs->damage;
+                d.hits = hs->hits;
+                d.max_hits = hs->hits;
+                d.moves = hs->moves;
+                d.max_moves = hs->moves;
+                d.resistance = hs->resistance;
+            } else {
+                d.attack = d.defense = d.damage = d.resistance = 0;
+                d.hits = d.max_hits = 1;
+                d.moves = d.max_moves = 0;
+            }
+            d.upkeep = (d.level + 1) * 2;
+            const std::array<bool, 256> bits =
+                aow::decode_ability_bitmap(mu->ability_mask,
+                                           mu->ability_count);
+            for (int i = 0; i < static_cast<int>(mu->ability_count) && i < 256;
+                 ++i) {
+                if (!bits[static_cast<std::size_t>(i)]) continue;
+                const char* name = city_ability_name(i);
+                if (name == nullptr) continue;
+                UnitWindowAbility row;
+                row.name = name;
+                row.type = unit_ability_type(i);
+                row.source = kAbilitySourceInherent;
+                d.abilities.push_back(std::move(row));
+            }
+        }
+        if (d.max_moves == 0) d.max_moves = d.moves;
+        d.next_level_experience = std::max(1, d.level * 2);
+        // `GetMorale`: hidden for Machines (GetUnitType == 2).
+        d.show_morale = (e == nullptr || e->unit_type != 2);
+        const int mi = unit_morale_index(mu->morale);
+        d.morale = std::string("Morale: ") +
+                   kUnitMoraleText[std::max(0, std::min(4, mi))];
+        // `TRace.GetPlayerRelation` for the party's own race is Friendly; the
+        // port has no diplomatic graph yet, so a party unit always answers the
+        // 4th TStatusRStr band (the reference's blue Friendly face, RelWin 14).
+        d.relation = kUnitRelationText[3];
+        d.relation_icon = 3;
+        d.show_relation = true;
+        d.show_type = true;
+        // ListAbilityInfo's `Engine.SortStringsEx` sorts the three columns by
+        // the ability name; keep the type/source columns aligned.
+        std::stable_sort(d.abilities.begin(), d.abilities.end(),
+                         [](const UnitWindowAbility& a,
+                            const UnitWindowAbility& b) {
+                             return a.name < b.name;
+                         });
+        d.move_icon = party_icon_frame(aow::unit_move_types(*mu));
+        unit_win = std::move(d);
+        unitwin_abil_sel = -1;
+        unitwin_abil_top = 0;
+        unit_face_refresh();
+        unit_sprite_refresh();
+    }
+
+    // The left portrait (`TAbstractUnit.ShowFace`: the unit-gfx record's face
+    // library/index, stretched into the left frame).
+    void unit_face_refresh() {
+        const aow::MapUnit* mu = party_unit(game_unit_slot);
+        const aow::UnitEntry* e = mu != nullptr ? unit_window_entry(*mu) : nullptr;
+        const int key = e != nullptr ? static_cast<int>(e->id) : -1;
+        if (unitwin_face_key == key && (key < 0 || unitwin_face.ok)) return;
+        unitwin_face_key = key;
+        unitwin_face = Sprite();
+        if (e == nullptr) {
+            // A hero/leader portrait is a FACERES.PFS record (THero+0x3c),
+            // resolved through TPlayer.GetFace -> TFaceResource.GetFaceImage,
+            // the same portrait the Events banner loads.
+            if (mu != nullptr && mu->is_hero && game_load_face(mu->face_index) &&
+                game_face.ok) {
+                unitwin_face = game_face;
+            }
+            return;
+        }
+        if (e->gfx == nullptr) return;
+        const std::string path = face_lib_path(e->gfx->image_lib);
+        if (path.empty()) return;
+        if (unitwin_face_path != path) {
+            std::string lerr;
+            if (!unitwin_face_il.load(path, lerr)) return;
+            unitwin_face_path = path;
+        }
+        const std::vector<aow::IlbEntry>& ents = unitwin_face_il.entries();
+        for (std::size_t i = 0; i < ents.size(); ++i) {
+            if (ents[i].index != e->gfx->face_index) continue;
+            std::uint32_t w = 0, h = 0;
+            std::string derr;
+            if (!unitwin_face_il.decode_rgb(i, unitwin_face.rgba, w, h, derr)) {
+                return;
+            }
+            unitwin_face.w = w;
+            unitwin_face.h = h;
+            unitwin_face.ok = true;
+            unitwin_face.base_x = 0;
+            unitwin_face.base_y = 0;
+            unitwin_face.has_key = false;
+            return;
+        }
+    }
+
+    // The right frame (`TAbstractUnit.ShowUnit`): the unit's standing pose,
+    // the same 64x64 frame the party cell shows.
+    void unit_sprite_refresh() {
+        const aow::MapUnit* mu = party_unit(game_unit_slot);
+        const aow::MapHs* a = party_army();
+        const int key = mu != nullptr
+                            ? static_cast<int>(game_unit_slot) * 100000 +
+                                  (mu->id + 1)
+                            : -1;
+        if (unitwin_sprite_key == key && (key < 0 || unitwin_sprite.ok)) return;
+        unitwin_sprite_key = key;
+        unitwin_sprite = Sprite();
+        unitwin_sprite_vx = unitwin_sprite_vy = 0;
+        if (mu == nullptr || a == nullptr) return;
+        std::vector<std::uint8_t> rgba;
+        int w = 0, h = 0, vx = 0, vy = 0;
+        std::string err;
+        // `FrRShPreDraw` (0x0040a2a0) calls the unit's `ShowUnit` at
+        // (FrRSh.Left + 0x31, FrRSh.Top + 0x4e). ShowUnit is a plain
+        // TImageLibrary show of the pose - the frame's own base+shift only,
+        // *without* the map sequence's xoff/yoff - which is exactly
+        // `unit_pose_sprite_rgba` (the helper the city cards use).
+        if (aow::unit_pose_sprite_rgba(mv_cat, root_dir, *mu,
+                                       a->army_direction, 0, 0, rgba, w, h, vx,
+                                       vy, err)) {
+            unitwin_sprite.rgba = std::move(rgba);
+            unitwin_sprite.w = static_cast<std::uint32_t>(w);
+            unitwin_sprite.h = static_cast<std::uint32_t>(h);
+            unitwin_sprite.ok = true;
+            unitwin_sprite_vx = vx;
+            unitwin_sprite_vy = vy;
+        }
+    }
+
+    // `Unit1FrameMouseDown@0x406040`: a portrait click files that slot's unit
+    // and brings the Unit window up.
+    void unit_window_open(int slot) {
+        if (slot < 0 || slot >= kPartySlots) return;
+        game_unit_slot = slot;
+        game_unit_tab = 0;
+        unitwin_hover = unitwin_pressed = -1;
+        unitwin_memo_top = 0;
+        unitwin_disband_armed = false;
+        unit_window_refresh();
+        if (!unit_win.valid) return;
+        game_show_unit = true;
+        std::printf(
+            "game_unit=open slot=%d name=%s lvl=%d atk=%d def=%d dmg=%d "
+            "res=%d hits=%d/%d moves=%d/%d upkeep=%d abil=%d morale=%s\n",
+            slot + 1, unit_win.name.c_str(), unit_win.level, unit_win.attack,
+            unit_win.defense, unit_win.damage, unit_win.resistance,
+            unit_win.hits, unit_win.max_hits, unit_win.moves,
+            unit_win.max_moves, unit_win.upkeep,
+            static_cast<int>(unit_win.abilities.size()), unit_win.morale.c_str());
+        std::fflush(stdout);
+    }
+
+    void unit_window_close() {
+        if (game_show_unit) {
+            std::printf("game_unit=close\n");
+            std::fflush(stdout);
+        }
+        game_show_unit = false;
+        unitwin_disband_armed = false;
+        unitwin_hover = unitwin_pressed = -1;
+    }
+
+    // `PPrevClick` / `PNextClick`: step to the previous/next occupied slot of
+    // the party (DFM tooltip "Selects the previous/next unit in the party").
+    void unit_window_step(int delta) {
+        if (party_army() == nullptr || delta == 0) return;
+        for (int step = 1; step <= kPartySlots; ++step) {
+            int s = (game_unit_slot + delta * step) % kPartySlots;
+            if (s < 0) s += kPartySlots;
+            if (party_unit(s) != nullptr) {
+                game_unit_slot = s;
+                unitwin_abil_sel = -1;
+                unitwin_abil_top = 0;
+                unitwin_memo_top = 0;
+                unit_window_refresh();
+                return;
+            }
+        }
+    }
+
+    // `DisbandBtnClick@0x40aaa8`: the original asks "Disband this unit?" and
+    // on confirmation removes the unit from the army. The port performs the
+    // removal on the (already requested) click; the message dialog is not
+    // reproduced yet.
+    void unit_window_disband() {
+        // The army object lives in game_state_map; party_army() is the read-only
+        // accessor the renderer uses, so this mutating handler takes it back.
+        aow::MapHs* a = const_cast<aow::MapHs*>(party_army());
+        if (a == nullptr || game_unit_slot < 0 ||
+            static_cast<std::size_t>(game_unit_slot) >= a->units.size()) {
+            return;
+        }
+        const std::string name = unit_win.name;
+        const int erased = game_unit_slot;
+        const std::uint8_t old_mask = party_sel;
+        a->units.erase(a->units.begin() + erased);
+        // The slots after the erased one shift down; keep each remaining
+        // unit's own travelling/left-behind state.
+        std::uint8_t mask = 0;
+        for (int i = 0;
+             i < static_cast<int>(a->units.size()) && i < kPartySlots; ++i) {
+            const int old = i < erased ? i : i + 1;
+            if (old < kPartySlots && (old_mask & (1u << old)) != 0) {
+                mask |= static_cast<std::uint8_t>(1u << i);
+            }
+        }
+        party_sel = mask;
+        party_refresh();
+        mv_contents_stale = true;
+        game_update_path();
+        unit_window_close();
+        if (a->units.empty()) {
+            game_show_party = false;
+            mv_reset();
+        } else {
+            game_unit_slot = std::min<int>(
+                game_unit_slot, static_cast<int>(a->units.size()) - 1);
+            unit_window_refresh();
+            game_show_unit = true;
+        }
+        std::printf("game_unit=disband name=%s left=%d\n", name.c_str(),
+                    static_cast<int>(a->units.size()));
+        std::fflush(stdout);
+    }
+
     // The window's refresh (`FUN_004062a0`, CheckEnd). The engine reads the
     // selected party's travelling mask into +0x178 and then repaints every
     // widget from it; the port has no widget tree, so only the mask has to be
@@ -6800,6 +8378,12 @@ struct Scene {
             const int s = hit - kPartyFrame0;
             if (party_unit(s) != nullptr) {
                 party_focus = s;
+                // `Unit1FrameMouseDown@0x406040`: file the clicked unit into
+                // the world-map selection and call FUN_00407db8, which shows
+                // the Unit info window for it.
+                game_sel_hx = mv_sel_x;
+                game_sel_hy = mv_sel_y;
+                unit_window_open(s);
                 game_say("party focus unit " + std::to_string(s + 1));
             }
             return;
@@ -6809,6 +8393,7 @@ struct Scene {
         case kPartyMin:
             // Closing the party window deselects the current party
             // (`mld_strings.txt`, "The Party Floater").
+            unit_window_close();
             game_show_party = false;
             mv_reset();
             return;
@@ -6894,6 +8479,734 @@ struct Scene {
                 s.ok = true;
                 party_portraits[i] = std::move(s);
             }
+        }
+    }
+
+    // -------------------------------------------- the Unit window layout
+    // The DFM's design boxes, translated by the floater's origin. UnitWin is a
+    // fixed 420x417 window (Width/HeightPercent 0), so every child keeps its
+    // WinLeft/WinTop/WinWidth/WinHeight; the only reflow is `UnitMainPnl`'s
+    // awBoth width (420 - 21 - 21 = 378) - exactly the design size.
+    struct UnitWindowLayout {
+        AowBox win, title_icon, close, main, left_frame, left_shade;
+        AowBox stat_pnl, stat_icon[7], stat_val[7];
+        AowBox right_body, right_frame, right_shade;
+        AowBox name, morale, level, xp, line1, line2;
+        AowBox tab[2];
+        AowBox t1, t2, list_pnl, list_name, list_type, list_src;
+        AowBox header[3];
+        AowBox memo, memo_body;
+        AowBox type_pnl, type_icon, type_lbl, type_val;
+        AowBox align_pnl, align_icon, align_lbl, align_val;
+        AowBox rel_pnl, rel_icon, rel_lbl, rel_val;
+        AowBox memo_sb;              // T2SBar (T2Text + 349,0) 17x86
+        AowBox pprev, pnext;         // CampaignTrans arrows, topmost
+        AowBox disband, bclose, celt_l, celt_r, celt_line;
+        int tab_h = 18;
+        int header_h = 14;
+        int button_h = 27;
+    };
+
+    UnitWindowLayout unit_window_layout() const {
+        UnitWindowLayout L;
+        const int x0 = (disp_w - kUnitWinW) / 2;
+        // awCenter/ahCenter rounds the half-pixel up: at 640x480 the 420x417
+        // floater's top is 32. The reference captures include the one row of
+        // backdrop above it, so their frame starts at image row 1.
+        const int y0 = (disp_h - kUnitWinH + 1) / 2;
+        L.win = AowBox{x0, y0, kUnitWinW, kUnitWinH};
+        L.title_icon = AowBox{x0 + 20, y0 + 5, 19, 16};
+        L.close = AowBox{x0 + 385, y0 + 4, 15, 16};
+        L.main = AowBox{x0 + 21, y0 + 22, 378, 143};
+        L.left_frame = AowBox{L.main.x, L.main.y, 118, 143};
+        L.left_shade = AowBox{L.main.x + 1, L.main.y, 118, 143};
+        L.right_body = AowBox{L.main.x + 260, L.main.y, 118, 143};
+        L.right_frame = L.right_body;
+        L.right_shade = AowBox{L.main.x + 260, L.main.y, 118, 143};
+        L.name = AowBox{L.main.x + 189, L.main.y + 8, 0, 0};
+        L.morale = AowBox{L.main.x + 189, L.main.y + 136, 0, 0};
+        L.line1 = AowBox{L.main.x + 118, L.main.y, 142, 27};
+        L.line2 = AowBox{L.main.x + 118, L.main.y + 116, 142, 27};
+        L.stat_pnl = AowBox{L.main.x + 117, L.main.y + 28, 144, 86};
+        const int sx = L.stat_pnl.x, sy = L.stat_pnl.y;
+        // UAttackIcon / UDefenseIcon sit two pixels right of the DFM box in the
+        // shipped window (their sprite shift is not folded into the control
+        // origin); the defence one is another two rows down.
+        L.stat_icon[0] = AowBox{sx + 7, sy + 3, 15, 17};   // attack
+        L.stat_icon[1] = AowBox{sx + 7, sy + 26, 15, 17};  // defense
+        L.stat_icon[2] = AowBox{sx + 0, sy + 45, 32, 17};  // moves
+        L.stat_icon[3] = AowBox{sx + 74, sy + 1, 15, 17};  // damage
+        L.stat_icon[4] = AowBox{sx + 74, sy + 22, 15, 17}; // resistance
+        L.stat_icon[5] = AowBox{sx + 74, sy + 45, 15, 17}; // hits
+        L.stat_icon[6] = AowBox{sx + 5, sy + 65, 19, 21};  // upkeep
+        // UAttack/UDefense/UMoves/UpKeep are UStatP1 children at x=22 (P1
+        // starts at +28); UDamage/UResistance/UHits are UStatP2 children at
+        // x=25 (P2 starts at +93).
+        L.stat_val[0] = AowBox{sx + 50, sy + 3, 0, 0};
+        L.stat_val[1] = AowBox{sx + 50, sy + 25, 0, 0};
+        L.stat_val[2] = AowBox{sx + 50, sy + 47, 0, 0};
+        L.stat_val[3] = AowBox{sx + 118, sy + 3, 0, 0};
+        L.stat_val[4] = AowBox{sx + 118, sy + 25, 0, 0};
+        L.stat_val[5] = AowBox{sx + 118, sy + 47, 0, 0};
+        L.stat_val[6] = AowBox{sx + 50, sy + 68, 0, 0};
+        // Level/XP are awCenter labels; the capture centres them 13 px right
+        // of the first replica's centre (right-frame + 63).
+        L.level = AowBox{L.right_body.x + 63, L.right_body.y + 18, 0, 0};
+        L.xp = AowBox{L.right_body.x + 63, L.right_body.y + 30, 0, 0};
+        // UnitTab is 379 wide with two tabs: SetSize makes the pitch
+        // (379/2 = 189) px, so tab 1 starts at 21 + 189 = 210, not at 190.
+        L.tab[0] = AowBox{x0 + 21, y0 + 163, 189, 21};
+        L.tab[1] = AowBox{x0 + 210, y0 + 163, 189, 21};
+        L.t1 = AowBox{x0 + 22, y0 + 178, 376, 201};
+        L.t2 = L.t1;
+        L.list_pnl = AowBox{L.t1.x + 5, L.t1.y + 15, 366, 156};
+        L.header[0] = AowBox{L.list_pnl.x + 1, L.list_pnl.y, 168, 14};
+        L.header[1] = AowBox{L.list_pnl.x + 164, L.list_pnl.y, 85, 14};
+        L.header[2] = AowBox{L.list_pnl.x + 248, L.list_pnl.y, 118, 14};
+        L.list_name = AowBox{L.list_pnl.x + 1, L.list_pnl.y + 14, 164, 141};
+        L.list_type = AowBox{L.list_pnl.x + 164, L.list_pnl.y + 14, 85, 141};
+        L.list_src = AowBox{L.list_pnl.x + 248, L.list_pnl.y + 14, 118, 141};
+        L.memo_body = AowBox{L.t2.x + 5, L.t2.y + 15, 366, 87};
+        L.memo = AowBox{L.memo_body.x + 1, L.memo_body.y, 365, 86};
+        L.type_pnl = AowBox{L.t2.x + 5, L.t2.y + 109, 116, 87};
+        L.align_pnl = AowBox{L.t2.x + 126, L.t2.y + 109, 125, 87};
+        L.rel_pnl = AowBox{L.t2.x + 256, L.t2.y + 109, 115, 87};
+        L.type_icon = AowBox{L.type_pnl.x + 39, L.type_pnl.y + 10, 39, 36};
+        // Card captions at the DFM's WinTop 56; the values one item-height
+        // below at 69. Both were confirmed against the capture's bright rows.
+        L.type_lbl = AowBox{L.type_pnl.x + 58, L.type_pnl.y + 56, 0, 0};
+        L.type_val = AowBox{L.type_pnl.x + 58, L.type_pnl.y + 69, 0, 0};
+        L.align_icon = AowBox{L.align_pnl.x + 6, L.align_pnl.y + 10, 113, 36};
+        L.align_lbl = AowBox{L.align_pnl.x + 62, L.align_pnl.y + 56, 0, 0};
+        L.align_val = AowBox{L.align_pnl.x + 62, L.align_pnl.y + 69, 0, 0};
+        L.rel_icon = AowBox{L.rel_pnl.x + 32, L.rel_pnl.y + 10, 51, 36};
+        L.rel_lbl = AowBox{L.rel_pnl.x + 57, L.rel_pnl.y + 56, 0, 0};
+        L.rel_val = AowBox{L.rel_pnl.x + 57, L.rel_pnl.y + 69, 0, 0};
+        // T2SBar: T2Text + (349,0), 17x86 (the DFM's own box).
+        L.memo_sb = AowBox{L.memo_body.x + 349, L.memo_body.y, 17, 86};
+        // PPrev/PNext (Priority 50000): the two 12x9 CampaignTrans arrows at
+        // the bottom of the right frame; UnitMainPnl awRight/ahBottom.
+        L.pprev = AowBox{L.main.x + 296, L.main.y + 109, 12, 9};
+        L.pnext = AowBox{L.main.x + 331, L.main.y + 109, 12, 9};
+        L.disband = AowBox{x0 + 89, y0 + 380, 119, 27};
+        L.bclose = AowBox{x0 + 212, y0 + 380, 119, 27};
+        L.celt_l = AowBox{x0 + 27, y0 + 380, 54, 27};
+        L.celt_r = AowBox{x0 + 339, y0 + 380, 54, 27};
+        L.celt_line = AowBox{x0 + 21, y0 + 380, 378, 27};
+        if (unitwin_tab[0][0].ok) L.tab_h = static_cast<int>(unitwin_tab[0][0].h);
+        for (int i = 0; i < 2; ++i) L.tab[i].h = L.tab_h;
+        if (unitwin_header[0][0].ok) {
+            L.header_h = static_cast<int>(unitwin_header[0][0].h);
+        }
+        for (int i = 0; i < 3; ++i) L.header[i].h = L.header_h;
+        if (unitwin_button[0][0].ok) {
+            L.button_h = static_cast<int>(unitwin_button[0][0].h);
+        }
+        L.disband.h = L.bclose.h = L.button_h;
+        return L;
+    }
+
+    // The Unit window's control ids. The title bar's Close is the DFM's own
+    // 15x16 button; the tabs sit above the two panels.
+    enum {
+        kUnitClose = 0, kUnitTab0, kUnitTab1, kUnitDisband, kUnitPrev, kUnitNext,
+        kUnitList0 = 10, kUnitListRows = 8,  // + row
+        kUnitSbUp = 30, kUnitSbDown
+    };
+
+    int unit_window_hit_test(int x, int y) const {
+        if (!game_show_unit) return -1;
+        const UnitWindowLayout L = unit_window_layout();
+        auto in = [](const AowBox& b, int px, int py) {
+            return b.x <= px && px < b.x + b.w && b.y <= py && py < b.y + b.h;
+        };
+        if (!in(L.win, x, y)) return -1;
+        // PPrev/PNext are Priority 50000 and own the pointer wherever they are.
+        if (in(L.pprev, x, y)) return kUnitPrev;
+        if (in(L.pnext, x, y)) return kUnitNext;
+        if (in(L.close, x, y)) return kUnitClose;
+        if (in(L.tab[0], x, y)) return kUnitTab0;
+        if (in(L.tab[1], x, y)) return kUnitTab1;
+        if (in(L.disband, x, y)) return kUnitDisband;
+        if (game_unit_tab == 1) {
+            // T2SBar: the 17x16 dec/inc arrows at each end of the track.
+            if (in(AowBox{L.memo_sb.x, L.memo_sb.y, L.memo_sb.w, 16}, x, y)) {
+                return kUnitSbUp;
+            }
+            if (in(AowBox{L.memo_sb.x, L.memo_sb.y + L.memo_sb.h - 16,
+                          L.memo_sb.w, 16},
+                   x, y)) {
+                return kUnitSbDown;
+            }
+        }
+        if (game_unit_tab == 0) {
+            // The three listboxes share one selection (T1AbilityLBMouseDown).
+            const int row_h = 17;
+            for (int i = 0; i < kUnitListRows; ++i) {
+                const AowBox r{L.list_name.x, L.list_name.y + i * row_h,
+                               L.list_name.w + L.list_type.w + L.list_src.w,
+                               row_h};
+                if (in(r, x, y)) return kUnitList0 + i;
+            }
+        }
+        return -2;  // inside the window but not a control
+    }
+
+    // The DFM handlers: CloseClick (hide), UnitTabChange (show the tab's
+    // panel), DisbandBtnClick and T1AbilityLBMouseDown (select a row). The
+    // shared UI click is FUN_00455dfc(0) -> Sfx\Int\Btn1.wav.
+    void unit_window_action(int hit) {
+        if (hit < 0) return;
+        play_game_sfx("Sfx\\Int\\Btn1.wav");
+        if (hit == kUnitClose) {
+            unit_window_close();
+            return;
+        }
+        if (hit == kUnitTab0 || hit == kUnitTab1) {
+            const int tab = hit == kUnitTab0 ? 0 : 1;
+            if (tab != game_unit_tab) {
+                game_unit_tab = tab;
+                unitwin_abil_sel = -1;
+                unitwin_abil_top = 0;
+                unitwin_memo_top = 0;
+            }
+            return;
+        }
+        if (hit == kUnitPrev) {
+            unit_window_step(-1);
+            return;
+        }
+        if (hit == kUnitNext) {
+            unit_window_step(1);
+            return;
+        }
+        if (hit == kUnitSbUp) {
+            if (unitwin_memo_top > 0) --unitwin_memo_top;
+            return;
+        }
+        if (hit == kUnitSbDown) {
+            ++unitwin_memo_top;   // clamped while drawing
+            return;
+        }
+        if (hit == kUnitDisband) {
+            unit_window_disband();
+            return;
+        }
+        if (hit >= kUnitList0 && hit < kUnitList0 + kUnitListRows) {
+            const int row = unitwin_abil_top + (hit - kUnitList0);
+            if (row >= 0 && static_cast<std::size_t>(row) < unit_win.abilities.size()) {
+                unitwin_abil_sel = row;
+                std::printf("game_unit=ability row=%d name=%s\n", row + 1,
+                            unit_win.abilities[static_cast<std::size_t>(row)]
+                                .name.c_str());
+                std::fflush(stdout);
+            }
+        }
+    }
+
+    // The Unit info floater (`TUnitWindow`). The draw order follows the DFM
+    // priorities: window body/frame, the main panel's two framed portraits
+    // (face under the 46 shade, unit sprite under the 46 shade), the stat
+    // panel, the celtic rules, the UnitTab strip over the T1/T2 panels, then
+    // the footer buttons.
+    void draw_game_unit_window(Canvas& cv) const {
+        if (!game_show_unit || !unit_win.valid) return;
+        const UnitWindowLayout L = unit_window_layout();
+        // 1. UnitWin: GenericT 2 body, DialogFr 32..39 frame, title bar.
+        blit_tex_rect(cv, unitwin_body, L.win.x, L.win.y, L.win.w, L.win.h,
+                      L.win.x, L.win.y);
+        blit9_tiled(cv, unitwin_frame, L.win);
+        cv.blit_clip(unitwin_title_icon,
+                     L.title_icon.x + unitwin_title_icon.base_x +
+                         unitwin_title_icon.shift_x,
+                     L.title_icon.y + unitwin_title_icon.base_y +
+                         unitwin_title_icon.shift_y,
+                     L.title_icon.x, L.title_icon.y, L.title_icon.w,
+                     L.title_icon.h);
+        text_at(cv, glyphs10b, L.win.x + 42, L.win.y + 7, "Unit", 0, 0, 0,
+                false, false);
+        {
+            const int st = unitwin_pressed == kUnitClose
+                               ? 2
+                               : (unitwin_hover == kUnitClose ? 1 : 0);
+            cv.blit_stretch(unitwin_close[st], L.close.x, L.close.y, L.close.w,
+                            L.close.h);
+        }
+        // 2. UnitMainPnl (GenericT 2). Its DFM block does not name an ILFrame,
+        // so the panel body is unframed; the texture is tiled from its origin.
+        blit_tex_rect(cv, unitwin_body, L.main.x, L.main.y, L.main.w, L.main.h,
+                      L.main.x, L.main.y);
+        // 3. RightFramePnl (Priority 0): GenericT 7 ScrollT parchment through
+        // the FrGoldD frame's 3 px inner origin.
+        // RightFramePnl's texture starts at the panel origin, not at the
+        // FrGoldD corner (the reference's ScrollT tiles exactly from 281,23).
+        blit_tex_rect(cv, unitwin_tex7, L.right_body.x, L.right_body.y,
+                      L.right_body.w, L.right_body.h, L.right_body.x,
+                      L.right_body.y);
+        // 4. The stat panel (a Priority-0 child of UnitMainPnl). UStatPnl has
+        // no ILTexture, so the UnitMainPnl body shows through; the reference's
+        // border is the 2 px raised/inset bevel the shipped dialog draws around
+        // it (outer dark/light on the top+bottom, light/dark on the sides).
+        {
+            const AowBox b{L.stat_pnl.x - 1, L.stat_pnl.y - 3,
+                           L.stat_pnl.w + 5, L.stat_pnl.h + 7};
+            // Sampled from the reference's 2 px stat-panel bevel.
+            const std::uint8_t d[3] = {41, 49, 33};
+            const std::uint8_t l[3] = {165, 173, 148};
+            cv.fill(b.x, b.y, b.w, 1, d[0], d[1], d[2], 255);
+            cv.fill(b.x, b.y + 1, b.w, 1, l[0], l[1], l[2], 255);
+            cv.fill(b.x, b.y + b.h - 2, b.w, 1, d[0], d[1], d[2], 255);
+            cv.fill(b.x, b.y + b.h - 1, b.w, 1, l[0], l[1], l[2], 255);
+            cv.fill(b.x, b.y + 2, 1, b.h - 4, l[0], l[1], l[2], 255);
+            cv.fill(b.x + 1, b.y + 2, 1, b.h - 4, d[0], d[1], d[2], 255);
+            cv.fill(b.x + b.w - 2, b.y + 2, 1, b.h - 4, l[0], l[1], l[2], 255);
+            cv.fill(b.x + b.w - 1, b.y + 2, 1, b.h - 4, d[0], d[1], d[2], 255);
+        }
+        for (int i = 0; i < 6; ++i) {
+            // Icons 0 Attack / 1 Defense / 2 Damage / 3 Resistance / 4 Hits;
+            // the moves slot uses IconMove 0 instead (UMovesIcon). TAOWImage
+            // draws the library image at its own base+shift: the moves icon is
+            // a 10x11 boot, *not* a 32x17 stretch (which turned it into a
+            // distorted anvil in the first replica).
+            const Sprite& ic =
+                i == 2 ? unitwin_move_icon
+                       : unitwin_stat_icon[i < 2 ? i : i - 1];
+            if (ic.ok) {
+                // TAOWImage blits the library image at base+shift and clips it
+                // to the 15x17 control box (the UnitIcons art itself is 15x20,
+                // so its bottom 3 px are cut exactly as in the reference).
+                cv.blit_clip(ic, L.stat_icon[i].x + ic.base_x,
+                             L.stat_icon[i].y + ic.base_y, L.stat_icon[i].x,
+                             L.stat_icon[i].y, L.stat_icon[i].w,
+                             L.stat_icon[i].h);
+            }
+        }
+        if (unit_win.upkeep_mana ? unitwin_upkeep_mana.ok
+                                 : unitwin_upkeep_gold.ok) {
+            // TBWin 51/52 are 69x18 `BarSet2` images whose *left* 19 px is the
+            // gold/mana pile; the 19x21 icon box clips that pile 1:1.
+            const Sprite& ic = unit_win.upkeep_mana ? unitwin_upkeep_mana
+                                                    : unitwin_upkeep_gold;
+            cv.blit_clip(ic, L.stat_icon[6].x + ic.base_x,
+                         L.stat_icon[6].y + ic.base_y, L.stat_icon[6].x,
+                         L.stat_icon[6].y, L.stat_icon[6].w,
+                         L.stat_icon[6].h);
+        }
+        const std::string vals[7] = {
+            std::to_string(unit_win.attack),
+            std::to_string(unit_win.defense),
+            std::to_string(unit_win.moves) + "/" +
+                std::to_string(unit_win.max_moves),
+            std::to_string(unit_win.damage),
+            std::to_string(unit_win.resistance),
+            std::to_string(unit_win.hits) + "/" +
+                std::to_string(unit_win.max_hits),
+            std::to_string(unit_win.upkeep)};
+        for (int i = 0; i < 7; ++i) {
+            // AoW15WhiteGrey's glyph layer is white ink with neutral-grey
+            // antialias edges. The engine blits the glyph itself (its palette
+            // greys stay grey); recolouring every non-black pixel white - what
+            // the first replica did - made every stat value one pixel bolder.
+            text_at(cv, glyphs, L.stat_val[i].x, L.stat_val[i].y, vals[i], 255,
+                    255, 255, true, true);
+        }
+        // 5. The portrait pair, in the DFM's priority order:
+        //    RightFramePnl(0) -> FrLSh/FrRSh(100: the pre-draw face/sprite
+        //    then the 46 shadow) -> UnitFrameLeft/UnitFrRight(200, the frames
+        //    over the portrait edges).
+        //
+        // The 46 shadow is a ShowInfo (mode 2, subtype 4) ShadowBlendTable
+        // image *with blend level 0* in this form, so its blend is the
+        // identity - it contributes nothing and the reference frame is the
+        // raw 44/45 art. (The first replica keyed it opaquely, which painted
+        // the whole 104x128 light mask over the portrait.)
+        if (unitwin_face.ok) {
+            // FrLShPreDraw's rect: (Left+29, Top+28)-(Left+132, Top+156) on
+            // the 118x143 frame, i.e. the 44 hole at +8,+7, 103x128.
+            cv.blit_stretch(unitwin_face, L.left_frame.x + 10,
+                            L.left_frame.y + 7, 103, 128);
+        }
+        if (unitwin_shade.ok) {
+            cv.blit_shadow(unitwin_shade, L.left_shade.x, L.left_shade.y);
+        }
+        if (unitwin_left_frame.ok) {
+            cv.blit_keyed(unitwin_left_frame, L.left_frame.x, L.left_frame.y);
+        }
+        if (unitwin_sprite.ok) {
+            // FrRShPreDraw anchors ShowUnit at (FrRSh.Left + 0x31,
+            // FrRSh.Top + 0x4e); the pose then carries its own base+shift.
+            // `ShowUnit` blits the pose at the anchor the pre-draw passes; the
+            // frame's own base+shift is *not* added a second time here. Using
+            // the raw anchor reproduces the reference's sprite column (the
+            // pose helper's vx/vy belong to the map/HXtoHP anchor path).
+            cv.blit_stretch(unitwin_sprite, L.right_body.x + 0x31 + 4,
+                            L.right_body.y + 0x4e - 5,
+                            static_cast<int>(unitwin_sprite.w),
+                            static_cast<int>(unitwin_sprite.h));
+        }
+        if (unitwin_shade.ok) {
+            cv.blit_shadow(unitwin_shade, L.right_shade.x, L.right_shade.y);
+        }
+        if (unitwin_right_frame.ok) {
+            cv.blit_keyed(unitwin_right_frame, L.right_frame.x,
+                          L.right_frame.y);
+        }
+        // The two celtic rules (UnitLine1/2, Priority 1000) are drawn before
+        // the Priority-1500 UnitName/Morale labels so the rules never cover
+        // the text.
+        if (unitwin_line.ok) {
+            // TAOWImage.Draw tiles a 100 px image across the 142 px UnitLine
+            // control (`width / art.w + 1` copies clipped to the control), so
+            // the celtic rule runs continuously from the control's left edge.
+            const int lw = static_cast<int>(unitwin_line.w);
+            const int lh = static_cast<int>(unitwin_line.h);
+            for (int tx = L.line1.x; tx < L.line1.x + L.line1.w; tx += lw) {
+                cv.blit_clip(unitwin_line, tx, L.line1.y, L.line1.x,
+                             L.line1.y, L.line1.w, lh);
+                cv.blit_clip(unitwin_line, tx, L.line2.y, L.line2.x,
+                             L.line2.y, L.line2.w, lh);
+            }
+        }
+        // 6. UnitName / Level / Exp / Morale.
+        text_at(cv, glyphs10, L.name.x, L.name.y, unit_win.name, 211, 237, 202,
+                true, false);
+        text_at(cv, glyphs8b, L.level.x, L.level.y,
+                "Level " + std::to_string(unit_win.level), 28, 28, 23, true,
+                false);
+        text_at(cv, glyphs8b, L.xp.x, L.xp.y,
+                "Exp (" + std::to_string(unit_win.experience) + "/" +
+                    std::to_string(unit_win.next_level_experience) + ")",
+                28, 28, 23, true, false);
+        if (unit_win.show_morale) {
+            text_at(cv, glyphs10, L.morale.x, L.morale.y - 5, unit_win.morale,
+                    211, 237, 202, true, false);
+        }
+        draw_game_unit_tabs(cv, L);
+        // PNext/PPrev are Priority 50000, i.e. above the tabs. CampaignTrans
+        // 23/25 idle (previous/next) and 24/26 held.
+        {
+            const Sprite& prev =
+                unitwin_pressed == kUnitPrev ? unitwin_pprev[1] : unitwin_pprev[0];
+            const Sprite& next =
+                unitwin_pressed == kUnitNext ? unitwin_pnext[1] : unitwin_pnext[0];
+            if (prev.ok) {
+                cv.blit_stretch(prev, L.pprev.x, L.pprev.y, L.pprev.w,
+                                L.pprev.h);
+            }
+            if (next.ok) {
+                cv.blit_stretch(next, L.pnext.x, L.pnext.y, L.pnext.w,
+                                L.pnext.h);
+            }
+        }
+        draw_game_unit_footer(cv, L);
+    }
+
+    // The UnitTab strip (CeltDeco 67..72) and the two tab panels. T1 is the
+    // three-column ability list; T2 is the description memo and the Type /
+    // Alignment / Race Relation cards. The tab strip is drawn last so its
+    // bottom edge sits over the panel top exactly as Priority 3000 does.
+    void draw_game_unit_tabs(Canvas& cv, const UnitWindowLayout& L) const {
+        if (game_unit_tab == 0) {
+            // T1Panel (GenericT 2, no ILFrame) and T1ListPnl (FrThinD 2 px
+            // inner origin over GenericT 2).
+            blit_tex_rect(cv, unitwin_body, L.t1.x, L.t1.y, L.t1.w, L.t1.h,
+                          L.t1.x, L.t1.y);
+            blit_tex_rect(cv, unitwin_body, L.list_pnl.x, L.list_pnl.y,
+                          L.list_pnl.w, L.list_pnl.h, L.list_pnl.x + 2,
+                          L.list_pnl.y + 2);
+            blit9_tiled(cv, unitwin_thin_frame, L.list_pnl);
+            // The three listbox bodies (GenericT 21) and their FrGoldD frames
+            // (3 px inner origin).
+            const AowBox* cols[3] = {&L.list_name, &L.list_type, &L.list_src};
+            for (int c = 0; c < 3; ++c) {
+                const AowBox& b = *cols[c];
+                blit_tex_rect(cv, unitwin_tex21, b.x, b.y, b.w, b.h, b.x + 3,
+                              b.y + 3);
+                blit9_tiled(cv, unitwin_gold_frame, b);
+            }
+            const int row_h = 17;
+            const int rows = static_cast<int>(unit_win.abilities.size());
+            // T1AbilityLB.Selected: Menus 8 across all three columns.
+            if (unitwin_abil_sel >= unitwin_abil_top) {
+                const int i = unitwin_abil_sel - unitwin_abil_top;
+                if (i >= 0 && i < kUnitListRows && unitwin_list_sel.ok) {
+                    const int y = L.list_name.y + i * row_h;
+                    cv.blit_stretch(unitwin_list_sel, L.list_name.x, y,
+                                    L.list_name.w, row_h);
+                    cv.blit_stretch(unitwin_list_sel, L.list_type.x, y,
+                                    L.list_type.w, row_h);
+                    cv.blit_stretch(unitwin_list_sel, L.list_src.x, y,
+                                    L.list_src.w, row_h);
+                }
+            }
+            for (int i = 0; i < kUnitListRows; ++i) {
+                const int row = unitwin_abil_top + i;
+                if (row < 0 || row >= rows) break;
+                const bool sel = row == unitwin_abil_sel;
+                const std::uint8_t r = sel ? 0 : 160;
+                const std::uint8_t g = sel ? 0 : 169;
+                const std::uint8_t b = sel ? 0 : 143;
+                const int y = L.list_name.y + i * row_h + 5;
+                const UnitWindowAbility& a =
+                    unit_win.abilities[static_cast<std::size_t>(row)];
+                // T1AbilityLB.TextColor 14679807 (BGR) = (255,254,223) cream;
+                // Type/Source are the warm grey 9415072 = (160,169,143).
+                // CAUTION - shared-font sandbox. TUnitWindow's controls name
+                // FontModule.Age8, whose CharacterDistance is 0 (TFONTMODULE.txt);
+                // pin it at these draw sites. Never give this screen its spacing
+                // by changing decode_glyph to advance by the RLE ink width: that
+                // is shared with every 0x02 face and it squeezed the Scenario
+                // screen's Age8s labels ("CPU Squire", "Simultaneous") by 1 px
+                // per glyph.
+                text_at(cv, glyphs8b, L.list_name.x + 6, y, a.name,
+                        sel ? 0 : 255, sel ? 0 : 254, sel ? 0 : 223, false,
+                        false, 0);
+                text_at(cv, glyphs8b, L.list_type.x + 6, y, a.type, r, g, b,
+                        false, false, 0);
+                text_at(cv, glyphs8b, L.list_src.x + 6, y, a.source, r, g, b,
+                        false, false, 0);
+            }
+            // The three sort headers (GenericB 85/91/88, Age8 clBlack).
+            const char* captions[3] = {"Ability Name", "Type", "Source"};
+            for (int c = 0; c < 3; ++c) {
+                const AowBox& h = L.header[c];
+                blit3_tile(cv, unitwin_header[0], h);
+                text_at(cv, glyphs8b, h.x + 5, h.y + 1, captions[c], 24, 20, 16,
+                        false, false, 0);
+            }
+        } else {
+            draw_game_unit_info(cv, L);
+        }
+        // The tab strip last (Priority 3000): down for the current page, up
+        // for the other. Selected text is clBlack, the other band's is the
+        // warm grey TextSelColor 9415072.
+        const char* labels[2] = {"Abilities", "Info"};
+        for (int i = 0; i < 2; ++i) {
+            // The current page is the down/lit band (ILIndexDown = 67);
+            // the other one keeps the raised ILIndexUp = 70 art. The tab panel
+            // draws its left cap, then the 130x22 middle art repeated/clipped
+            // across the span, then the right cap; the reference's light face
+            // is continuous all the way to the cap.
+            const int st = i == game_unit_tab ? 0 : 1;
+            const Sprite* b = unitwin_tab[st];
+            const int y = L.tab[i].y;
+            if (b[1].ok) {
+                const int lw = static_cast<int>(b[0].w);
+                const int rw = static_cast<int>(b[2].w);
+                const int x0 = L.tab[i].x + lw;
+                const int x1 = L.tab[i].x + L.tab[i].w - rw;
+                cv.blit_stretch(b[0], L.tab[i].x, y, lw, L.tab[i].h);
+                for (int tx = x0; tx < x1; tx += static_cast<int>(b[1].w)) {
+                    cv.blit_clip(b[1], tx, y, x0, y, x1 - x0, L.tab[i].h);
+                }
+                cv.blit_stretch(b[2], x1, y, rw, L.tab[i].h);
+            }
+            const bool sel = i == game_unit_tab;
+            text_at(cv, glyphs10b, L.tab[i].x + L.tab[i].w / 2,
+                    L.tab[i].y + 5, labels[i], sel ? 0 : 160,
+                    sel ? 0 : 169, sel ? 0 : 143, true, false);
+        }
+    }
+
+    // T2Memo is a TAOWMemo (FontModule.Age10s, 365x86, ItemHeight 15): word
+    // wrap the unit's description, then show five rows from `unitwin_memo_top`
+    // and let T2SBar move that window.
+    void draw_unit_memo(Canvas& cv, int x, int y, int w,
+                        const std::string& s) const {
+        const int line_h = 15;
+        unitwin_memo_lines.clear();
+        std::size_t i = 0;
+        while (i < s.size()) {
+            // An explicit newline always breaks.
+            const std::size_t nl = s.find('\n', i);
+            const std::size_t end =
+                nl == std::string::npos ? s.size() : nl;
+            std::string rest = s.substr(i, end - i);
+            while (!rest.empty()) {
+                std::size_t take = rest.size();
+                // Fit as many characters as the line allows, preferring the
+                // last space before the limit (the memo's own word wrap).
+                if (text_w(glyphs10, rest) > w) {
+                    take = 0;
+                    for (std::size_t k = 1; k <= rest.size(); ++k) {
+                        if (text_w(glyphs10, rest.substr(0, k)) > w) break;
+                        take = k;
+                    }
+                    const std::size_t sp = rest.rfind(' ', take);
+                    if (sp != std::string::npos && sp > 0) take = sp;
+                }
+                if (take == 0) take = 1;
+                unitwin_memo_lines.push_back(rest.substr(0, take));
+                rest.erase(0, take);
+                while (!rest.empty() && rest.front() == ' ') rest.erase(0, 1);
+            }
+            if (nl == std::string::npos) break;
+            i = nl + 1;
+        }
+        unitwin_memo_total = static_cast<int>(unitwin_memo_lines.size());
+        const int max_top = unitwin_memo_total > 5 ? unitwin_memo_total - 5 : 0;
+        if (unitwin_memo_top < 0) unitwin_memo_top = 0;
+        if (unitwin_memo_top > max_top) unitwin_memo_top = max_top;
+        for (int row = 0; row < 5; ++row) {
+            const int li = unitwin_memo_top + row;
+            if (li >= unitwin_memo_total) break;
+            text_at(cv, glyphs10, x, y + row * line_h,
+                    unitwin_memo_lines[static_cast<std::size_t>(li)], 160, 169,
+                    143, false, false);
+        }
+    }
+
+    // T2SBar (TAOWVScrollBar, GenericS 94..101): a 17x86 bar at the memo's
+    // right edge. The arrows are always drawn in the reference; the thumb is
+    // sized by NumberVisible / Max and sits at Position.
+    void draw_unit_memo_sb(Canvas& cv, const UnitWindowLayout& L) const {
+        if (!unitwin_sb[0].ok) return;
+        const AowBox& b = L.memo_sb;
+        cv.blit_stretch(unitwin_sb[0], b.x, b.y, b.w, 16);              // 94 dec up
+        cv.blit_stretch(unitwin_sb[2], b.x, b.y + b.h - 16, b.w, 16);   // 96 inc down
+        const int track_y = b.y + 16;
+        const int track_h = b.h - 32;
+        if (unitwin_sb[7].ok) {
+            cv.blit_tile(unitwin_sb[7], b.x, track_y, b.w, track_h, true);
+        }
+        // T2SBar.NumberVisible is 1 in the DFM; the reference's thumb covers
+        // roughly two text rows, which is TAOWVScrollBar's two-row minimum.
+        const int total = unitwin_memo_total > 5 ? unitwin_memo_total : 5;
+        int thumb_h = track_h * 2 / total;
+        if (thumb_h < 12) thumb_h = 12;
+        if (thumb_h > track_h) thumb_h = track_h;
+        const int span = track_h - thumb_h;
+        const int max_top = unitwin_memo_total > 5 ? unitwin_memo_total - 5 : 1;
+        const int ty = track_y + (max_top > 0 ? span * unitwin_memo_top /
+                                                max_top
+                                              : 0);
+        const Sprite& th = unitwin_sb[4].ok ? unitwin_sb[4] : unitwin_sb[7];
+        cv.blit_stretch(th, b.x, ty, b.w, thumb_h);
+    }
+
+    // T2Panel: the Info tab's memo over the three cards (Type / Alignment /
+    // Race Relation). The cards are TAOWPanel GenericF 105 + GenericT 17 with
+    // the Value labels in Age8 and the DFM's own 39x36 / 113x36 / 51x36 art.
+    void draw_game_unit_info(Canvas& cv, const UnitWindowLayout& L) const {
+        // T2Panel has no ILFrame in the DFM (only its GenericT 2 body), while
+        // T2Text/T2Leader and the three cards are FrThinD (2 px inner origin).
+        blit_tex_rect(cv, unitwin_body, L.t2.x, L.t2.y, L.t2.w, L.t2.h,
+                      L.t2.x, L.t2.y);
+        blit_tex_rect(cv, unitwin_tex17, L.memo_body.x, L.memo_body.y,
+                      L.memo_body.w, L.memo_body.h, L.memo_body.x + 2,
+                      L.memo_body.y + 2);
+        blit9_tiled(cv, unitwin_thin_frame, L.memo_body);
+        // T2Memo (Priority 200, T2Text+1): GenericT 18 TextOld2 inside its own
+        // FrGoldD frame. This is the near-black page the reference shows; the
+        // T2Text panel behind it is the TextOld1 border.
+        blit_tex_rect(cv, unitwin_tex18, L.memo.x, L.memo.y, L.memo.w,
+                      L.memo.h, L.memo.x + 3, L.memo.y + 3);
+        blit9_tiled(cv, unitwin_gold_frame, L.memo);
+        // BorderWidth 5 / BorderHeight 3 plus the 3 px FrGoldD inset; the
+        // reference's first line starts at memo + (8,6). 323 px is the exact
+        // wrap interval between the three reference line widths (321/316/293)
+        // and the next word (327) - it reproduces the four captured lines.
+        draw_unit_memo(cv, L.memo.x + 8, L.memo.y + 6, 323,
+                       unit_win.description);
+        draw_unit_memo_sb(cv, L);
+        const AowBox* panels[3] = {&L.type_pnl, &L.align_pnl, &L.rel_pnl};
+        for (const AowBox* p : panels) {
+            blit_tex_rect(cv, unitwin_tex17, p->x, p->y, p->w, p->h, p->x + 2,
+                          p->y + 2);
+            blit9_tiled(cv, unitwin_thin_frame, *p);
+        }
+        // A TAOWImage blits its slot at the control origin and places the
+        // cropped visual by base+shift, clipping to the control. The card art
+        // carries transparent margins (39x36 TypeIcn slot with a 37x36 disc,
+        // 51x36 RelationIcn slot with a 37x36 face), so stretching the visual
+        // to the slot makes it visibly larger than the capture.
+        auto card_icon = [&](const Sprite& ic, const AowBox& b) {
+            cv.blit_clip(ic, b.x + ic.base_x + ic.shift_x,
+                         b.y + ic.base_y + ic.shift_y, b.x, b.y, b.w, b.h);
+        };
+        // The three captions/values are Age8 with CharacterDistance 0 (same
+        // shared-font sandbox as draw_game_unit_tabs): pin the step at the draw
+        // sites so a change to the shared face table cannot move them.
+        if (unit_win.show_type && unit_win.type_icon >= 0 &&
+            unit_win.type_icon < 3 && unitwin_type_icon[unit_win.type_icon].ok) {
+            card_icon(unitwin_type_icon[unit_win.type_icon], L.type_icon);
+            text_at(cv, glyphs8b, L.type_lbl.x, L.type_lbl.y, "Type", 160, 169,
+                    143, true, false, 0);
+            text_at(cv, glyphs8b, L.type_val.x, L.type_val.y, unit_win.type,
+                    160, 169, 143, true, false, 0);
+        }
+        if (unit_win.align_icon >= 0 && unit_win.align_icon < 5 &&
+            unitwin_align_icon[unit_win.align_icon].ok) {
+            card_icon(unitwin_align_icon[unit_win.align_icon], L.align_icon);
+            text_at(cv, glyphs8b, L.align_lbl.x, L.align_lbl.y, "Alignment",
+                    160, 169, 143, true, false, 0);
+            text_at(cv, glyphs8b, L.align_val.x, L.align_val.y,
+                    unit_win.alignment, 160, 169, 143, true, false, 0);
+        }
+        if (unit_win.show_relation && unit_win.relation_icon >= 0 &&
+            unit_win.relation_icon < 8 &&
+            unitwin_relation[unit_win.relation_icon].ok) {
+            card_icon(unitwin_relation[unit_win.relation_icon], L.rel_icon);
+            text_at(cv, glyphs8b, L.rel_lbl.x, L.rel_lbl.y, "Race Relation",
+                    160, 169, 143, true, false, 0);
+            text_at(cv, glyphs8b, L.rel_val.x, L.rel_val.y, unit_win.relation,
+                    160, 169, 143, true, false, 0);
+        }
+    }
+
+    // The footer (both tabs): BCeltL is a `frHorizLine` over CeltDeco 55
+    // (7x27 left cap), 56 (100x27 braid) and 57 (7x27 right cap). DrawILLh
+    // runs `(width - caps) / middle.w + 1` middle tiles (four here), clipped
+    // to the box, then pins the right cap; the braid is therefore continuous
+    // across the whole 378 px band exactly as the reference shows. The two
+    // CeltLineL/R knots are a 27x27 image in a 54x27 box, which TAOWImage
+    // tiles twice.
+    void draw_game_unit_footer(Canvas& cv, const UnitWindowLayout& L) const {
+        if (unitwin_celt_line.ok && unitwin_celt_mid.ok &&
+            unitwin_celt_right.ok) {
+            const int y = L.celt_line.y;
+            const int lw = static_cast<int>(unitwin_celt_line.w);
+            const int rw = static_cast<int>(unitwin_celt_right.w);
+            const int x1 = L.celt_line.x + L.celt_line.w - rw;
+            cv.blit_keyed(unitwin_celt_line, L.celt_line.x, y);
+            for (int tx = L.celt_line.x + lw; tx < x1;
+                 tx += static_cast<int>(unitwin_celt_mid.w)) {
+                cv.blit_clip(unitwin_celt_mid, tx, y, L.celt_line.x + lw, y,
+                             x1 - (L.celt_line.x + lw), L.celt_line.h);
+            }
+            cv.blit_keyed(unitwin_celt_right, x1, y);
+        } else if (unitwin_celt_line.ok) {
+            cv.blit_tile(unitwin_celt_line, L.celt_line.x, L.celt_line.y,
+                         L.celt_line.w, L.celt_line.h, false);
+        }
+        if (unitwin_celt_knot.ok) {
+            const AowBox* knots[2] = {&L.celt_l, &L.celt_r};
+            for (const AowBox* k : knots) {
+                for (int ty = 0; ty < k->h;
+                     ty += static_cast<int>(unitwin_celt_knot.h)) {
+                    for (int tx = 0; tx < k->w;
+                         tx += static_cast<int>(unitwin_celt_knot.w)) {
+                        cv.blit_clip(unitwin_celt_knot, k->x + tx, k->y + ty,
+                                     k->x, k->y, k->w, k->h);
+                    }
+                }
+            }
+        }
+        struct Btn {
+            const AowBox* box;
+            const char* text;
+            int id;
+            std::uint8_t r, g, b;
+        };
+        const Btn btns[2] = {{&L.disband, "Disband", kUnitDisband, 89, 0, 0},
+                             {&L.bclose, "Close", kUnitClose, 24, 20, 16}};
+        for (const Btn& b : btns) {
+            const int st = unitwin_pressed == b.id
+                               ? 2
+                               : (unitwin_hover == b.id ? 1 : 0);
+            blit3_clip(cv, unitwin_button[st], *b.box);
+            text_at(cv, glyphs10b, b.box->x + b.box->w / 2, b.box->y + 4,
+                    b.text, b.r, b.g, b.b, true, false);
         }
     }
 
@@ -7150,7 +9463,8 @@ struct Scene {
             const int f = tb_turn_start + kTbTurnRaceStride * tb_turn_cur + 6;
             if (f >= 0 && f < kTbTurnFrameCount) return f;
         }
-        return tb_turn_start + tb_turn_frame;
+        const int f = tb_turn_start + tb_turn_frame;
+        return (f >= 0 && f < kTbTurnFrameCount) ? f : -1;
     }
 
 
@@ -7158,11 +9472,15 @@ struct Scene {
     // the window's own Update cadence. The state machine is reproduced verbatim:
     //   mode 0  idle; a CurPlayer that differs from LastPlayer starts the change
     //           from LastPlayer's block at AnimStart;
-    //   mode 1  step the frame up until the target block's +5 frame;
+    //   mode 1  step the frame up until *LastPlayer's* +5 frame (0x59704d2c
+    //           compares +0x140 against +0x11c, not +0x118);
     //   mode 2  run the "turn changing" glow frames 0..10;
-    //   mode 3  step down from the target block's +5 frame to its first frame,
-    //           then settle on it, keep LastPlayer = CurPlayer, clear Animating
-    //           and fire OnAnimDone (TurnButtonAnimDone clears Checked).
+    //   mode 3  step down from CurPlayer's +5 frame to its first frame, then
+    //           settle on it, keep LastPlayer = CurPlayer, clear Animating and
+    //           fire OnAnimDone (TurnButtonAnimDone clears Checked).
+    // LastPlayer = -1 (the day handler 0x0044ece8) therefore starts a change
+    // even when CurPlayer did not move: Frame = -7, drawn as library frame 4,
+    // and the walk is the one 23-frame rotation of a new day.
     void tb_turn_update() {
         switch (tb_turn_mode) {
         case 0:
@@ -7171,10 +9489,13 @@ struct Scene {
             tb_turn_start = kTbTurnAnimStart;
             tb_turn_mode = 1;
             tb_turn_animating = true;
+            std::printf("game_turnanim=start from=%d to=%d\n", tb_turn_last,
+                        tb_turn_cur);
+            std::fflush(stdout);
             break;
         case 1:
             ++tb_turn_frame;
-            if (tb_turn_frame > kTbTurnRaceStride * tb_turn_cur + 5) {
+            if (tb_turn_frame > kTbTurnRaceStride * tb_turn_last + 5) {
                 tb_turn_frame = 0;
                 tb_turn_mode = 2;
                 tb_turn_start = 0;
@@ -7198,32 +9519,33 @@ struct Scene {
                 tb_turn_animating = false;
                 // OnAnimDone -> TurnButtonAnimDone (AoW.exe 0x004572f4).
                 tb_turn_checked = false;
+                tb_turn_ai_hold = 0;
+                std::printf("game_turnanim=done frame=%d\n", tb_turn_frame);
+                std::fflush(stdout);
             }
             break;
         default:
             tb_turn_mode = 0;
             break;
         }
-        if (tb_turn_frame < 0) tb_turn_frame = 0;
-        if (tb_turn_frame >= kTbTurnFrameCount) tb_turn_frame = kTbTurnFrameCount - 1;
+        // The decompiled Update has no clamp: Frame may be negative while mode 1
+        // walks LastPlayer == -1 (the day change). Draw bounds-checks the index.
     }
 
-    // The form's seated-player update (AoW.exe 0x004551b1): the button takes the
-    // new seat's race block; with `animate` the class walks there itself, without
-    // it the button snaps to the block's first frame (what the form does when a
-    // map opens). Either way the Checked state is dropped.
-    void tb_turn_set_player(int race, bool animate) {
+    // The form's map-open update (AoW.exe 0x00454d2c with 0x004551b1): the
+    // button takes the *seated* player's race block - both CurPlayer and
+    // LastPlayer - and snaps to the block's first frame. It is not called when
+    // the turn simply moves to the next player; in a single-player game the seat
+    // never changes, so the one visible change is the new-day rotation below.
+    void tb_turn_set_player(int race) {
         if (race < 0 || race > kTbTurnNoRace) race = kTbTurnNoRace;
         tb_turn_checked = false;
-        if (!animate) {
-            tb_turn_cur = tb_turn_last = race;
-            tb_turn_frame = kTbTurnRaceStride * race;
-            tb_turn_start = kTbTurnAnimStart;
-            tb_turn_mode = 0;
-            tb_turn_animating = false;
-            return;
-        }
-        tb_turn_cur = race;
+        tb_turn_cur = tb_turn_last = race;
+        tb_turn_frame = kTbTurnRaceStride * race;
+        tb_turn_start = kTbTurnAnimStart;
+        tb_turn_mode = 0;
+        tb_turn_animating = false;
+        tb_turn_ai_hold = 0;
     }
 
     // TAbstractUnit.NewTurn (@0x55780d4c) refills every unit's move points when
@@ -7241,18 +9563,50 @@ struct Scene {
         }
     }
 
-    // The turn loop moved to another player: the TurnButton follows it, the day
-    // read-out follows the map, and a human seat's turn start plays its sound
-    // and refills its armies (TTurnPlayerControl.NewTurn 0x55756714).
+    // The turn loop moved to another player: the day read-out follows the map,
+    // and a human seat's turn start plays its sound and refills its armies
+    // (TTurnPlayerControl.NewTurn 0x55756714). The TurnButton itself follows the
+    // *seated* seat only, set once when the map opens (0x00454d2c); the one
+    // in-game change is the new day, where the day handler 0x0044ece8 stores
+    // LastPlayer = -1 so TAOWTurnButton.Update plays exactly one rotation.
     void game_turn_changed(bool animate) {
         const aow::Player* p = game_current_player();
-        tb_turn_set_player(tb_turn_race_of(p), animate);
+        const int prev_day = game_day;
         game_day = mv_gs.day;
+        // The round wrapped: every seat has ended, so the day label handler runs
+        // and invalidates LastPlayer. The button stays on its Checked glow until
+        // the 23-frame rotation finishes (TurnButtonAnimDone clears Checked).
+        // NEWTURN.WAV belongs to the same instant - the start of the rotation -
+        // not to the later hand-over to the human's seat in the new order.
+        if (animate && game_day > prev_day) {
+            tb_turn_last = -1;
+            play_game_sfx("SFX\\EVENTS\\NEWTURN.WAV");
+            game_newturn_sound_day = game_day;
+            std::printf("game_newturn_sound=day=%d at=turnanim-start\n",
+                        game_day);
+            std::fflush(stdout);
+        }
+        // Head-less diagnostic: the four WGold/WMana bar read-outs for the
+        // seated player (`game_live_stats` is what render_game draws).
+        if (const aow::Player* seat = game_seat()) {
+            std::printf("game_stats=player=%d gold=%d income=%d upkeep=%d "
+                        "net=%d mana=%d mana_income=%d\n",
+                        static_cast<int>(seat->index), seat->gold, seat->income,
+                        seat->upkeep(), seat->income - seat->upkeep(),
+                        seat->magic.mana, seat->magic.mana_income);
+            std::fflush(stdout);
+        }
         if (p == nullptr) {
             std::printf("game_turn=none day=%d\n", game_day);
             std::fflush(stdout);
             return;
         }
+        // `TCity.NewTurn@557ab814` -> `TProductionControl.NewTurn@5575dd00`:
+        // every city this seat owns retries a waiting item, ticks an executing
+        // one and completes it. A finished produce places the unit on the map,
+        // so re-composite the current level's armies afterwards.
+        mv_city_production_new_turn(p->index);
+        if (!game_px.empty()) mv_refresh_draw();
         std::printf("game_turn=player=%d name=%s day=%d race=%d block=%d\n",
                     static_cast<int>(p->index), p->display_name().c_str(),
                     game_day, static_cast<int>(p->race),
@@ -7261,7 +9615,16 @@ struct Scene {
         if (p->index == mv_human) {
             mv_reset_army_turn(mv_human);
             tb_next_index = -1;   // TPlayer+0xb4 starts a fresh seat
-            play_game_sfx("SFX\\EVENTS\\NEWTURN.WAV");
+            // The first turn (and a restart) has no day-change rotation, so it
+            // plays the sound here; every later round already played it at the
+            // rotation start above.
+            if (game_newturn_sound_day != game_day) {
+                play_game_sfx("SFX\\EVENTS\\NEWTURN.WAV");
+                game_newturn_sound_day = game_day;
+                std::printf("game_newturn_sound=day=%d at=seat-start\n",
+                            game_day);
+                std::fflush(stdout);
+            }
             game_say("your turn - day " + std::to_string(game_day));
         }
     }
@@ -7287,12 +9650,17 @@ struct Scene {
             mv_gs.turn_in_order = 0;
             mv_gs.current_player = mv_gs.turn_order.front();
             game_turns_started = false;
-            tb_turn_set_player(tb_turn_race_of(game_current_player()), false);
+            tb_turn_set_player(tb_turn_race_of(game_current_player()));
             game_day = mv_gs.day;
             return;
         }
         mv_gs.begin_first_turn(mv_human);
         game_turns_started = true;
+        // A fresh/restarted loop must play the first hand-over's NEWTURN.WAV.
+        game_newturn_sound_day = 0;
+        // The map-open snap: CurPlayer and LastPlayer become the seated seat's
+        // race and the button sits on its block's first frame. No animation.
+        tb_turn_set_player(tb_turn_race_of(game_current_player()));
         game_turn_changed(false);
     }
 
@@ -7300,7 +9668,8 @@ struct Scene {
     // player's turn, or withdraws it when that player already ended. The result
     // of the map's EndTurn/CancelEndTurn is filed back into Checked
     // (`*(Sender+0x5c) + 0x13c`), which is what turns the button into its
-    // "turn ended" picture.
+    // "turn ended" picture. It does not move CurPlayer/Frame: the button stays
+    // on the Checked transition frame until the new-day rotation (0x0044ece8).
     void game_turn_button_click() {
         if (!mv_ready || mv_gs.players.empty() || mv_human == 0xff) return;
         if (tb_turn_animating) return;   // CheckMouseDown's [+0x120] gate
@@ -7310,6 +9679,7 @@ struct Scene {
         if (!ended) {
             const std::uint8_t before = mv_gs.current();
             tb_turn_checked = mv_gs.end_turn(mv_human);
+            tb_turn_ai_hold = tb_turn_checked ? kGameAiTurnHoldFrames : 0;
             std::printf("game_endturn=player=%d ok=%d from=%d to=%d day=%d\n",
                         static_cast<int>(mv_human), tb_turn_checked ? 1 : 0,
                         static_cast<int>(before),
@@ -7318,6 +9688,7 @@ struct Scene {
             if (tb_turn_checked) game_turn_changed(true);
         } else {
             tb_turn_checked = !mv_gs.cancel_end_turn(mv_human);
+            tb_turn_ai_hold = 0;
             std::printf("game_endturn=cancel player=%d checked=%d\n",
                         static_cast<int>(mv_human), tb_turn_checked ? 1 : 0);
             std::fflush(stdout);
@@ -7337,17 +9708,25 @@ struct Scene {
     // The turn loop, driven once per game frame. Every seat that the port does
     // not simulate - the independents (0) and the CPU wizards - plays its
     // (empty) turn and ends it through the same `GameState::end_turn` the
-    // human's button uses. The end is paced by the TurnButton's own turn-change
-    // animation, so each seat's colour is seen before the next one begins: the
-    // AI phase as the original plays it (and no seat is ever skipped before it
-    // ended its turn).
+    // human's button uses. The original spends a real turn on each seat; the
+    // port holds each one for the button's change span so the Checked glow is
+    // seen while everybody ends, then the day rolls and the single rotation
+    // plays. The button never follows these seats (CurPlayer is the seated one).
     void game_turn_tick() {
         if (!game_turns_started || mv_human == 0xff) return;
         if (mv_gs.turn_order.empty()) return;
         const std::uint8_t cur = mv_gs.current();
         if (cur == 0xff || cur == mv_human) return;
-        if (tb_turn_animating) return;   // the colour change is still playing
-        if (mv_gs.end_turn(cur)) game_turn_changed(true);
+        if (tb_turn_animating) return;   // the new-day change is still playing
+        if (tb_turn_checked && tb_turn_ai_hold > 0) {
+            --tb_turn_ai_hold;
+            return;
+        }
+        if (mv_gs.end_turn(cur)) {
+            game_turn_changed(true);
+            tb_turn_ai_hold = (mv_gs.current() == mv_human)
+                                  ? 0 : kGameAiTurnHoldFrames;
+        }
     }
 
 
@@ -7736,6 +10115,713 @@ struct Scene {
         return true;
     }
 
+    // --- the city production model -----------------------------------------
+    // `AoWE.TUnitProductionList` entries carry a Unitres record id; resolve it
+    // through the already-loaded `UnitCatalog` (the same join TUnitResource.
+    // GetUnitName does in the original).
+    const aow::UnitEntry* city_unit_entry(int id) const {
+        for (const aow::UnitEntry& u : mv_cat.units) {
+            if (static_cast<int>(u.id) == id) return &u;
+        }
+        return nullptr;
+    }
+
+    std::string city_unit_name(int id) const {
+        const aow::UnitEntry* u = city_unit_entry(id);
+        if (u != nullptr && !u->display_name.empty()) return u->display_name;
+        return "Unit " + std::to_string(id);
+    }
+
+    // The TCity the screen is showing (`game_city_hx/hy` on the current level).
+    // The unit page asks it for UnitProductionGold/Time and the size term of
+    // the production timer, exactly like `FUN_0043c43c` reads TCity+0x50.
+    const aow::MapHs* city_current_hs() const {
+        if (game_level < 0 || static_cast<std::size_t>(game_level) >=
+                                  game_state_map.levels.size()) {
+            return nullptr;
+        }
+        const aow::MapLevel& lv =
+            game_state_map.levels[static_cast<std::size_t>(game_level)];
+        if (game_city_hx < 0 || game_city_hy < 0 ||
+            static_cast<std::uint32_t>(game_city_hx) >= lv.width ||
+            static_cast<std::uint32_t>(game_city_hy) >= lv.height) {
+            return nullptr;
+        }
+        const aow::MapTile& tile =
+            lv.tiles[static_cast<std::size_t>(game_city_hy) * lv.width +
+                     static_cast<std::size_t>(game_city_hx)];
+        for (const aow::MapHs& hs : tile.objects) {
+            if (hs.class_id == aow::kCityClassId) return &hs;
+        }
+        return nullptr;
+    }
+
+    // `TAlignmentRStr` (AoWE's resourcestring array) indexed by
+    // `GetAlignment & 0x7f`; the unit page writes "Alignment: %s".
+    static const char* city_alignment_name(int a) {
+        static const char* const kNames[7] = {
+            "Pure Good", "Good", "Pure Neutral", "Neutral",
+            "Evil", "Pure Evil", "None"};
+        const int i = a & 0x7f;
+        return (i >= 0 && i < 7) ? kNames[i] : "Neutral";
+    }
+
+    // `TAbility.GetName` (AbilityP.dpl's AoWE.<name>Str resourcestrings).
+    // The English texts live in AoWEPACK.dpl's RT_STRING table; each concrete
+    // `T*Ability.Create` assigns `this+0xc` the ability id and `this+8` the
+    // loaded caption (e.g. `TTurnUndeadAbility.Create@5576ad20` -> id 0x26,
+    // "Turn Undead"; `THealingAbility.Create@5576be3c` -> id 0x2f, "Healing";
+    // `TDispelMagicAbility.Create@5576cd68` -> id 0x3c, "Dispel Magic"). The id
+    // is `Ability.pfs tag - 10`, not the record index: tag 43 is absent, so
+    // 34 = Turned Undead, 35 = Invoke Death, 36 = Wall Climbing. Unknown ids
+    // return nullptr: ListAbilities skips an ability whose GetName is empty.
+    static const char* city_ability_name(int id) {
+        switch (id) {
+        case 0: return "Walking";
+        case 1: return "Flying";
+        case 2: return "Swimming";
+        case 3: return "Forestry";
+        case 4: return "Cave Crawling";
+        case 5: return "Mountaineering";
+        case 6: return "Magic Immunity";
+        case 7: return "Fire Immunity";
+        case 8: return "Cold Immunity";
+        case 9: return "Lightning Immunity";
+        case 10: return "Poison Immunity";
+        case 11: return "Death Immunity";
+        case 12: return "Holy Immunity";
+        case 13: return "Physical Immunity";
+        case 14: return "Fire Strike";
+        case 15: return "Cold Strike";
+        case 16: return "Lightning Strike";
+        case 17: return "Poison Strike";
+        case 18: return "Death Strike";
+        case 19: return "Holy Strike";
+        case 20: return "Magic Strike";
+        case 21: return "Strike";
+        case 22: return "Archery";
+        case 23: return "Sailing";
+        case 24: return "Hurl Boulder";
+        case 25: return "Hurl Stones";
+        case 26: return "Trail Of Darkness";
+        case 27: return "Web";
+        case 28: return "Dominate";
+        case 29: return "Seduce";
+        case 30: return "Flame Throwing";
+        case 31: return "Call Flames";
+        case 32: return "Marksmanship";
+        case 34: return "Turned Undead";
+        case 35: return "Invoke Death";
+        case 36: return "Wall Climbing";
+        case 37: return "Bard's Skills";
+        case 38: return "Turn Undead";
+        case 39: return "Night Vision";
+        case 40: return "Entangle";
+        case 41: return "True Seeing";
+        case 42: return "Tunneling";
+        case 43: return "Ignition";
+        case 44: return "Fire Cannon";
+        case 45: return "Fire Musket";
+        case 46: return "Leadership";
+        case 47: return "Healing";
+        case 48: return "Seduced";
+        case 49: return "Regeneration";
+        case 50: return "Transport";
+        case 51: return "Cause Fear";
+        case 52: return "Spell Casting";
+        case 54: return "Invisibility";
+        case 55: return "Doom Gaze";
+        case 57: return "Shoot Javelin";
+        case 58: return "Shoot Black Javelin";
+        case 59: return "Floating";
+        case 60: return "Dispel Magic";
+        case 61: return "Poison Darts";
+        case 62: return "Venomous Spit";
+        case 63: return "Dragon";
+        case 64: return "Vision";
+        case 65: return "Self Destruct";
+        case 66: return "Pass Wall";
+        case 67: return "Fearless";
+        case 68: return "Path Of Decay";
+        case 69: return "Path Of Life";
+        case 70: return "Death Protection";
+        case 71: return "Fire Protection";
+        case 72: return "Holy Protection";
+        case 73: return "Poison Protection";
+        case 74: return "Lightning Protection";
+        case 75: return "Magic Protection";
+        case 76: return "Cold Protection";
+        case 77: return "Physical Protection";
+        case 86: return "Fire Breath";
+        case 87: return "Cold Breath";
+        case 88: return "Black Breath";
+        case 89: return "Divine Breath";
+        case 90: return "Gas Breath";
+        case 92: return "Stunned";
+        case 93: return "Cursed";
+        case 94: return "Entangled";
+        case 95: return "Frozen";
+        case 96: return "Poisoned";
+        case 97: return "Webbed";
+        case 98: return "Vertigo";
+        case 99: return "Nature's Blessing";
+        case 100: return "Blessed";
+        case 101: return "Crusader";
+        case 106: return "Possess";
+        case 107: return "Possessed";
+        case 108: return "Panicked";
+        case 109: return "Path Of Frost";
+        case 111: return "Charge";
+        case 112: return "Dragon Slaying";
+        case 113: return "Parry";
+        case 114: return "Round Attack";
+        case 115: return "Extra Strike";
+        case 116: return "First Strike";
+        case 117: return "Wall Crushing";
+        case 118: return "Life Stealing";
+        case 119: return "Entangle Strike";
+        case 120: return "Black Bolts";
+        case 121: return "Magic Bolts";
+        case 122: return "Frost Bolts";
+        case 123: return "Lightning Bolts";
+        case 124: return "Holy Bolts";
+        case 125: return "Construct";
+        case 127: return "Burning";
+        case 128: return "Resurrected";
+        case 129: return "Animated";
+        case 130: return "Resurrected";
+        case 131: return "Decay";
+        case 132: return "Slow";
+        case 138: return "Steppe Concealment";
+        case 139: return "Underground Concealment";
+        case 140: return "Grass Concealment";
+        case 141: return "Snow Concealment";
+        case 142: return "Desert Concealment";
+        case 143: return "Wasteland Concealment";
+        case 144: return "Water Concealment";
+        case 145: return "Concealment";
+        case 146: return "Holy Champion";
+        case 147: return "Unholy Champion";
+        case 148: return "Charm";
+        case 149: return "Charmed";
+        case 150: return "Dominated";
+        case 152: return "Haste";
+        case 153: return "Stone Skin";
+        case 154: return "Enchanted Weapon";
+        case 155: return "Summoned";
+        case 156: return "Fury";
+        case 157: return "Free Movement";
+        case 168: return "Bloodlust";
+        default: return nullptr;
+        }
+    }
+
+    // The level-carrying `T*Ability.GetName` overrides append a fixed suffix on
+    // top of the base caption. TTurnUndeadAbility.GetLevelName@5576af3c /
+    // TDispelMagicAbility.GetLevelName@5576cf3c / TMarksmanshipAbility and
+    // TVisionAbility all use the DAT_5576b068.. constants " I".." IV".
+    static const char* city_ability_level_suffix(int id, int level) {
+        switch (id) {
+        case 32:  // Marksmanship
+        case 38:  // Turn Undead
+        case 52:  // Spell Casting
+        case 60:  // Dispel Magic
+        case 64:  // Vision
+            break;
+        default:
+            return "";
+        }
+        switch (level) {
+        case 1: return " I";
+        case 2: return " II";
+        case 3: return " III";
+        case 4: return " IV";
+        default: return "";
+        }
+    }
+
+    // `FUN_004541b0(GetMoveTypes)`: picks the IconMove id TCityScreen puts in
+    // UMovesIcon. The unit's move-type bits come from its movement abilities
+    // (TAbstractUnit.GetMoveTypes); each test overwrites the previous one, so
+    // the order below is the original's.
+    static int city_move_icon(std::uint8_t mask) {
+        int v = 0;
+        if ((mask & 8) == 8) v = 2;
+        if ((mask & 0x20) == 0x20) v = 4;
+        if ((mask & 4) == 4) v = 6;
+        if ((mask & 5) == 5) v = 8;
+        if ((mask & 0xc) == 0xc) v = 10;
+        if ((mask & 0x24) == 0x24) v = 12;
+        if ((mask & 0x28) == 0x28) v = 14;
+        if ((mask & 0x2c) == 0x2c) v = 16;
+        if ((mask & 2) == 2) v = 18;
+        return v;
+    }
+
+    // `TUnit.GetFace@5578283c` -> `TUnitGFXResource.GetFaceImage@55783b00`:
+    // the unit-gfx record's image library (`FACES\R_FACES.ILB`) at its face
+    // index. `UFaceDraw@0043dc0c` then stretches it into UPictureFramePnl. That
+    // handler resolves the face of the card that is checked at draw time
+    // (`TCityScreen+0x2b0` -> city+0x50 GetItem(+0x2c4)), so the sprite has to
+    // follow the selection; `city_unit_face_id` is the cache key.
+    bool city_load_unit_face(int unit_id) {
+        if (city_unit_face_id == unit_id && city_unit_face.ok) return true;
+        city_unit_face = Sprite();
+        city_unit_face_id = -1;
+        const aow::UnitEntry* u = city_unit_entry(unit_id);
+        if (u == nullptr || u->gfx == nullptr) return false;
+        const std::string path = face_lib_path(u->gfx->image_lib);
+        if (path.empty()) return false;
+        if (city_unit_face_path != path) {
+            std::string lerr;
+            if (!city_unit_face_il.load(path, lerr)) return false;
+            city_unit_face_path = path;
+        }
+        const std::vector<aow::IlbEntry>& ents = city_unit_face_il.entries();
+        for (std::size_t i = 0; i < ents.size(); ++i) {
+            if (ents[i].index != u->gfx->face_index) continue;
+            std::uint32_t w = 0, h = 0;
+            std::string derr;
+            if (!city_unit_face_il.decode_rgb(i, city_unit_face.rgba, w, h,
+                                              derr)) {
+                return false;
+            }
+            city_unit_face.w = w;
+            city_unit_face.h = h;
+            city_unit_face.ok = true;
+            city_unit_face_id = unit_id;
+            // The face pictures are class 0x10 (no colour key); UFaceDraw
+            // stretches them across the frame's inner rect.
+            city_unit_face.base_x = 0;
+            city_unit_face.base_y = 0;
+            city_unit_face.has_key = false;
+            return true;
+        }
+        return false;
+    }
+
+    // Resolve the checked production card into the values `FUN_0043c43c`
+    // writes into UnitPnl. Selecting a card, a queue row, or (re)loading the
+    // production list calls this; the renderer is then a pure view.
+    void city_unit_page_refresh() {
+        CityUnitPage p;
+        city_unit_abil_top = 0;
+        if (city_prod_sel < 0 ||
+            static_cast<std::size_t>(city_prod_sel) >= city_prod_units.size()) {
+            city_unit_page = p;
+            return;
+        }
+        const aow::CityProductionUnit& card =
+            city_prod_units[static_cast<std::size_t>(city_prod_sel)];
+        const aow::UnitEntry* u = city_unit_entry(card.unit_id);
+        if (u == nullptr) {
+            city_unit_page = p;
+            return;
+        }
+        p.valid = true;
+        p.unit_id = card.unit_id;
+        p.title = (card.flag ? "Produce " : "Install ") +
+                  city_unit_name(card.unit_id);
+        p.attack = u->attack;
+        p.defense = u->defense;
+        p.damage = u->damage;
+        p.resistance = u->resistance;
+        p.hits = u->hit_points;
+        p.moves = u->moves;
+        const std::array<bool, 256> has =
+            aow::decode_ability_bitmap(u->ability_mask, u->ability_count);
+        p.move_icon = city_move_icon(aow::move_types_from_abilities(has));
+        // UnitProductionGold / UnitProductionTime for the card's kind (1
+        // Produce, 2 Install) - the same pair the Queue button charges.
+        const int kind = card.flag ? 1 : 2;
+        const aow::MapHs* hs = city_current_hs();
+        p.cost = hs != nullptr
+                     ? city_production_gold(*hs, kind, city_prod_sel)
+                     : city_unit_gold(card.unit_id);
+        p.turns = hs != nullptr
+                      ? city_production_time(*hs, kind, city_prod_sel)
+                      : city_unit_level(card.unit_id);
+        p.alignment = city_alignment_name(u->alignment);
+        p.level = u->level;
+        // TAbstractUnit.GetUpkeep@5577fc64: (level+1)*2, 0 with ability 0x9b.
+        p.upkeep = has[0x9b] ? 0 : (u->level + 1) * 2;
+        for (int i = 0; i < static_cast<int>(u->ability_count) && i < 256; ++i) {
+            if (!has[static_cast<std::size_t>(i)]) continue;
+            const char* name = city_ability_name(i);
+            if (name == nullptr) continue;
+            const int ability_level =
+                static_cast<std::size_t>(i) < u->ability_levels.size()
+                    ? u->ability_levels[static_cast<std::size_t>(i)]
+                    : 0;
+            if (i == 50 && ability_level > 0) {
+                // TTransportAbility.GetLevelName@557660a0 formats the
+                // `TransportXUnitsRStr` caption "Transport (%s units)".
+                p.abilities.push_back("Transport (" +
+                                      std::to_string(ability_level) + " units)");
+            } else {
+                p.abilities.push_back(std::string(name) +
+                                      city_ability_level_suffix(i, ability_level));
+            }
+        }
+        city_unit_page = p;
+        (void)city_load_unit_face(card.unit_id);
+    }
+
+    // `City.ProductionIDToCityAction@557a7ce4` maps a TProductionItem+8
+    // (`TProductionControl.Produce@5575d95c` / `ProduceUnitEx@5575d670` /
+    // `ResearchUnit@5575d870` write it) to the CityBtn1Click switch value:
+    //
+    //   1  produce a unit              -> 8  (TCityScreen case 8, "Produce")
+    //   2  install / research a unit    -> 7  (case 7, "Install")
+    //   10 produce merchandise (trade)  -> 1
+    //   11 upgrade                      -> 2
+    //   12 fortify                      -> 3
+    //   13 migrate                      -> 4
+    //   14 loot                         -> 5
+    //
+    // `City.CityActionToProductionID@557a7d44` is the inverse used by the
+    // city's Trade/Upgrade/Fortify/Migrate/Loot methods when they queue.
+    static int city_queue_action(int kind) {
+        switch (kind) {
+        case 1: return 8;
+        case 2: return 7;
+        case 10: return 1;
+        case 11: return 2;
+        case 12: return 3;
+        case 13: return 4;
+        case 14: return 5;
+        default: return 0;
+        }
+    }
+
+    static int city_action_to_production_id(int action) {
+        switch (action) {
+        case 1: return 10;
+        case 2: return 11;
+        case 3: return 12;
+        case 4: return 13;
+        case 5: return 14;
+        default: return 0;
+        }
+    }
+
+    static bool city_production_is_unit(int kind) {
+        return kind == 1 || kind == 2;
+    }
+
+    // `TProductionControl.GetProductionName@5575de04` (unit kinds) and
+    // `TCityProductionControl.GetProductionName@557a8acc` (city actions).
+    std::string city_production_item_name(int kind, int index) const {
+        if (city_production_is_unit(kind)) {
+            const bool has_unit =
+                index >= 0 && static_cast<std::size_t>(index) <
+                                  city_prod_units.size();
+            std::string name = has_unit
+                ? city_unit_name(city_prod_units[
+                      static_cast<std::size_t>(index)].unit_id)
+                : "Unknown";
+            return (kind == 1 ? "Produce " : "Install ") + name;
+        }
+        switch (kind) {
+        case 10: return "Produce Merchandise";
+        case 11: return "Upgrade";
+        case 12: return "Fortify";
+        case 13:
+            return "Migrate to " + aow::race_label_plural(
+                static_cast<std::uint8_t>(index < 0 ? 0 : index));
+        case 14: return "Loot";
+        default: return "Unknown";
+        }
+    }
+
+    // `TProductionControl.GetProductionNameProgressive@5575dfe4`: the
+    // "Producing X" / "Installing X" line the overview's IncomeMemo shows.
+    std::string city_production_item_progressive(int kind, int index) const {
+        if (city_production_is_unit(kind)) {
+            const bool has_unit =
+                index >= 0 && static_cast<std::size_t>(index) <
+                                  city_prod_units.size();
+            std::string name = has_unit
+                ? city_unit_name(city_prod_units[
+                      static_cast<std::size_t>(index)].unit_id)
+                : "Unknown";
+            return (kind == 1 ? "Producing " : "Installing ") + name;
+        }
+        switch (kind) {
+        case 10: return "Producing Merchandise";
+        case 11: return "Upgrading the city";
+        case 12: return "Fortifying the city";
+        case 13: return "Migrating the city";
+        case 14: return "Looting the city";
+        default: return "Producing";
+        }
+    }
+
+    // --- unit production cost/time (the recovered getters) -------------------
+    // `TCityProductionControl.UnitProductionTime@557a913c`:
+    //   level - City.GetSize()/2 + 1, clamped to >= 1.
+    // `TProductionControl.UnitResearchTime@5575d7b8` (install) = level.
+    // `UnitProductionGold/UnitResearchGold` both return the Unitres record's
+    // +0x4c, i.e. tag 27 (`TUnitResource.GetObtainValue@55784d58`); the port's
+    // UnitEntry stores it as `obtain_value`. Mana is 0 for a city: the
+    // `TProductionPlaceControl.UnitProductionGold/Mana` pair sends the cost to
+    // the gold slot when the production place is a city (GetType == 8).
+    int city_unit_level(int unit_id) const {
+        const aow::UnitEntry* u = city_unit_entry(unit_id);
+        return u != nullptr && u->level > 0 ? static_cast<int>(u->level) : 1;
+    }
+
+    int city_unit_gold(int unit_id) const {
+        const aow::UnitEntry* u = city_unit_entry(unit_id);
+        return u != nullptr ? static_cast<int>(u->obtain_value) : 0;
+    }
+
+    // `TCity.GetSize@557aa938` (docs/26_CITY_SCREEN.md): the number of
+    // TTerrainList entries whose terrain byte is >= 0 as a signed char, i.e.
+    // the city resource's covered hexes (City1..City4 = 1..4).
+    int city_size_hexes(const aow::MapHs& hs) const {
+        const aow::MapResource* r =
+            aow::find_map_resource(game_res, hs.resource);
+        if (r == nullptr) return 1;
+        int n = 0;
+        for (std::uint16_t e : r->terrain_list) {
+            if (static_cast<std::int8_t>(e & 0xff) >= 0) ++n;
+        }
+        return n > 0 ? n : 1;
+    }
+
+    int city_production_time_for(
+        const std::vector<aow::CityProductionUnit>& units,
+        const aow::MapHs& hs, int kind, int index) const {
+        if (kind == 1) {
+            const int unit_id =
+                (index >= 0 &&
+                 static_cast<std::size_t>(index) < units.size())
+                    ? units[static_cast<std::size_t>(index)].unit_id
+                    : 0;
+            const int t = city_unit_level(unit_id) - city_size_hexes(hs) / 2 + 1;
+            return t < 1 ? 1 : t;
+        }
+        if (kind == 2) {
+            if (index < 0 || static_cast<std::size_t>(index) >= units.size()) {
+                return 1;
+            }
+            const int lvl =
+                city_unit_level(units[static_cast<std::size_t>(index)].unit_id);
+            return lvl < 1 ? 1 : lvl;
+        }
+        switch (kind) {
+        case 10: return 1;                   // ExecuteProduction: trade
+        case 11: return 3;                   // TCity.UpgradeTime@557aabcc
+        case 12: return 2;                   // TCity.FortifyTime@557aad78
+        case 13: return 2;                   // TCity.MigrationTime
+        case 14: return city_size_hexes(hs);  // TCity.LootTime@557ab024
+        default: return 1;
+        }
+    }
+
+    int city_production_time(const aow::MapHs& hs, int kind,
+                             int index) const {
+        return city_production_time_for(city_prod_units, hs, kind, index);
+    }
+
+    // The gold `ExecuteProduction@5575d118` charges when it starts an item
+    // (`CanExecuteProduction@5575cf4c` checks it first).
+    int city_production_gold_for(
+        const std::vector<aow::CityProductionUnit>& units,
+        const aow::MapHs& hs, int kind, int index) const {
+        if (kind == 1 || kind == 2) {
+            if (index < 0 || static_cast<std::size_t>(index) >= units.size()) {
+                return 0;
+            }
+            return city_unit_gold(
+                units[static_cast<std::size_t>(index)].unit_id);
+        }
+        if (kind == 11) return 250;  // TCity.UpgradeCost: flat 250 gold
+        if (kind == 12) {
+            // TCity.FortifyCost: 20/40/60/80 by size while the wall is below
+            // stone (2); a stone wall cannot be fortified further.
+            if (hs.wall_type >= 2) return -1;
+            return city_size_hexes(hs) * 20;
+        }
+        return 0;
+    }
+
+    int city_production_gold(const aow::MapHs& hs, int kind,
+                             int index) const {
+        return city_production_gold_for(city_prod_units, hs, kind, index);
+    }
+
+    // `TProductionControl.LoopableProduction@5575ddfc` + the city override:
+    // only producing a unit or merchandise may repeat; installing a unit and
+    // the Upgrade/Fortify/Migrate/Loot actions do not.
+    static bool city_production_loopable(int kind) {
+        return kind == 1 || kind == 10;
+    }
+
+    // `GetQueueLocked@5575cd20`: full, or a queued Migrate/Loot (the city
+    // override's LockQueueProduction) disables the Queue button.
+    bool city_queue_locked() const {
+        if (city_queue.size() >= 5) return true;
+        for (const aow::CityQueueItem& q : city_queue) {
+            const int a = city_queue_action(q.kind);
+            if (a == 4 || a == 5) return true;
+        }
+        return false;
+    }
+
+    // `TProductionControl.ReadWrite@5575dc18` serialises TProductionControl+0x24
+    // as rw tag 0x16. That object is a `TProductionSettings`
+    // (`TProductionSettings.ReadWrite@5575c8c4`), whose +8/+0xc/+0x10 are the
+    // paid gold/mana and the turns left. `NewTurn@5575dd00` ticks +0x10 and
+    // `FUN_0043f574` reads it, so the mirror follows the live values every time
+    // they change. It is copied even while the state is 0: ProductionDone
+    // keeps the finished item's +8/+0xc/+0x1c (only +0x10 is left at 0), while
+    // ExecuteCancelProduction clears the settings, and both cases already have
+    // the right values in the live fields.
+    static void city_sync_settings_mirror(aow::MapHs& hs) {
+        hs.production_current.kind = hs.production_gold_paid;   // +8
+        hs.production_current.index = hs.production_mana_paid;  // +0xc
+        hs.production_current.extra = hs.production_turns_left; // +0x10
+        hs.production_current_present = true;
+    }
+
+    // Builds the Scene's copy of `City.TCity` rw tag 0x12: the unit list (the
+    // 12 cards), the queue rows and LoopQueueBox. The card art is decoded once
+    // here (`PreDrawProductions` draws the unit's standing pose over the
+    // CityWin frame); a city with no production control keeps the reference
+    // page's cards.
+    void load_city_production(const aow::MapHs* hs) {
+        city_prod_units.clear();
+        city_queue.clear();
+        city_prod_names.clear();
+        city_queue_names.clear();
+        city_card_art.clear();
+        city_prod_sel = -1;
+        city_loop = false;
+        city_queue_edit = false;
+        city_queue_sel = -1;
+        city_map_hs = const_cast<aow::MapHs*>(hs);
+        city_prod_state = 0;
+        city_prod_turns_left = 0;
+        city_prod_turns_total = 0;
+        city_prod_gold_paid = 0;
+        city_prod_mana_paid = 0;
+        if (hs == nullptr) return;
+        city_prod_units = hs->production_units;
+        city_queue = hs->production_queue;
+        city_loop = hs->loop_queue;
+        city_repeat = city_loop;
+        for (const aow::CityProductionUnit& u : city_prod_units) {
+            city_prod_names.push_back(city_unit_name(u.unit_id));
+            // The card's kind is `TUnitProduction+0xc`: non-zero draws the
+            // CityWin 4 face with the unit at facing 3, zero draws the CityWin
+            // 5 face, the unit at facing 5 and the 45 % blend wash over it.
+            std::printf("city_production_card=%u unit=%d kind=%d name=[%s]\n",
+                        static_cast<unsigned>(city_prod_names.size() - 1),
+                        u.unit_id, u.flag,
+                        city_prod_names.back().c_str());
+        }
+        std::fflush(stdout);
+        for (const aow::CityQueueItem& q : city_queue) {
+            city_queue_names.push_back(
+                city_production_item_name(q.kind, q.index));
+        }
+        // `TProductionControl+0x20` and the `+0x24` settings object as the
+        // rw tags 0x17/0x16 load them. An active item stores its paid gold in
+        // +8, paid mana in +0xc, the turns left in +0x10 and the total in
+        // +0x1c (ExecuteProduction@5575d118 / TProductionSettings). A map that
+        // only carries the queue (state 0/1) has no running timer.
+        city_prod_state = hs->production_state;
+        if (!city_queue.empty()) {
+            const aow::CityQueueItem& front = city_queue.front();
+            const int total =
+                city_production_time(*hs, front.kind, front.index);
+            if (city_prod_state == 2) {
+                // Take the live timer, not the queue row: the row's +0x10 is
+                // a TProductionItem field that is never written for a queue
+                // entry, while +0x10 of tag 0x16 is the byte NewTurn ticks.
+                city_prod_turns_left = hs->production_turns_left;
+                city_prod_turns_total = hs->production_turns_total;
+                city_prod_gold_paid = hs->production_gold_paid;
+                city_prod_mana_paid = hs->production_mana_paid;
+                if (city_prod_turns_total <= 0) {
+                    // A scenario map can carry state 2 without a total (only
+                    // ExecuteProduction writes +0x1c); recover it like the
+                    // start path does.
+                    city_prod_turns_total = total;
+                }
+                if (city_prod_gold_paid < 0 || city_prod_gold_paid > 1000000) {
+                    city_prod_gold_paid =
+                        city_production_gold(*hs, front.kind, front.index);
+                }
+                if (city_prod_mana_paid < 0 || city_prod_mana_paid > 1000000) {
+                    city_prod_mana_paid = 0;
+                }
+                // +0x10 is a signed byte: 0 is the "UnitProduced retry" state
+                // NewTurn leaves for this turn, and -1 hides the label
+                // (`FUN_0043f574`). Anything larger than the total is stale.
+                if (city_prod_turns_left < 0 && city_prod_turns_left != -1) {
+                    city_prod_turns_left = 0;
+                }
+                if (city_prod_turns_left > city_prod_turns_total) {
+                    city_prod_turns_left = city_prod_turns_total;
+                }
+                // The cleaned-up values replace the raw bytes (`city_map_hs` is
+                // the non-const view of `hs` taken above).
+                city_map_hs->production_turns_left = city_prod_turns_left;
+                city_map_hs->production_turns_total = city_prod_turns_total;
+                city_map_hs->production_gold_paid = city_prod_gold_paid;
+                city_map_hs->production_mana_paid = city_prod_mana_paid;
+                city_sync_settings_mirror(*city_map_hs);
+            } else if (city_prod_state == 1) {
+                city_prod_turns_total = total;
+            }
+        } else {
+            city_prod_state = 0;
+        }
+        if (city_prod_state != 0) {
+            std::printf("city_production_load=state=%u turns_left=%d total=%d "
+                        "gold_paid=%d mana_paid=%d\n",
+                        static_cast<unsigned>(city_prod_state),
+                        city_prod_turns_left, city_prod_turns_total,
+                        city_prod_gold_paid, city_prod_mana_paid);
+            std::fflush(stdout);
+        }
+        // One standing pose per card. `PreDrawProductions` resolves it with the
+        // draw-info record's facing (3 for a produce item, 5 for an install
+        // item) and draws it at `(cell.Left - 4, cell.Top - 4)` plus the
+        // *frame's* base+shift only (`aow::unit_pose_sprite_rgba`): the
+        // sequence's own xoff/yoff belong to the map's hex anchor, not here. No
+        // cropping and no re-centring either - those offsets are what the
+        // reference capture shows.
+        for (const aow::CityProductionUnit& u : city_prod_units) {
+            CityCardArt art;
+            aow::MapUnit mu;
+            mu.class_id = aow::kMapUnitClassId;
+            mu.resource = u.unit_id;
+            std::vector<std::uint8_t> rgba;
+            int aw = 0, ah = 0, vx = 0, vy = 0;
+            std::string err;
+            const int facing =
+                u.flag ? kCityCardFaceProduce : kCityCardFaceInstall;
+            if (aow::unit_pose_sprite_rgba(mv_cat, root_dir, mu, facing, 0, 0,
+                                           rgba, aw, ah, vx, vy, err) &&
+                aw > 0 && ah > 0) {
+                art.s.rgba = std::move(rgba);
+                art.s.w = static_cast<std::uint32_t>(aw);
+                art.s.h = static_cast<std::uint32_t>(ah);
+                art.s.ok = true;
+                art.vx = vx;
+                art.vy = vy;
+            }
+            city_card_art.push_back(std::move(art));
+        }
+        // The unit page is a view of the list; it starts empty (no card
+        // checked) and is filled by each card/queue selection.
+        city_unit_page_refresh();
+    }
+
     // TIWindow.MainBtnClick's city branch: hand the selected TCity to
     // TCityScreen. `ShowCity` (0x0043af24) first fills the activity panels
     // (FUN_0043b208) from the city - name, population/race, civil status,
@@ -7795,6 +10881,7 @@ struct Scene {
                 }
             }
         }
+        load_city_production(city_hs);
         city_upgrade_level = city_hs != nullptr && city_hs->city_level > 0
                                  ? city_hs->city_level
                                  : 2;
@@ -7805,9 +10892,12 @@ struct Scene {
         city_enh_header = "Enhancements";
         city_enh_lines = "Upgrade Level: " + std::to_string(city_upgrade_level) +
                          "\r" + city_wall;
-        city_production = "Producing Merchandise";
-        city_production_turns = "(default)";
+        // TCityScreen.ShowCity -> TProductionControl.GetProductionName for the
+        // queue's first item; a city with no queue produces merchandise.
+        city_queue_sync_production();
         city_queue_sel = -1;
+        city_change = false;          // +0x2cc = 0: the overview page
+        city_activity = 0;            // B1CB Tag
         city_hover = city_pressed = -1;
         std::printf("city_screen=%d,%d city=1 name=[%s] race=[%s] level=%d "
                     "art=%d/%d\n",
@@ -7821,7 +10911,14 @@ struct Scene {
 
     void close_city_screen() {
         if (!game_show_city) return;
+        city_store_to_map();
+        city_map_hs = nullptr;
         game_show_city = false;
+        city_change = false;
+        city_queue_edit = false;
+        city_activity = 0;
+        city_prod_sel = -1;
+        city_unit_page_refresh();
         city_hover = city_pressed = -1;
         game_city_hx = game_city_hy = -1;
         std::printf("city_screen=closed\n");
@@ -7841,12 +10938,80 @@ struct Scene {
 
     // TCityScreen's controls. The form is modal, so a click anywhere else is
     // swallowed (returns -1) instead of reaching the frozen bar/map behind it.
-    // IDs 2001..2004 = CityBtn1 (Change), PPrev, PNext, CityBtn3 (Exit);
-    // 2005 = LoopQueueBox; 2010+i = QueueLB row i.
+    // Overview (mode 0): 2001 Change, 2002 PPrev, 2003 PNext, 2004 Exit,
+    // 2005 LoopQueueBox, 2010+i QueueLB row i.
+    // Production picker (mode 1): 2001 MainBtn1 (the action), 2002 Queue,
+    // 2004 Done, 2010+i QueueLB row i, 2100+i B1CB..B6CB activity cells,
+    // 2200+i P1CB..P12CB production cells.
     int city_hit_test(int x, int y) const {
         auto in = [](int bx, int by, int bw, int bh, int px, int py) {
             return bx <= px && px < bx + bw && by <= py && py < by + bh;
         };
+        if (city_change) {
+            // B1CB..B6CB: ActivityPnl2 at (167,357); each cell is WinLeft
+            // 51*Tag, WinTop 1, 52 wide and 64 tall (the 48x60 Is-* card is
+            // blitted at +2,+2). This is ActivityPnl2's actual bottom row -
+            // the earlier 51x65 at y=357 mixed the panel and the cell.
+            // Page 04's MigratePnl covers this row entirely (the capture shows
+            // its picture/lists there), so the cells are not clickable there.
+            if (city_activity != 3) {
+                for (int i = 0; i < 6; ++i) {
+                    if (in(167 + i * 51, 358, 52, 64, x, y)) return 2100 + i;
+                }
+            }
+            // P1CB..P12CB: ActivityPnl2? No - the cards live in ActivityPnl
+            // (WinLeft 11, WinTop 164); P1CB is WinLeft 2 + 51*Tag, WinTop 0,
+            // 52x52. The visible row is y=164..216, *not* 203..255.
+            for (int i = 0; i < 12; ++i) {
+                if (in(13 + i * 51, 164, 52, 52, x, y)) return 2200 + i;
+            }
+            // RightPnl: MainBtn1 (action / Delete), CityBtn2 (Queue /
+            // Execute), CityBtn3 (Done).
+            const bool unit_sel =
+                city_prod_sel >= 0 &&
+                static_cast<std::size_t>(city_prod_sel) < city_prod_units.size();
+            if (city_queue_edit) {
+                if (in(475, 358, 153, 21, x, y)) {
+                    return city_queue_sel >= 0 ? 2001 : -1;
+                }
+                if (in(475, 379, 153, 21, x, y)) {
+                    // `FUN_00441020` shows CityBtn2 (Execute) for row 0 while
+                    // the control is waiting for its cost (state 1).
+                    return (city_queue_sel == 0 && city_prod_state == 1) ? 2002
+                                                                        : -1;
+                }
+            } else {
+                if (in(475, 358, 153, 21, x, y)) {
+                    return (unit_sel ||
+                            city_activity_has_action(city_activity))
+                               ? 2001
+                               : -1;
+                }
+                if (in(475, 379, 153, 21, x, y)) {
+                    // `FUN_0043c43c` shows Queue when GetQueueLocked() is
+                    // false; Migrate has no queue button.
+                    return (!city_queue_locked() &&
+                            (unit_sel || city_activity <= 2 ||
+                             city_activity == 4))
+                               ? 2002
+                               : -1;
+                }
+            }
+            if (in(475, 399, 153, 21, x, y)) return 2004;
+            // QueueLB: 157x63 at (11,358), ItemHeight 11. Only a row that
+            // exists in TProductionQueue selects (the original's
+            // `count <= Selected` guard); clicking past it does nothing.
+            if (in(11, 358, 157, 63, x, y)) {
+                int row = (y - 358) / 11;
+                if (row < 0) row = 0;
+                if (row > 4) row = 4;
+                if (row < static_cast<int>(city_queue.size())) {
+                    return 2010 + row;
+                }
+                return -1;
+            }
+            return -1;
+        }
         if (in(475, 358, 153, 21, x, y)) return 2001;
         if (in(475, 379, 77, 21, x, y)) return 2002;
         if (in(551, 379, 77, 21, x, y)) return 2003;
@@ -7897,52 +11062,849 @@ struct Scene {
         std::fflush(stdout);
     }
 
-    // CityBtn1Click's "Change": the original opens TProductionScreen, whose
-    // list is the city's buildable units. The port has the full Unitres
-    // catalogue, so cycle a representative unit of the city's race (and the
-    // default Merchandise item) in place.
+    // CityBtn1Click mode 0 (AoW.exe 0x0043d37c): switch TCityScreen to its
+    // production picker. `FUN_0043bb14(param,1)` builds the 12 production cells
+    // from TCity's TUnitProductionList, `FUN_0043c414` shows UpgradePnl /
+    // ActivityPnl2, and `FUN_0043c43c` fills the page for the selected action.
+    // B1CB..B6CB are the six activity cells (Tag 0..5): Produce Merchandise,
+    // Upgrade, Fortify, Migrate, Loot and Raze.
     void city_change_production() {
-        std::vector<std::string> items;
-        items.push_back("Merchandise");
-        const int race = (game_struct_race_index >= 0 &&
-                          game_struct_race_index < 12)
-                             ? game_struct_race_index
-                             : 0;
-        for (const aow::UnitEntry* u :
-             mv_cat.units_of_race(static_cast<std::uint8_t>(race))) {
-            if (u == nullptr) continue;
-            items.push_back(u->display_name);
-            if (items.size() >= 8) break;
-        }
-        if (items.empty()) items.push_back("Merchandise");
-        std::size_t cur = 0;
-        for (std::size_t i = 0; i < items.size(); ++i) {
-            if (city_production == "Producing " + items[i]) cur = i;
-        }
-        cur = (cur + 1) % items.size();
-        city_production = "Producing " + items[cur];
-        city_production_turns = items[cur] == "Merchandise" ? "(default)" : "3 turns";
-        std::printf("city_production=[%s] turns=[%s]\n", city_production.c_str(),
-                    city_production_turns.c_str());
+        city_change = true;
+        city_queue_edit = false;
+        city_prod_sel = -1;
+        city_activity = 0;
+        city_unit_page_refresh();
+        std::printf("city_change=1 activity=0\n");
         std::fflush(stdout);
     }
 
+    static const char* city_activity_title(int a) {
+        static const char* const kTitles[6] = {
+            "Produce Merchandise", "Upgrade", "Fortify",
+            "Migrate", "Loot", "Raze",
+        };
+        return (a >= 0 && a < 6) ? kTitles[a] : kTitles[0];
+    }
+
+    // CityBtn1's label is the action ("Produce Merchandise", "Upgrade",
+    // "Fortify", "Loot", "Raze"); Migrate has no MainBtn1
+    // (`FUN_0043c43c` hides it for action 4). CityBtn2 (Queue) is driven by
+    // `GetQueueLocked` plus the Migrate page's hidden panel.
+    static bool city_activity_has_action(int a) { return a != 3; }
+
+    void city_activity_select(int a) {
+        if (a < 0) a = 0;
+        if (a > 5) a = 5;
+        city_activity = a;
+        city_queue_edit = false;
+        city_prod_sel = -1;
+        city_unit_page_refresh();
+        std::printf("city_activity=%d title=[%s]\n", city_activity,
+                    city_activity_title(city_activity));
+        std::fflush(stdout);
+    }
+
+    // `CityBtn1Click` mode 1 case 6 (Raze) is the only activity that is not a
+    // queued production: it calls the city's raze method immediately and hides
+    // the dialog. Every other activity (Trade/Upgrade/Fortify/Migrate/Loot) is
+    // queued through `city_queue_add` and applied by
+    // `city_production_complete` when its timer runs out, exactly like the
+    // original's `TCityProductionControl.NewTurn`.
+    void city_activity_apply() {
+        if (city_activity != 5) {
+            // Defensive: MainBtn1 only reaches here for Raze; a stray call
+            // keeps the old page state rather than changing the city.
+            std::printf("city_apply=[%s]\n",
+                        city_activity_title(city_activity));
+            std::fflush(stdout);
+            return;
+        }
+        std::printf("city_destroyed=Raze\n");
+        city_change = false;
+        close_city_screen();
+        std::fflush(stdout);
+    }
+
+    // --- the queue editor (TCityScreen mode 2) ------------------------------
+    // `FUN_0043c43c` uses the item's action kind, `QueueLBChange` shows the
+    // Delete button for a selected row and - only for row 0 with
+    // LoopQueueBox checked - the Execute button.
+    void city_queue_rebuild_names() {
+        city_queue_names.clear();
+        for (const aow::CityQueueItem& q : city_queue) {
+            city_queue_names.push_back(
+                city_production_item_name(q.kind, q.index));
+        }
+    }
+
+    // `AoWE.FmtTurnsLeftStr@5575a5c4`: the overview's ActiveActionTurns.
+    // Only the value 1 takes the singular resource ("1 turn left"); every
+    // other value - including 0 - goes through IntToStr + " turns left", so a
+    // finished-but-not-yet-placed item really reads "0 turns left".
+    static std::string city_turns_left_text(int turns) {
+        if (turns == 1) return "1 turn left";
+        return std::to_string(turns) + " turns left";
+    }
+
+    // `FUN_0043f574` does not cache the label: it reads
+    // `TProductionSettings+0x10` (the same byte `NewTurn@5575dd00` ticks)
+    // whenever it refreshes the overview. Derive the text from the live city
+    // so no refresh path can leave the number behind. The original hides the
+    // label for the stored signed byte -1 instead of formatting it.
+    std::string city_turns_left_label() const {
+        if (city_map_hs != nullptr && city_map_hs->production_state == 2) {
+            if (city_map_hs->production_turns_left == -1) return std::string();
+            return city_turns_left_text(city_map_hs->production_turns_left);
+        }
+        return city_production_turns;
+    }
+
+    // Keep the overview's ActiveAction / ActiveActionTurns / IncomeMemo in step
+    // with the queue's first row and the live production state. The original's
+    // `FUN_0043bb14`/`FUN_0043f574` show the queue's `GetProductionName` and
+    // `FmtTurnsLeftStr(TProductionControl+0x24 + 0x10)` while an item runs; a
+    // waiting item (state 1) shows the reason string CanExecuteProduction
+    // fills (not implemented yet), so its label stays hidden.
+    void city_queue_sync_production() {
+        if (city_queue.empty()) {
+            city_production = "Producing Merchandise";
+            city_production_turns = "(default)";
+            city_income_lines = "Base Income\r" +
+                                std::to_string(city_crop_fields) +
+                                " Crop Fields\rProducing Merchandise";
+            return;
+        }
+        const aow::CityQueueItem& front = city_queue.front();
+        city_production = city_production_item_name(front.kind, front.index);
+        if (city_prod_state == 2) {
+            city_production_turns = city_prod_turns_left == -1
+                                        ? std::string()
+                                        : city_turns_left_text(
+                                              city_prod_turns_left);
+        } else if (city_prod_state == 1) {
+            city_production_turns.clear();
+        } else {
+            city_production_turns = "(default)";
+        }
+        city_income_lines =
+            "Base Income\r" + std::to_string(city_crop_fields) +
+            " Crop Fields\r" +
+            city_production_item_progressive(front.kind, front.index);
+    }
+
+    // The roster entry that owns the open city (`TProductionControl.GetPlayer`
+    // @557a9134 -> City+0x30 -> TPlayerList.GetPlayers).
+    aow::Player* city_owner_player() {
+        if (city_map_hs == nullptr) return nullptr;
+        const std::size_t i = mv_gs.index_of(city_map_hs->structure_owner);
+        return i < mv_gs.players.size() ? &mv_gs.players[i] : nullptr;
+    }
+
+    aow::Player* player_by_index(std::uint8_t idx) {
+        const std::size_t i = mv_gs.index_of(idx);
+        return i < mv_gs.players.size() ? &mv_gs.players[i] : nullptr;
+    }
+
+    // Writes the Scene's live production model back into the city's MapHs
+    // (`TProductionControl.ReadWrite@5575dc18`: tag 0x14 queue, 0x15 unit
+    // list, 0x16 settings, 0x17 state, 0x18 loop). The settings object's
+    // +8/+0xc/+0x10 store the paid gold/mana and the turns left while active;
+    // its rw tag 0x16 is always streamed, so `production_current_present`
+    // stays set once the city had a production control.
+    void city_store_to_map() {
+        if (city_map_hs == nullptr) return;
+        city_map_hs->production_units = city_prod_units;
+        city_map_hs->production_queue = city_queue;
+        city_map_hs->loop_queue = city_loop;
+        city_map_hs->production_state = city_prod_state;
+        city_map_hs->production_turns_left = city_prod_turns_left;
+        city_map_hs->production_turns_total = city_prod_turns_total;
+        city_map_hs->production_gold_paid = city_prod_gold_paid;
+        city_map_hs->production_mana_paid = city_prod_mana_paid;
+        city_sync_settings_mirror(*city_map_hs);
+    }
+
+    // `TProductionControl.ExecuteProduction@5575d118` +
+    // `CanExecuteProduction@5575cf4c`: charge the item's gold/mana, then set
+    // the state to 2 and the timer to the item's time. When the treasury is
+    // short the item stays in state 1 ("Waiting") and is retried next turn -
+    // exactly what `NewTurn@5575dd00` does with a state-1 control.
+    bool city_production_try_start() {
+        if (city_map_hs == nullptr || city_queue.empty()) return false;
+        if (city_prod_state == 2) return true;
+        const aow::CityQueueItem& q = city_queue.front();
+        const int gold =
+            city_production_gold(*city_map_hs, q.kind, q.index);
+        if (gold < 0) {
+            std::printf("city_production_reject=[%s] cost<0\n",
+                        city_production_item_name(q.kind, q.index).c_str());
+            std::fflush(stdout);
+            return false;
+        }
+        aow::Player* p = city_owner_player();
+        const int have = p != nullptr ? p->gold : 0;
+        if (have < gold) {
+            city_prod_state = 1;
+            city_store_to_map();
+            std::printf("city_production_wait=[%s] cost=%d gold=%d\n",
+                        city_production_item_name(q.kind, q.index).c_str(),
+                        gold, have);
+            std::fflush(stdout);
+            return false;
+        }
+        if (p != nullptr) p->gold -= gold;
+        city_prod_state = 2;
+        city_prod_turns_total =
+            city_production_time(*city_map_hs, q.kind, q.index);
+        city_prod_turns_left = city_prod_turns_total;
+        city_prod_gold_paid = gold;
+        city_prod_mana_paid = 0;
+        city_store_to_map();
+        city_queue_sync_production();
+        std::printf("city_production_start=[%s] cost=%d time=%d gold=%d\n",
+                    city_production_item_name(q.kind, q.index).c_str(), gold,
+                    city_prod_turns_total, p != nullptr ? p->gold : 0);
+        std::fflush(stdout);
+        return true;
+    }
+
+    // `TProductionControl.ProduceUnitEx@5575d670` / `ResearchUnit@5575d870`
+    // through `ExecuteAddProduction@5575d324`: append the item, then execute it
+    // straight away when it is the only row. `from_queue` is the Queue
+    // button's flag (0 for MainBtn1): `CanResearchUnit@5575d7e4` only rejects
+    // a duplicate queued install when that flag is set.
+    bool city_queue_add(int kind, int index, bool from_queue) {
+        if (city_queue.size() >= 5) {
+            std::printf("city_queue_add=full\n");
+            std::fflush(stdout);
+            return false;
+        }
+        if (city_queue_locked()) {
+            std::printf("city_queue_add=locked\n");
+            std::fflush(stdout);
+            return false;
+        }
+        if (from_queue && kind == 2) {
+            for (const aow::CityQueueItem& q : city_queue) {
+                if (q.kind == 2 && q.index == index) {
+                    std::printf("city_queue_add=already-queued\n");
+                    std::fflush(stdout);
+                    return false;
+                }
+            }
+        }
+        if ((kind == 11 && city_map_hs != nullptr &&
+             city_map_hs->city_level >= city_size_hexes(*city_map_hs)) ||
+            (kind == 12 && city_map_hs != nullptr &&
+             city_map_hs->wall_type >= 2)) {
+            std::printf("city_queue_add=action-unavailable\n");
+            std::fflush(stdout);
+            return false;
+        }
+        aow::CityQueueItem q;
+        q.kind = kind;
+        q.index = index;
+        // `ProduceUnitEx@5575d670` stores its caller flag in
+        // `TProductionItem+0x10`; `ResearchUnit@5575d870` and the city-action
+        // methods leave that field at 0.
+        q.extra = (kind == 1 && from_queue) ? 1 : 0;
+        city_queue.push_back(q);
+        city_queue_rebuild_names();
+        city_queue_sync_production();
+        city_queue_sel = -1;
+        std::printf("city_queue_add=[%s] rows=%d\n",
+                    city_queue_names.back().c_str(),
+                    static_cast<int>(city_queue.size()));
+        std::fflush(stdout);
+        if (city_prod_state == 0 && city_queue.size() == 1) {
+            city_production_try_start();
+        }
+        city_store_to_map();
+        return true;
+    }
+
+    // --- producing a unit into the city's army -------------------------------
+    // `TAbstractUnit.Place@557810fc`: find the TArmyHS on the hex (creating one
+    // when the hex is empty), `TArmy.AddUnit` it, and fail when the army is
+    // full (`TArmy.MaxSize@5578def4` = 8, reduced by a transport ability).
+    bool city_place_unit_at(aow::MapLevel& lv, int hx, int hy,
+                            std::uint8_t owner, int unit_id) {
+        if (hx < 0 || hy < 0 || hx >= static_cast<int>(lv.width) ||
+            hy >= static_cast<int>(lv.height)) {
+            return false;
+        }
+        aow::MapTile& tile =
+            lv.tiles[static_cast<std::size_t>(hy) * lv.width +
+                     static_cast<std::size_t>(hx)];
+        aow::MapUnit mu;
+        mu.class_id = aow::kMapUnitClassId;
+        mu.resource = unit_id;
+        mu.id = -1;
+        mu.move_points_left = -1;
+        // `TUnit.SetUnitResource` copies the Unitres ability list into the new
+        // unit. Without it `GetMoveTypes` is 0, and the all-0xFF move table of
+        // that one unit makes the whole army immobile when folded.
+        if (const aow::UnitEntry* e = city_unit_entry(unit_id)) {
+            mu.ability_count = e->ability_count;
+            mu.ability_mask = e->ability_mask;
+        }
+        for (aow::MapHs& o : tile.objects) {
+            if (o.class_id != aow::kMapArmyHsClassId) continue;
+            if (o.owner != owner) return false;  // another owner's stack
+            if (o.units.size() >= 8) return false;  // TArmy.AddUnit fails
+            o.units.push_back(mu);
+            std::printf("city_unit_produced=unit=%d at=%d,%d army=%zu\n",
+                        unit_id, hx, hy, o.units.size());
+            std::fflush(stdout);
+            return true;
+        }
+        aow::MapHs army;
+        army.class_id = aow::kMapArmyHsClassId;
+        army.owner = owner;
+        army.army_direction = 3;
+        army.units.push_back(mu);
+        tile.objects.push_back(army);
+        std::printf("city_unit_produced=unit=%d at=%d,%d army=new\n", unit_id,
+                    hx, hy);
+        std::fflush(stdout);
+        return true;
+    }
+
+    // `TCityProductionControl.UnitProduced@557a8f10`: try the city's own
+    // covered hexes (the TTerrainList entries of its city resource), then the
+    // stored hex with `Place(..., force)`. The port derives the covered hexes
+    // with the same HN spiral the engine uses (`hn_walk_hex`), so a multi-hex
+    // city puts the unit on a footprint tile instead of always on its centre.
+    bool city_produce_unit_at_city(aow::MapLevel& lv, const aow::MapHs& hs,
+                                   int hx, int hy, int unit_id) {
+        const std::uint8_t owner = hs.structure_owner;
+        const aow::MapResource* r =
+            aow::find_map_resource(game_res, hs.resource);
+        if (r != nullptr) {
+            for (std::size_t i = 0; i < r->terrain_list.size(); ++i) {
+                if (static_cast<std::int8_t>(r->terrain_list[i] & 0xff) < 0) {
+                    continue;
+                }
+                int nx = hx, ny = hy;
+                aow::hn_walk_hex(hx, hy, static_cast<int>(i), nx, ny);
+                if (city_place_unit_at(lv, nx, ny, owner, unit_id)) {
+                    return true;
+                }
+            }
+        }
+        return city_place_unit_at(lv, hx, hy, owner, unit_id);
+    }
+
+    // Applies a finished queue item and logs it. Unit produce/install are the
+    // two mechanics the wiki calls "Produce unit"/"Install unit":
+    //   * install = UnitResearched@5575d774: set TUnitProduction+0xc, i.e. the
+    //     card becomes producible (its button flips from Install to Produce);
+    //   * produce = UnitProduced@557a8f10: place a new TUnit at the city.
+    // The other production ids mirror TCityProductionControl.NewTurn@557a82a8.
+    bool city_production_complete(aow::MapLevel& lv, aow::MapHs& hs, int hx,
+                                  int hy, const aow::CityQueueItem& item) {
+        switch (item.kind) {
+        case 1: {
+            if (item.index < 0 ||
+                static_cast<std::size_t>(item.index) >=
+                    hs.production_units.size()) {
+                return false;
+            }
+            const int unit_id =
+                hs.production_units[static_cast<std::size_t>(item.index)]
+                    .unit_id;
+            if (!city_produce_unit_at_city(lv, hs, hx, hy, unit_id)) {
+                // No city hex could take it: NewTurn keeps the item at the
+                // head of the queue and retries UnitProduced next turn.
+                std::printf("city_unit_produced=unit=%d at=%d,%d failed\n",
+                            unit_id, hx, hy);
+                std::fflush(stdout);
+                return false;
+            }
+            return true;
+        }
+        case 2: {
+            if (item.index < 0 ||
+                static_cast<std::size_t>(item.index) >=
+                    hs.production_units.size()) {
+                return false;
+            }
+            hs.production_units[static_cast<std::size_t>(item.index)].flag =
+                true;
+            std::printf("city_unit_installed=index=%d unit=%d\n", item.index,
+                        hs.production_units[static_cast<std::size_t>(item.index)]
+                            .unit_id);
+            std::fflush(stdout);
+            return true;
+        }
+        case 10:
+            std::printf("city_production_done=[Produce Merchandise]\n");
+            break;
+        case 11: {
+            const int size = city_size_hexes(hs);
+            hs.city_level = static_cast<std::uint8_t>(
+                std::min<int>(size, static_cast<int>(hs.city_level) + 1));
+            std::printf("city_upgrade_level=%d\n",
+                        static_cast<int>(hs.city_level));
+            break;
+        }
+        case 12: {
+            // TCity.SetWallType: a map without tag 0xf leaves +0x4c at 0, so
+            // the port's -1 sentinel means "no wall", not "below wooden".
+            const int wall = hs.wall_type < 0 ? 0 : hs.wall_type;
+            hs.wall_type = static_cast<std::int8_t>(std::min(2, wall + 1));
+            std::printf("city_wall=%d\n", static_cast<int>(hs.wall_type));
+            break;
+        }
+        case 13:
+            hs.race = static_cast<std::int8_t>(item.index < 0 ? 0 : item.index);
+            std::printf("city_migrated=race=%d\n",
+                        static_cast<int>(hs.race));
+            break;
+        case 14:
+            std::printf("city_production_done=[Loot]\n");
+            break;
+        default:
+            break;
+        }
+        std::fflush(stdout);
+        return true;
+    }
+
+    // The MapHs-only twin of `city_production_try_start` (the turn loop runs
+    // for every city, not just the one whose screen is open).
+    bool city_try_start_for(aow::MapHs& hs) {
+        if (hs.production_queue.empty()) {
+            hs.production_state = 0;
+            return false;
+        }
+        const aow::CityQueueItem& q = hs.production_queue.front();
+        const int gold = city_production_gold_for(hs.production_units, hs,
+                                                   q.kind, q.index);
+        if (gold < 0) {
+            std::printf("city_production_reject=[%s] cost<0\n",
+                        city_production_item_name(q.kind, q.index).c_str());
+            std::fflush(stdout);
+            return false;
+        }
+        aow::Player* p = player_by_index(hs.structure_owner);
+        const int have = p != nullptr ? p->gold : 0;
+        if (have < gold) {
+            hs.production_state = 1;
+            std::printf("city_production_wait=[%s] cost=%d gold=%d\n",
+                        city_production_item_name(q.kind, q.index).c_str(),
+                        gold, have);
+            std::fflush(stdout);
+            return false;
+        }
+        if (p != nullptr) p->gold -= gold;
+        hs.production_state = 2;
+        hs.production_turns_total = city_production_time_for(
+            hs.production_units, hs, q.kind, q.index);
+        hs.production_turns_left = hs.production_turns_total;
+        hs.production_gold_paid = gold;
+        hs.production_mana_paid = 0;
+        city_sync_settings_mirror(hs);
+        std::printf("city_production_start=[%s] cost=%d time=%d gold=%d\n",
+                    city_production_item_name(q.kind, q.index).c_str(), gold,
+                    hs.production_turns_total, p != nullptr ? p->gold : 0);
+        std::fflush(stdout);
+        return true;
+    }
+
+    // `TProductionControl.ProductionDone@5575dc7c`: free (or, with the Repeat
+    // box checked, move to the end) the finished queue row, then execute the
+    // next one. `LoopableProduction` excludes installs and every city action
+    // except Produce Merchandise.
+    void city_production_done(aow::MapLevel& lv, aow::MapHs& hs, int hx,
+                              int hy) {
+        if (hs.production_queue.empty()) {
+            hs.production_state = 0;
+            city_sync_settings_mirror(hs);
+            return;
+        }
+        const aow::CityQueueItem item = hs.production_queue.front();
+        if (!city_production_complete(lv, hs, hx, hy, item)) {
+            // `NewTurn` leaves a state-2 item whose UnitProduced failed at the
+            // head of the queue (turn counter already 0); the next turn calls
+            // UnitProduced again instead of dropping the finished unit.
+            hs.production_state = 2;
+            hs.production_turns_left = 0;
+            city_sync_settings_mirror(hs);
+            std::printf("city_production_retry=[%s]\n",
+                        city_production_item_name(item.kind, item.index)
+                            .c_str());
+            std::fflush(stdout);
+            return;
+        }
+        if (hs.loop_queue && city_production_loopable(item.kind)) {
+            hs.production_queue.erase(hs.production_queue.begin());
+            hs.production_queue.push_back(item);
+        } else {
+            hs.production_queue.erase(hs.production_queue.begin());
+        }
+        // ProductionDone does not clear the settings object: +8/+0xc/+0x1c
+        // keep the finished item's values until the next ExecuteProduction
+        // refills them (the shipped autosave's idle city still carries 250/3).
+        // Only the timer is 0 and the state goes idle.
+        hs.production_state = 0;
+        hs.production_turns_left = 0;
+        if (!hs.production_queue.empty()) city_try_start_for(hs);
+        city_sync_settings_mirror(hs);
+        std::printf("city_production_advance=[%s] rows=%zu state=%u\n",
+                    city_production_item_name(item.kind, item.index).c_str(),
+                    hs.production_queue.size(),
+                    static_cast<unsigned>(hs.production_state));
+        std::fflush(stdout);
+    }
+
+    // `FUN_0043f574` refreshes the overview from the live TProductionControl
+    // (queue + the settings object's +0x10). The port keeps an editable copy
+    // for the screen, so mirror the map fields back into it after a turn ticked
+    // the city that is currently open. (The GUI city screen is modal, but the
+    // head-less `--game-turns` smoke test keeps it open across days, which is
+    // exactly how the stale-number bug showed up.)
+    void city_refresh_open_from_map(aow::MapHs& hs) {
+        if (city_map_hs != &hs) return;
+        city_prod_state = hs.production_state;
+        city_prod_turns_left = hs.production_turns_left;
+        city_prod_turns_total = hs.production_turns_total;
+        city_prod_gold_paid = hs.production_gold_paid;
+        city_prod_mana_paid = hs.production_mana_paid;
+        // An Install completion flips TUnitProduction+0xc, so the cards must
+        // follow too (the art stays keyed by index; the row order is stable).
+        city_prod_units = hs.production_units;
+        city_prod_names.clear();
+        for (const aow::CityProductionUnit& u : city_prod_units) {
+            city_prod_names.push_back(city_unit_name(u.unit_id));
+        }
+        city_queue = hs.production_queue;
+        city_queue_rebuild_names();
+        if (city_prod_state != 0 && city_prod_turns_total <= 0 &&
+            !city_queue.empty()) {
+            city_prod_turns_total = city_production_time(
+                hs, city_queue.front().kind, city_queue.front().index);
+        }
+        if (city_queue_sel >= static_cast<int>(city_queue.size())) {
+            city_queue_sel = static_cast<int>(city_queue.size()) - 1;
+        }
+        if (city_queue.empty()) {
+            city_queue_sel = -1;
+            city_queue_edit = false;
+        }
+        city_queue_sync_production();
+        city_unit_page_refresh();
+        std::printf("city_production_tick=state=%u turns_left=%d total=%d "
+                    "label=[%s]\n",
+                    static_cast<unsigned>(city_prod_state),
+                    city_prod_turns_left, city_prod_turns_total,
+                    city_turns_left_label().c_str());
+        std::fflush(stdout);
+    }
+
+    // `TCity.NewTurn@557ab814` -> `TProductionControl.NewTurn@5575dd00` for
+    // every city the player owns: retry a waiting item (state 1), tick an
+    // executing one (state 2) and finish it when the timer reaches 0.
+    void mv_city_production_new_turn(std::uint8_t player) {
+        // Collect first: finishing an item can push a new TArmyHS into a
+        // tile's object vector, which would invalidate a live range-for.
+        struct CityRef {
+            aow::MapLevel* lv;
+            aow::MapHs* hs;
+            int hx, hy;
+        };
+        std::vector<CityRef> cities;
+        for (aow::MapLevel& lv : game_state_map.levels) {
+            for (std::uint32_t y = 0; y < lv.height; ++y) {
+                for (std::uint32_t x = 0; x < lv.width; ++x) {
+                    aow::MapTile& tile =
+                        lv.tiles[static_cast<std::size_t>(y) * lv.width + x];
+                    for (aow::MapHs& hs : tile.objects) {
+                        if (hs.class_id != aow::kCityClassId) continue;
+                        if (hs.structure_owner != player) continue;
+                        if (hs.production_state == 0 &&
+                            hs.production_queue.empty()) {
+                            continue;
+                        }
+                        cities.push_back(CityRef{&lv, &hs,
+                                                 static_cast<int>(x),
+                                                 static_cast<int>(y)});
+                    }
+                }
+            }
+        }
+        for (const CityRef& c : cities) {
+            aow::MapHs& hs = *c.hs;
+            if (hs.production_queue.empty()) {
+                hs.production_state = 0;
+                if (city_map_hs == &hs) city_refresh_open_from_map(hs);
+                continue;
+            }
+            if (hs.production_state == 1) {
+                city_try_start_for(hs);
+            } else if (hs.production_state == 2) {
+                // `NewTurn@5575dd00`: `if (+0x10 > 0) dec(+0x10); if (+0x10 ==
+                // 0) finish`. 0 means "retry UnitProduced this turn", so a
+                // failed placement stays at 0 instead of restarting the timer.
+                if (hs.production_turns_left > 0) --hs.production_turns_left;
+                // Keep the serialized settings mirror equal to the live byte
+                // the overview reads (TProductionSettings +0x10).
+                city_sync_settings_mirror(hs);
+                if (hs.production_turns_left == 0) {
+                    city_production_done(*c.lv, hs, c.hx, c.hy);
+                }
+            } else if (hs.production_state == 0 && !hs.production_queue.empty()) {
+                city_try_start_for(hs);
+            }
+            if (city_map_hs == &hs) city_refresh_open_from_map(hs);
+        }
+    }
+
+    void city_queue_select(int row) {
+        if (row < 0 || static_cast<std::size_t>(row) >= city_queue.size()) {
+            return;
+        }
+        city_queue_sel = row;
+        city_queue_edit = true;
+        const aow::CityQueueItem& q =
+            city_queue[static_cast<std::size_t>(row)];
+        const int action = city_queue_action(q.kind);
+        if (action >= 1 && action <= 6) {
+            city_activity = action - 1;
+        } else {
+            city_activity = 0;
+        }
+        if (action == 7 || action == 8) {
+            city_prod_sel = q.index;
+            if (city_prod_sel < 0 ||
+                static_cast<std::size_t>(city_prod_sel) >=
+                    city_prod_units.size()) {
+                city_prod_sel = city_prod_units.empty() ? -1 : 0;
+            }
+        } else {
+            city_prod_sel = -1;
+        }
+        city_unit_page_refresh();
+        std::printf("city_queue_sel=%d action=%d name=[%s] mode=2\n", row,
+                    action,
+                    row < static_cast<int>(city_queue_names.size())
+                        ? city_queue_names[static_cast<std::size_t>(row)].c_str()
+                        : "?");
+        std::fflush(stdout);
+    }
+
+    // CityBtn1Click mode 2: delete the selected TProductionQueue item
+    // (`TProductionControl.DeleteProduction@5575d9e0`). Deleting the running
+    // row cancels it through `ExecuteCancelProduction@5575cd64`, which refunds
+    // `CancelProductionReturnGold/Mana` - the paid cost times the turns left
+    // over the total, rounded (`TProductionControl+0x24`).
+    void city_queue_delete() {
+        if (city_queue_sel < 0 ||
+            static_cast<std::size_t>(city_queue_sel) >= city_queue.size()) {
+            return;
+        }
+        const int row = city_queue_sel;
+        const aow::CityQueueItem item =
+            city_queue[static_cast<std::size_t>(row)];
+        int refund = 0;
+        if (row == 0 && city_prod_state == 2) {
+            const int total =
+                city_prod_turns_total > 0 ? city_prod_turns_total : 1;
+            // Delphi's Round is banker's rounding; nearbyint uses the default
+            // FE_TONEAREST mode, which is the same.
+            const double v = static_cast<double>(city_prod_turns_left) *
+                             city_prod_gold_paid / static_cast<double>(total);
+            refund = static_cast<int>(std::nearbyint(v));
+            if (refund < 0) refund = 0;
+            aow::Player* p = city_owner_player();
+            if (p != nullptr) p->gold += refund;
+            city_prod_state = 0;
+            city_prod_turns_left = 0;
+            city_prod_turns_total = 0;
+            city_prod_gold_paid = 0;
+            city_prod_mana_paid = 0;
+        } else if (row == 0) {
+            city_prod_state = 0;
+            city_prod_turns_left = 0;
+            city_prod_turns_total = 0;
+            city_prod_gold_paid = 0;
+            city_prod_mana_paid = 0;
+        }
+        std::printf("city_queue_delete=%d name=[%s] refund=%d\n", row,
+                    city_production_item_name(item.kind, item.index).c_str(),
+                    refund);
+        city_queue.erase(city_queue.begin() + row);
+        city_queue_rebuild_names();
+        city_queue_sel = city_queue.empty() ? -1 : row;
+        if (city_queue_sel >= static_cast<int>(city_queue.size())) {
+            city_queue_sel = static_cast<int>(city_queue.size()) - 1;
+        }
+        if (row == 0 && !city_queue.empty()) city_production_try_start();
+        city_store_to_map();
+        city_queue_sync_production();
+        if (city_queue.empty()) {
+            city_queue_edit = false;
+            city_prod_sel = -1;
+            city_activity = 0;
+        } else if (city_queue_sel >= 0) {
+            // Re-run QueueLBChange for the row that slid into the selection so
+            // the page/helper captions follow the new item.
+            city_queue_select(city_queue_sel);
+        }
+        city_unit_page_refresh();
+        std::fflush(stdout);
+    }
+
+    // CityBtn2Click mode 2: `TProductionControl.RetryProductionExecution`
+    // (@5575dad8) only acts on a *waiting* (state 1) queue whose first row is
+    // selected; it runs CanExecuteProduction and, on success, starts the item.
+    void city_queue_execute() {
+        if (city_queue_sel != 0 || city_queue.empty()) return;
+        if (city_prod_state != 1) return;
+        const std::string name =
+            city_production_item_name(city_queue.front().kind,
+                                      city_queue.front().index);
+        const bool ok = city_production_try_start();
+        std::printf("city_queue_execute=[%s] ok=%d\n", name.c_str(),
+                    ok ? 1 : 0);
+        std::fflush(stdout);
+        if (ok) {
+            city_change = false;
+            city_queue_edit = false;
+            city_queue_sync_production();
+        }
+    }
+
     void city_action(int hit) {
+        if (city_change) {
+            if (hit >= 2100 && hit <= 2105) {   // B1CB..B6CB
+                city_activity_select(hit - 2100);
+                return;
+            }
+            if (hit >= 2200 && hit <= 2211) {   // P1CB..P12CB
+                const int card = hit - 2200;
+                city_prod_sel = card < static_cast<int>(city_prod_units.size())
+                                    ? card
+                                    : -1;
+                city_queue_edit = false;
+                // FUN_0043c43c(7/8) for the checked card: fill UnitPnl.
+                city_unit_page_refresh();
+                if (city_prod_sel >= 0 &&
+                    static_cast<std::size_t>(card) < city_prod_names.size()) {
+                    std::printf("city_production_sel=%d name=[%s]\n", card,
+                                city_prod_names[static_cast<std::size_t>(card)]
+                                    .c_str());
+                } else {
+                    std::printf("city_production_sel=%d\n", card);
+                }
+                std::fflush(stdout);
+                return;
+            }
+        }
         switch (hit) {
-        case 2001: city_change_production(); break;
-        case 2002: city_step(-1); break;
-        case 2003: city_step(1); break;
+        case 2001:
+            if (city_change) {
+                if (city_queue_edit) {
+                    city_queue_delete();
+                } else if (city_prod_sel >= 0 &&
+                           static_cast<std::size_t>(city_prod_sel) <
+                               city_prod_units.size()) {
+                    // `FUN_0043c43c(7/8)` set MainBtn1 to Produce/Install;
+                    // CityBtn1Click then calls the city's Produce/Research,
+                    // which queues the matching TProductionItem (kind 1/2) and
+                    // returns to the overview.
+                    const bool produce =
+                        city_prod_units[static_cast<std::size_t>(city_prod_sel)]
+                            .flag;
+                    if (city_queue_add(produce ? 1 : 2, city_prod_sel, false)) {
+                        city_change = false;
+                        city_queue_edit = false;
+                        city_prod_sel = -1;
+                        city_unit_page_refresh();
+                    }
+                } else if (city_activity_has_action(city_activity)) {
+                    if (city_activity == 5) {
+                        // Raze is not a queued production: CityBtn1Click case 6
+                        // calls the city's raze method immediately.
+                        city_activity_apply();
+                    } else {
+                        const int kind =
+                            city_action_to_production_id(city_activity + 1);
+                        const int index = (kind == 10) ? -1 : 0;
+                        if (city_queue_add(kind, index, false)) {
+                            city_change = false;
+                            city_queue_edit = false;
+                            city_prod_sel = -1;
+                            city_unit_page_refresh();
+                        }
+                    }
+                }
+            } else {
+                city_change_production();
+            }
+            break;
+        case 2002:
+            if (city_change) {
+                if (city_queue_edit) {
+                    city_queue_execute();
+                } else if (!city_queue_locked()) {
+                    if (city_prod_sel >= 0 &&
+                        static_cast<std::size_t>(city_prod_sel) <
+                            city_prod_units.size()) {
+                        // kind 1 = Produce, 2 = Install (TProductionItem+8).
+                        (void)city_queue_add(
+                            city_prod_units[
+                                static_cast<std::size_t>(city_prod_sel)].flag
+                                ? 1
+                                : 2,
+                            city_prod_sel, true);
+                    } else if (city_activity <= 2 || city_activity == 4) {
+                        const int kind =
+                            city_action_to_production_id(city_activity + 1);
+                        const int index = (kind == 10) ? 1 : 0;
+                        (void)city_queue_add(kind, index, true);
+                    }
+                }
+            } else {
+                city_step(-1);
+            }
+            break;
+        case 2003:
+            if (!city_change) city_step(1);
+            break;
         case 2004:
-            close_city_screen();
+            if (city_change) {
+                // Done / Escape: back to the overview page (mode 0). It does
+                // not close the city screen - that is CityBtn3 in mode 0.
+                city_change = false;
+                city_queue_edit = false;
+                city_prod_sel = -1;
+                city_unit_page_refresh();
+                std::printf("city_change=0\n");
+            } else {
+                close_city_screen();
+            }
             break;
         case 2005:
-            city_repeat = !city_repeat;
-            std::printf("city_repeat=%d\n", city_repeat ? 1 : 0);
+            if (!city_change) {
+                city_repeat = !city_repeat;
+                // LoopQueueBoxChange -> TProductionControl.SetLoopQueueTo
+                // (+0x20); QueueLBChange's Execute button reads the same bit.
+                city_loop = city_repeat;
+                city_store_to_map();
+                std::printf("city_repeat=%d\n", city_repeat ? 1 : 0);
+            }
             break;
         default:
             if (hit >= 2010 && hit <= 2014) {
-                city_queue_sel = hit - 2010;
-                std::printf("city_queue_sel=%d\n", city_queue_sel);
+                if (city_change) {
+                    city_queue_select(hit - 2010);
+                } else {
+                    // `QueueLBChange` restores -1 in mode 0; the overview's
+                    // list is a read-only view of the current production.
+                    std::printf("city_queue_sel=%d (mode 0, ignored)\n",
+                                hit - 2010);
+                }
             }
             break;
         }
@@ -8187,7 +12149,9 @@ struct Scene {
     // ---- the City screen (TCityScreen.Dlg, 640x432) -----------------------
     // The backdrop is the captured original skin (assets/cityscreen.bmp); the
     // live controls below are drawn over it at the DFM's own coordinates. The
-    // 48 px world-map bar at y=432 is *not* covered, so it keeps running.
+    // captured BMP still contains the original screen's 48 px bar band, but
+    // every city blit is clipped to the 432 px dialog so the live world-map bar
+    // (drawn by render_game before the modal) is never replaced or covered.
     // True when the live city matches the capture the backdrop was extracted
     // from (Venice, Humans, Cheerful, 38 gold, level 2, Stone Wall). The
     // backdrop already carries that city's text, so the renderer leaves it
@@ -8201,7 +12165,8 @@ struct Scene {
                city_crop_income == 10 && city_prod_income == 6 &&
                city_upgrade_level == 2 && city_wall == "Stone Wall" &&
                city_production == "Producing Merchandise" &&
-               game_struct_race_index == 0 && city_queue_sel < 0 && !city_repeat;
+               game_struct_race_index == 0 &&
+               (city_change || (city_queue_sel < 0 && !city_repeat));
     }
 
     // The four right-hand buttons (Change / < / > / Exit). While a button is
@@ -8224,14 +12189,481 @@ struct Scene {
                     true, false);
         }
     }
+    // Copy an opaque sub-rectangle of `s` to the canvas (used to restore the
+    // RightPnl background behind a button the page capture still shows).
+    void blit_sprite_rect(Canvas& cv, const Sprite& s, int sx, int sy, int w,
+                          int h, int dx, int dy) const {
+        if (!s.ok || w <= 0 || h <= 0) return;
+        if (sx < 0 || sy < 0 ||
+            sx + w > static_cast<int>(s.w) ||
+            sy + h > static_cast<int>(s.h)) {
+            return;
+        }
+        std::vector<std::uint8_t> patch(static_cast<std::size_t>(w) * h * 4);
+        for (int y = 0; y < h; ++y) {
+            const std::size_t src =
+                (static_cast<std::size_t>(sy + y) * s.w + sx) * 4;
+            const std::size_t dst = static_cast<std::size_t>(y) * w * 4;
+            std::copy(s.rgba.begin() + static_cast<std::ptrdiff_t>(src),
+                      s.rgba.begin() +
+                          static_cast<std::ptrdiff_t>(src + w * 4),
+                      patch.begin() + static_cast<std::ptrdiff_t>(dst));
+        }
+        cv.blit_rgba_rect(patch, static_cast<std::uint32_t>(w),
+                          static_cast<std::uint32_t>(h), dx, dy, dx, dy, w,
+                          h);
+    }
+
+    // Text width for an explicit CharacterDistance. The Unit window's Age8
+    // captions pin the DFM's CharacterDistance 0 (re/dfm_all/TFONTMODULE.txt);
+    // the shipped "Alignment: Neutral" is 79 px (bin/UnitsSelectionRef.png),
+    // i.e. the glyph slot widths with no extra distance.
+    int text_w_track(const std::vector<Glyph>& fs, const std::string& s,
+                     int tracking) const {
+        int t = 0;
+        for (unsigned char c : s) {
+            const Glyph& g = fs[c];
+            t += (g.ok ? static_cast<int>(g.face.advance) : 5) + tracking;
+        }
+        return t;
+    }
+
+    // Tile `tex` 1:1 over (x,y,w,h) with its screen-space phase anchored at
+    // (ox,oy). TAOWPanel.Draw repeats ILTexture from the frame's inner origin,
+    // so callers pass panel + the frame corner size (2 for FrThinD, 3 for
+    // FrGoldD) - the phase that reproduces the captured pages.
+    void blit_tex_rect(Canvas& cv, const Sprite& tex, int x, int y, int w,
+                       int h, int ox, int oy) const {
+        if (!tex.ok || tex.w == 0 || tex.h == 0 || w <= 0 || h <= 0) return;
+        const int tw = static_cast<int>(tex.w);
+        const int th = static_cast<int>(tex.h);
+        // ShowClipped draws the visual at (dest + base_x/base_y); that margin
+        // is part of the pattern's phase (ScrollT's is 15,16, which is exactly
+        // the offset the right-frame parchment showed against the reference).
+        const int ax = ox + tex.base_x;
+        const int ay = oy + tex.base_y;
+        const int sx0 = x - (((x - ax) % tw + tw) % tw);
+        const int sy0 = y - (((y - ay) % th + th) % th);
+        for (int ty = sy0; ty < y + h; ty += th) {
+            for (int tx = sx0; tx < x + w; tx += tw) {
+                cv.blit_clip(tex, tx + tex.base_x, ty + tex.base_y, x, y, w, h);
+            }
+        }
+    }
+
+    // `FUN_0043c43c` cases 7 and 8: the unit detail page. Everything the
+    // original fills into UnitPnl is drawn here (see the kUnit* block for the
+    // DFM rects): the picture frame + stretched face, the two stat columns
+    // with their icons and values, the alignment/level footer, the ability
+    // list, and the Cost/Turns boxes. The twelve cards, the queue and the
+    // three RightPnl buttons stay live around it.
+    void draw_city_unit_page(Canvas& cv) const {
+        const CityUnitPage& p = city_unit_page;
+        if (!p.valid) return;
+        // The page body is ActivityPnl's MainFloaterSet tile (origin 11,162).
+        // Rows 227..228 are the separator/panel bevel the capture already
+        // carries (the reference's light bevel), so the live body starts at
+        // 229 - the same place the shipped page texture does.
+        blit_tex_rect(cv, city_page_tex, kUnitPageX, 229, kUnitPageW, 128, 11,
+                      162);
+        // UPicturePnl (GenericT 18 + FrThinD) and its inset FrGoldD frame;
+        // UFaceDraw stretches the face into the frame's inner rect.
+        blit_tex_rect(cv, city_body_tex2, 33, 237, 90, 110, 35, 239);
+        blit9_impl(cv, city_unit_frame, 33, 237, 90, 110, 2, 2);
+        blit_tex_rect(cv, city_panel_tex3, 35, 238, 87, 107, 38, 241);
+        blit9_impl(cv, city_unit_gold_frame, 35, 238, 87, 107, 3, 3);
+        if (city_unit_face.ok) {
+            cv.blit_stretch(city_unit_face, 37, 240, 83, 103);
+        }
+        // UStatPnl: the outer FrThinD panel, then UStatFr1 / UStatFr2 / UInfoFr
+        // (each FrGoldD; UStatFr1/2 were still empty when the page opened).
+        blit_tex_rect(cv, city_body_tex, 143, 256, 166, 91, 145, 258);
+        blit9_impl(cv, city_unit_frame, 143, 256, 166, 91, 2, 2);
+        blit_tex_rect(cv, city_body_tex, 145, 257, 81, 57, 148, 260);
+        blit9_impl(cv, city_unit_gold_frame, 145, 257, 81, 57, 3, 3);
+        blit_tex_rect(cv, city_body_tex, 226, 257, 82, 57, 229, 260);
+        blit9_impl(cv, city_unit_gold_frame, 226, 257, 82, 57, 3, 3);
+        blit_tex_rect(cv, city_body_tex, 145, 314, 163, 31, 148, 317);
+        blit9_impl(cv, city_unit_gold_frame, 145, 314, 163, 31, 3, 3);
+        // AbilPnl (FrThinD) and the UAbilitiesLB cell (FrGoldD). The list body
+        // is the panel's TextOld1 showing through: the DFM's ILTextureNormal
+        // (GenericT 21) is only used for item cells, and ListAbilities leaves
+        // the list background untextured.
+        // The list cell's FrGoldD frame starts its own texture phase (the
+        // capture matches TextOld1 from (336,260), i.e. the list rect + the
+        // 3 px frame), not the outer panel's (333,258).
+        blit_tex_rect(cv, city_body_tex, 331, 256, 166, 91, 336, 260);
+        blit9_impl(cv, city_unit_frame, 331, 256, 166, 91, 2, 2);
+        blit9_impl(cv, city_unit_gold_frame, 333, 257, 163, 88, 3, 3);
+        // UCostPnl (FrThinD) with CostFr / TurnsFr (FrGoldD).
+        blit_tex_rect(cv, city_body_tex, 517, 237, 90, 110, 519, 239);
+        blit9_impl(cv, city_unit_frame, 517, 237, 90, 110, 2, 2);
+        blit_tex_rect(cv, city_body_tex, 519, 238, 87, 54, 522, 241);
+        blit9_impl(cv, city_unit_gold_frame, 519, 238, 87, 54, 3, 3);
+        blit_tex_rect(cv, city_body_tex, 519, 292, 87, 53, 522, 295);
+        blit9_impl(cv, city_unit_gold_frame, 519, 292, 87, 53, 3, 3);
+        // The six TAOWImage icons: Int\Icons.ILB 0..4 and UMovesIcon's
+        // IconMove frame (FUN_004541b0). The sprite's base already carries the
+        // class shift, so cv.blit lands the visual box on the control.
+        const int clip[4] = {kUnitPageX, kUnitPageY, kUnitPageX + kUnitPageW,
+                             kUnitPageY + kUnitPageH};
+        // Int\Icons.ILB's five icons are [sword, shield, star, ankh, heart] =
+        // [attack, defense, damage, resistance, hits]; the moves icon is a
+        // separate IconMove frame (UMovesIcon) in the middle-left cell.
+        static const int kIconCell[5] = {0, 1, 3, 4, 5};
+        for (int i = 0; i < 5; ++i) {
+            if (!city_unit_icon[i].ok) continue;
+            const int cell = kIconCell[i];
+            cv.blit(city_unit_icon[i], kUnitIconX[cell], kUnitIconY[cell],
+                    kAlphaFull, clip[0], clip[1], clip[2], clip[3]);
+        }
+        {
+            const int fi = p.move_icon;
+            if (fi >= 0 && static_cast<std::size_t>(fi) < move_icons.size() &&
+                move_icons[static_cast<std::size_t>(fi)].ok) {
+                int dx = 0, dy = 0;
+                for (const aow::IlbEntry& e : iconmove_il.entries()) {
+                    if (e.index == static_cast<std::uint32_t>(fi)) {
+                        dx = e.xshift;
+                        dy = e.yshift;
+                        break;
+                    }
+                }
+                cv.blit(move_icons[static_cast<std::size_t>(fi)],
+                        kUnitIconX[2] + dx, kUnitIconY[2] + dy, kAlphaFull,
+                        clip[0], clip[1], clip[2], clip[3]);
+            }
+        }
+        // Text: UnitLbl (AoW15WhiteGrey, centred on UnitPnl), UAttack..UHits
+        // (Age10s, centred in UStatP1/UStatP2), UAlignment/ULevel (Age8),
+        // UAbilitiesLB rows (Age8, ItemHeight 16) and Cost/Turns.
+        text_at(cv, glyphs, 320, 233, p.title, 0, 0, 0, true, true);
+        const std::string stat[6] = {
+            std::to_string(p.attack), std::to_string(p.defense),
+            std::to_string(p.moves),  std::to_string(p.damage),
+            std::to_string(p.resistance), std::to_string(p.hits)};
+        for (int i = 0; i < 6; ++i) {
+            const int col = i < 3 ? 0 : 1;
+            const int row = i < 3 ? i : i - 3;
+            text_at(cv, glyphs10, kUnitStatLblX[col], kUnitStatLblY[row],
+                    stat[i], kUnitTextR, kUnitTextG, kUnitTextB, true, false);
+        }
+        const std::string align = "Alignment: " + p.alignment;
+        const std::string level = "Level " + std::to_string(p.level) +
+                                  " / Upkeep: " + std::to_string(p.upkeep);
+        text_at(cv, glyphs8b, 226 - text_w_track(glyphs8b, align, 0) / 2, 319,
+                align, kUnitTextR, kUnitTextG, kUnitTextB, false, false, 0);
+        text_at(cv, glyphs8b, 226 - text_w_track(glyphs8b, level, 0) / 2, 331,
+                level, kUnitTextR, kUnitTextG, kUnitTextB, false, false, 0);
+        // UAbilitiesLB is a TAOWListBox: ItemHeight 16 inside an 88 px body, so
+        // at most five rows are visible; its T2SBar (VanishWhenFull) scrolls the
+        // rest. The list also clips at its right edge (the bar takes the last
+        // 17 px while shown).
+        const int ability_total = static_cast<int>(p.abilities.size());
+        const int ability_max_top = ability_total > kUnitAbilRows
+                                        ? ability_total - kUnitAbilRows
+                                        : 0;
+        int ability_top = city_unit_abil_top;
+        if (ability_top < 0) ability_top = 0;
+        if (ability_top > ability_max_top) ability_top = ability_max_top;
+        const bool show_sb = ability_max_top > 0;
+        const int clip_r = show_sb ? kUnitAbilSbX - 1 : 493;
+        for (int row_i = 0; row_i < kUnitAbilRows; ++row_i) {
+            const int i = ability_top + row_i;
+            if (i >= ability_total) break;
+            std::string row = p.abilities[static_cast<std::size_t>(i)];
+            while (!row.empty() &&
+                   kUnitAbilX + text_w_track(glyphs8b, row, 0) > clip_r) {
+                row.pop_back();
+            }
+            text_at(cv, glyphs8b, kUnitAbilX, kUnitAbilY + row_i * kUnitAbilDy,
+                    row, kUnitTextR, kUnitTextG, kUnitTextB, false, false, 0);
+        }
+        if (show_sb) {
+            const int sx = kUnitAbilSbX, sy = kUnitAbilSbY;
+            const int sw = kUnitAbilSbW, sh = kUnitAbilSbH;
+            if (city_unit_abil_sb[7].ok) {
+                cv.blit_stretch(city_unit_abil_sb[7], sx, sy, sw, sh);
+            } else {
+                cv.fill(sx, sy, sw, sh, 92, 86, 62, 255);
+            }
+            if (city_unit_abil_sb[0].ok) {
+                cv.blit(city_unit_abil_sb[0], sx, sy, kAlphaFull, 0, 0, disp_w,
+                        disp_h);
+            }
+            if (city_unit_abil_sb[2].ok) {
+                cv.blit(city_unit_abil_sb[2], sx,
+                        sy + sh - static_cast<int>(city_unit_abil_sb[2].h),
+                        kAlphaFull, 0, 0, disp_w, disp_h);
+            }
+            const int cap = city_unit_abil_sb[0].ok
+                                ? static_cast<int>(city_unit_abil_sb[0].h)
+                                : 16;
+            const int span = sh - 2 * cap;
+            int thumb_h = span * kUnitAbilRows / ability_total;
+            if (thumb_h < 24) thumb_h = 24;
+            if (thumb_h > span) thumb_h = span;
+            const int travel = span - thumb_h;
+            const int thumb_y =
+                sy + cap + (ability_max_top > 0
+                                ? travel * ability_top / ability_max_top
+                                : 0);
+            if (city_unit_abil_sb[4].ok) {
+                cv.blit(city_unit_abil_sb[4], sx, thumb_y, kAlphaFull, 0, 0,
+                        disp_w, disp_h);
+            }
+            if (city_unit_abil_sb[5].ok && thumb_h > 8) {
+                cv.blit_stretch(city_unit_abil_sb[5], sx, thumb_y + 4, sw,
+                                thumb_h - 8);
+            }
+            if (city_unit_abil_sb[6].ok) {
+                cv.blit(city_unit_abil_sb[6], sx,
+                        thumb_y + thumb_h -
+                            static_cast<int>(city_unit_abil_sb[6].h),
+                        kAlphaFull, 0, 0, disp_w, disp_h);
+            }
+        }
+        // CostLbl/TurnsLbl are left-aligned at CostFr/TurnsFr + their DFM
+        // WinLeft (33 / 31), not centred; UCost/UTurns are centred in the box.
+        text_at(cv, glyphs8b, 552, 248, "Cost", kUnitTextR, kUnitTextG,
+                kUnitTextB, false, false, 0);
+        text_at(cv, glyphs, 562, 261, std::to_string(p.cost), 0, 0, 0, true,
+                true);
+        text_at(cv, glyphs8b, 550, 302, "Turns", kUnitTextR, kUnitTextG,
+                kUnitTextB, false, false, 0);
+        text_at(cv, glyphs, 562, 315, std::to_string(p.turns), 0, 0, 0, true,
+                true);
+    }
+
+    // The 12 P1CB..P12CB cards. The base TAOWCheckBox draws RelFr 42/43 (52x64,
+    // no own offset) first and `PreDrawProductions` overlays CityWin 4/5 (or 62
+    // Is-Empty, both 48x60, no own offset) at the rect +2,+2 plus the unit's
+    // standing pose. The rect the handler builds sits `kCityCardRaise` px above
+    // the control: the reference capture puts RelFr 42's top edge on
+    // `cell.y - 2` and the face on `(cell.x + 2, cell.y)`, and neither art is
+    // clipped to the 52x52 cell - the checkbox frame runs down to
+    // `cell.y + 62`. Only the helper-driven states are re-drawn here; the page
+    // capture underneath already carries the resting row.
+    void draw_city_production_cards(Canvas& cv) const {
+        const int top = kCityCardY - kCityCardRaise;
+        const int clip_b = top + 64;   // RelFr 42/43 is 52x64
+        for (int i = 0; i < 12; ++i) {
+            const int x = kCityCardX + i * kCityCardPitch;
+            const bool selected = city_prod_sel == i;
+            if (!selected && city_card_up.ok) {
+                cv.blit(city_card_up, x, top, kAlphaFull, x, top, x + 52,
+                        clip_b);
+            }
+            if (i < static_cast<int>(city_prod_units.size())) {
+                const bool produce = city_prod_units[
+                    static_cast<std::size_t>(i)].flag;
+                const Sprite& face = city_card_frame[produce ? 0 : 1];
+                if (face.ok) {
+                    cv.blit(face, x + 2, top + 2, kAlphaFull, x, top,
+                            x + 52, clip_b);
+                }
+                if (i < static_cast<int>(city_card_art.size()) &&
+                    city_card_art[static_cast<std::size_t>(i)].s.ok) {
+                    const CityCardArt& a =
+                        city_card_art[static_cast<std::size_t>(i)];
+                    cv.blit(a.s, x - kCityCardUnitDx + a.vx,
+                            top - kCityCardUnitDy + a.vy, kAlphaFull, x, top,
+                            x + 52, clip_b);
+                }
+                // The install branch's second pass: the frame-5 face again,
+                // through GFXE's 45 % alpha-blend table, which washes the unit
+                // art (and only the unit art: over the face itself src == dst)
+                // out - the "not installed yet" look of the reference capture.
+                if (!produce && face.ok) {
+                    cv.blit(face, x + 2, top + 2, kCityCardInstallBlend, x,
+                            top, x + 52, clip_b);
+                }
+            } else if (city_card_empty.ok) {
+                cv.blit(city_card_empty, x + 2, top + 2, kAlphaFull, x, top,
+                        x + 52, clip_b);
+            }
+            if (selected && city_card_sel.ok) {
+                cv.blit(city_card_sel, x, top, kAlphaFull, x, top, x + 52,
+                        clip_b);
+            }
+        }
+    }
+
+    // QueueLB's five rows. The captured `<empty>` text is removed by first
+    // blitting `assets/cityqueue.bmp` (the same TAOWListBox art generated by
+    // tools/city_prod_bg.py); the selected row uses Menus 8 + black text,
+    // exactly like TAOWListBox.Draw.
+    void draw_city_queue_live(Canvas& cv) const {
+        if (!city_queue_clean.ok) return;
+        cv.blit(city_queue_clean, 11, 358, kAlphaFull, 11, 358, 168, 421);
+        for (int i = 0; i < 5; ++i) {
+            std::string row =
+                std::to_string(i + 1) + ". " +
+                (i < static_cast<int>(city_queue_names.size())
+                     ? city_queue_names[static_cast<std::size_t>(i)]
+                     : "<empty>");
+            // QueueLB is 157 px wide with a 3 px border; the engine clips a
+            // long production name at the control's right edge.
+            while (!row.empty() &&
+                   17 + text_w(glyphs8b, row) > 165) {
+                row.pop_back();
+            }
+            const int y = 360 + i * 11;
+            const bool selected = city_queue_edit && city_queue_sel == i;
+            if (selected) {
+                if (city_queue_sel_tex.ok) {
+                    for (int xx = 0; xx < 155;
+                         xx += static_cast<int>(city_queue_sel_tex.w)) {
+                        cv.blit_clip(city_queue_sel_tex, 13 + xx, y, 13, y,
+                                     155, 11);
+                    }
+                }
+                text_at(cv, glyphs8b, 17, y, row, 0, 0, 0, false, false);
+            } else {
+                text_at(cv, glyphs8b, 17, y, row, 118, 131, 103, false,
+                        false);
+            }
+        }
+    }
+
+    // The production picker's three right-hand buttons. `FUN_0043c43c` sets
+    // MainBtn1's caption to the selected action and hides it for Migrate;
+    // `FUN_0043a?` hides Queue for Migrate/Loot/Raze. The resting art is part
+    // of the captured page; only the hover/held skin is drawn live.
+    void draw_city_change_buttons(Canvas& cv) const {
+        struct CBtn {
+            AowBox box;
+            std::string text;
+            int id;
+            bool visible;
+        };
+        const bool unit_sel =
+            city_prod_sel >= 0 &&
+            static_cast<std::size_t>(city_prod_sel) < city_prod_units.size();
+        std::vector<CBtn> btns;
+        if (city_queue_edit) {
+            // `QueueLBChange` sets MainBtn1 to Delete, shows MainBtn2 as
+            // Execute for row 0 while the control is waiting (state 1), and
+            // leaves Done.
+            btns.push_back(CBtn{AowBox{475, 358, 153, 21}, "Delete", 2001,
+                                city_queue_sel >= 0});
+            btns.push_back(CBtn{AowBox{475, 379, 153, 21}, "Execute", 2002,
+                                city_queue_sel == 0 && city_prod_state == 1});
+            btns.push_back(CBtn{AowBox{475, 399, 153, 21}, "Done", 2004,
+                                true});
+        } else {
+            if (city_activity_has_action(city_activity) || unit_sel) {
+                std::string title = city_activity_title(city_activity);
+                if (unit_sel) {
+                    title = city_prod_units[
+                                static_cast<std::size_t>(city_prod_sel)].flag
+                                ? "Produce"
+                                : "Install";
+                }
+                btns.push_back(
+                    CBtn{AowBox{475, 358, 153, 21}, title, 2001, true});
+            } else {
+                btns.push_back(CBtn{AowBox{475, 358, 153, 21}, "", 2001,
+                                    false});
+            }
+            btns.push_back(CBtn{
+                AowBox{475, 379, 153, 21}, "Queue", 2002,
+                !city_queue_locked() &&
+                    (unit_sel || city_activity <= 2 || city_activity == 4)});
+            btns.push_back(
+                CBtn{AowBox{475, 399, 153, 21}, "Done", 2004, true});
+        }
+        for (const CBtn& b : btns) {
+            const bool hover = city_hover == b.id;
+            const bool pressed = city_pressed == b.id;
+            // The page capture already carries MainBtn1/Queue/Done for the
+            // resting mode-1 case. Redraw when the helper changes a caption,
+            // in the queue editor, and for hover/held.
+            const bool force = city_queue_edit ||
+                               (unit_sel && b.id == 2001) ||
+                               (!b.visible && b.id == 2002 &&
+                                city_queue_locked());
+            if (!b.visible) {
+                // The Migrate capture (page 04) shows a clean RightPnl with
+                // only Done, so its top/middle rectangles are the background
+                // behind a hidden MainBtn1/CityBtn2.
+                if ((force || city_queue_edit) && b.id != 2004 &&
+                    city_prod_frame[3].ok) {
+                    blit_sprite_rect(cv, city_prod_frame[3], b.box.x,
+                                     b.box.y, b.box.w, b.box.h, b.box.x,
+                                     b.box.y);
+                }
+                continue;
+            }
+            if (!force && !hover && !pressed) continue;
+            const int st = pressed ? 2 : (hover ? 1 : 0);
+            if (party_btn[st][1].ok) blit3_box(cv, party_btn[st], b.box);
+            const int ty = b.box.y + (b.box.h - party_text_h()) / 2 + 1;
+            text_at(cv, glyphs10b, b.box.x + b.box.w / 2, ty, b.text, 24, 20,
+                    16, true, false);
+        }
+    }
+
+    // TCityScreen mode 1 (the page `CityBtn1Click`'s Change opens). The six
+    // pages are the B1CB..B6CB captures; the live controls are the activity
+    // cells (2100+i), the 12 production cells (2200+i), the three RightPnl
+    // buttons and the QueueLB rows. The overview's panels are not drawn.
+    void render_city_change(Canvas& cv) const {
+        const int a = (city_activity >= 0 && city_activity < 6) ? city_activity
+                                                               : 0;
+        const Sprite& f = city_prod_frame[a];
+        // The pages were captured at 640x480 with the original bar band; clip
+        // them to the 432 px dialog so the live bar below stays visible.
+        const int dlg_h = kGameH - kTbBarH;
+        if (f.ok) {
+            cv.blit(f, 0, 0, kAlphaFull, 0, 0, cv.width(), dlg_h);
+        } else if (city_bg.ok) {
+            cv.blit(city_bg, 0, 0, kAlphaFull, 0, 0, cv.width(), dlg_h);
+        }
+        const bool reference = city_is_reference();
+        if (!reference) {
+            // Keep the live banner/name and the live map behind the page: the
+            // overview's clean skin owns y<203, while the activity page keeps
+            // the 12-cell production row and everything below it.
+            if (city_bg_clean.ok) {
+                cv.blit_clip(city_bg_clean, 0, 0, 0, 0, 640, 203);
+            }
+            text_at(cv, glyphs, 320, 13, city_name, 0, 0, 0, true, true);
+        }
+        // A checked P1CB..P12CB card (`city_prod_sel`, mode 1) - or a unit
+        // production row selected in the queue editor - shows `UnitPnl`
+        // (`FUN_0043c43c` cases 7/8) over the page area. It is drawn live from
+        // the DFM art, so it does not depend on the activity capture.
+        if (city_prod_sel >= 0 && city_unit_page.valid) {
+            draw_city_unit_page(cv);
+        }
+        // Re-draw the state the page capture cannot carry: a city other than
+        // the reference, a checked production card (mode 1) or the queue
+        // editor (mode 2). The reference page with no selection stays an
+        // exact blit of the capture, which is what QueueRef.png benchmarks.
+        if (!reference || city_prod_sel >= 0 || city_queue_edit) {
+            draw_city_production_cards(cv);
+        }
+        if (!reference || !city_queue.empty() || city_queue_edit) {
+            draw_city_queue_live(cv);
+        }
+        draw_city_change_buttons(cv);
+    }
 
     void render_city_screen(Canvas& cv) const {
         if (!game_show_city) return;
+        if (city_change) {
+            render_city_change(cv);
+            return;
+        }
         const bool exact = city_is_reference();
         const Sprite& bg =
             (!exact && city_bg_clean.ok) ? city_bg_clean : city_bg;
         if (bg.ok) {
-            cv.blit(bg, 0, 0, kAlphaFull, 0, 0, cv.width(), cv.height());
+            // Clip to the dialog: rows 432..479 of the captured backdrop hold
+            // the original (frozen) bar and must not replace the live one.
+            cv.blit(bg, 0, 0, kAlphaFull, 0, 0, cv.width(),
+                    kGameH - kTbBarH);
         }
         // RacePortrait (IPPnl+5,4, 48x60): TCityScreen.RacePortraitDraw asks
         // TRaceResource.GetFace for the city's race and stretch-blits its
@@ -8320,14 +12752,13 @@ struct Scene {
         const int qr = 118, qg = 131, qb = 103;   // DFM TextColor 6783862
         text_at(cv, glyphs8b, 322, 367, city_production, qr, qg, qb, true,
                 false);
-        text_at(cv, glyphs8b, 322, 382, city_production_turns, qr, qg, qb, true,
-                false);
-        // QueueLB: five numbered slots (a city with no queue shows <empty>).
-        for (int i = 0; i < 5; ++i) {
-            const std::string row = std::to_string(i + 1) + ". <empty>";
-            text_at(cv, glyphs8b, 16, 360 + i * 11, row, qr, qg, qb, false,
-                    false);
-        }
+        text_at(cv, glyphs8b, 322, 382, city_turns_left_label(), qr, qg, qb,
+                true, false);
+        // QueueLB: five numbered slots, fed from the city's TProductionQueue
+        // (a city with no queue shows <empty>). The clean overview backdrop
+        // has this box erased, so the live rows are drawn for every
+        // non-reference city - not only when the queue is non-empty.
+        draw_city_queue_live(cv);
         // LoopQueueBox: the GenericI 12x11 checkbox (47 off / 49 lit).
         if (city_check[city_repeat ? 1 : 0].ok) {
             cv.blit(city_check[city_repeat ? 1 : 0], 186, 381, kAlphaFull, 0, 0,
@@ -8405,9 +12836,9 @@ struct Scene {
             const Sprite& b = tb_next_down ? tb_next_pressed : tb_next_idle;
             if (b.ok) cv.blit_stretch(b, L.next.x, L.next.y, L.next.w, L.next.h);
         }
-        // TurnButton (TAOWTurnButton.Draw 0x59704e44): the current frame of the
-        // 102-frame turn animation - the seat's race block at rest, the block's
-        // transition frame when the turn has been ended, and the swirl while the
+        // TurnButton (TAOWTurnButton.Draw 0x59704e44): the 102-frame turn art -
+        // the seated race's block at rest, its transition/glow frame while
+        // Checked (the seat has ended), and the one new-day rotation while the
         // change animation plays.
         {
             const int f = tb_turn_draw_frame();
@@ -8422,19 +12853,36 @@ struct Scene {
         // The totals (FontModule.TBarNumber, clBlack) right-aligned rox 23, the
         // "+" sign (Age8) at rox 16 and the per-turn income (Age8) centred in
         // the 16 px box inset rox 1 - the sign and income are green 0x77FF77.
-        char gold[32], ginc[32], mana[32], minc[32];
-        std::snprintf(gold, sizeof(gold), "%d", game_gold);
-        std::snprintf(ginc, sizeof(ginc), "%d", game_gold_income);
-        std::snprintf(mana, sizeof(mana), "%d", game_mana);
-        std::snprintf(minc, sizeof(minc), "%d", game_mana_income);
-        draw_readout(cv, L.gold, gold, ginc);
-        draw_readout(cv, L.mana, mana, minc);
+        char gold[32], mana[32];
+        int gold_v = game_gold, ginc_v = game_gold_income;
+        int mana_v = game_mana, minc_v = game_mana_income;
+        game_live_stats(gold_v, ginc_v, mana_v, minc_v);
+        // The green/red number is the NET per-turn value: the gold side
+        // subtracts TPlayer.GetUpkeep() (army + magic), the mana side is the
+        // already-net GetNetPowerToMana result.
+        int gold_net = ginc_v;
+        if (const aow::Player* seat = game_seat()) {
+            gold_net = seat->income - seat->upkeep();
+        }
+        std::snprintf(gold, sizeof(gold), "%d", gold_v);
+        std::snprintf(mana, sizeof(mana), "%d", mana_v);
+        draw_readout(cv, L.gold, gold, gold_net);
+        draw_readout(cv, L.mana, mana, minc_v);
 
         if (game_show_scan) draw_game_scan(cv, L);
         if (game_show_events) draw_game_events(cv, L);
         // The Party floater (TControlWin) rides the right edge over everything
         // but the pointer, exactly as the engine's Priority-10 window does.
         if (game_show_party) draw_game_party(cv, party_layout());
+
+        // TCityScreen's Dlg is modal (Priority 55) and covers the map and every
+        // in-game window, including the Party floater. Its backdrop blit stops
+        // at y=432, so the live bottom bar drawn at step 2 stays visible and is
+        // never replaced or overlapped by the city screen.
+        render_city_screen(cv);
+        // TUnitWindow (Priority 300, Modal = True) covers the party floater
+        // and the city screen; it is the last window before the pointer.
+        draw_game_unit_window(cv);
 
         // 6. The pointer (THSMapMouse+0x30). The plain arrow, the hover sparkle
         //    while the pointer rests on something selectable, the walk / sail /
@@ -8630,9 +13078,6 @@ struct Scene {
         // The Structure floater has Priority 10 and is drawn over every other
         // in-game window (TIWindow.InfoWin).
         render_structure_panel(cv);
-        // TCityScreen's Dlg is modal (Priority 55) and covers the map + every
-        // floater; the 48 px bar stays visible below it.
-        render_city_screen(cv);
     }
 
     // ---- the in-game screen (TWorldMap) drawing helpers -------------------
@@ -8678,6 +13123,92 @@ struct Scene {
         cv.blit_stretch(fr[6], r.x + cw, r.y + r.h - bh, r.w - 2 * cw, bh);
         cv.blit_stretch(fr[3], r.x, r.y + th, cw, r.h - th - bh);
         cv.blit_stretch(fr[4], r.x + r.w - cw, r.y + th, cw, r.h - th - bh);
+    }
+
+    // The engine's own 9-slice: TInterfaceIL.DrawILF keeps the corner images
+    // at their native size and *tiles* the four edge images 1:1 through the
+    // span (it never stretches them). The DialogFr top edge is 190x22 over the
+    // 420 px window, so the reference shows two repeats - a stretch would
+    // blur that pattern.
+    void blit9_tiled(Canvas& cv, const Sprite* fr, const AowBox& r,
+                     int edge_phase = 0) const {
+        if (r.w <= 0 || r.h <= 0 || !fr[0].ok) return;
+        auto sw = [](const Sprite& s) {
+            return static_cast<int>(s.slot_w ? s.slot_w : s.w);
+        };
+        auto sh = [](const Sprite& s) {
+            return static_cast<int>(s.slot_h ? s.slot_h : s.h);
+        };
+        // Draw one slot cell: the cropped visual is positioned inside the cell
+        // by base+shift (TSprite16.ShowOpaque's dest = anchor + base + shift),
+        // then clipped to the cell.
+        auto cell = [&](const Sprite& s, int x, int y, int cw, int ch) {
+            cv.blit_clip(s, x + s.base_x + s.shift_x,
+                         y + s.base_y + s.shift_y, x, y, cw, ch);
+        };
+        const int cw = sw(fr[0]);
+        const int th = sh(fr[0]);
+        const int bh = sh(fr[5]);
+        // DrawILF tiles the edge images, clipping only the last cell at the
+        // far cap; the middle span is [corner, w-corner). `edge_phase` shifts
+        // the horizontal tiling's texture start (the shipped DialogFr edge is
+        // four pixels ahead of the corner origin); the corners are painted
+        // last so they cover the overlap.
+        const int ew = sw(fr[1]);
+        for (int tx = r.x + cw - edge_phase; tx < r.x + r.w - cw; tx += ew) {
+            const int w = std::min(ew, r.x + r.w - cw - tx);
+            cell(fr[1], tx, r.y, w, th);
+        }
+        const int bw = sw(fr[6]);
+        for (int tx = r.x + cw - edge_phase; tx < r.x + r.w - cw; tx += bw) {
+            const int w = std::min(bw, r.x + r.w - cw - tx);
+            cell(fr[6], tx, r.y + r.h - bh, w, bh);
+        }
+        const int eh = sh(fr[3]);
+        for (int ty = r.y + th; ty < r.y + r.h - bh; ty += eh) {
+            const int h = std::min(eh, r.y + r.h - bh - ty);
+            cell(fr[3], r.x, ty, cw, h);
+        }
+        const int rh = sh(fr[4]);
+        for (int ty = r.y + th; ty < r.y + r.h - bh; ty += rh) {
+            const int h = std::min(rh, r.y + r.h - bh - ty);
+            cell(fr[4], r.x + r.w - cw, ty, cw, h);
+        }
+        cell(fr[0], r.x, r.y, cw, th);
+        cell(fr[2], r.x + r.w - cw, r.y, cw, th);
+        cell(fr[5], r.x, r.y + r.h - bh, cw, bh);
+        cell(fr[7], r.x + r.w - cw, r.y + r.h - bh, cw, bh);
+    }
+
+    // 3-piece button whose middle image is a repeating skin: the caps keep
+    // their width and the middle art is tiled 1:1 across the span (the list
+    // headers' 97 px NGHeadLight tile runs twice across a 168 px header).
+    void blit3_tile(Canvas& cv, const Sprite* b, const AowBox& r) const {
+        if (!b[1].ok) return;
+        const int lw = static_cast<int>(b[0].w);
+        const int rw = static_cast<int>(b[2].w);
+        cv.blit_clip(b[0], r.x, r.y, r.x, r.y, lw, r.h);
+        const int x0 = r.x + lw;
+        const int x1 = r.x + r.w - rw;
+        for (int tx = x0; tx < x1; tx += static_cast<int>(b[1].w)) {
+            cv.blit_clip(b[1], tx, r.y, x0, r.y, x1 - x0, r.h);
+        }
+        cv.blit_clip(b[2], x1, r.y, x1, r.y, rw, r.h);
+    }
+
+    // The engine's 3-piece button: the caps keep their native width and the
+    // 170 px middle is blitted 1:1 and clipped inside the 119 px button. The
+    // replica used to shrink the middle to fit, compressing the celtic braid.
+    void blit3_clip(Canvas& cv, const Sprite* b, const AowBox& r) const {
+        if (!b[1].ok) return;
+        const int lw = static_cast<int>(b[0].w);
+        const int rw = static_cast<int>(b[2].w);
+        cv.blit_clip(b[0], r.x, r.y, r.x, r.y, lw, r.h);
+        if (r.w - lw - rw > 0) {
+            cv.blit_clip(b[1], r.x + lw, r.y, r.x + lw, r.y, r.w - lw - rw,
+                         r.h);
+        }
+        cv.blit_clip(b[2], r.x + r.w - rw, r.y, r.x + r.w - rw, r.y, rw, r.h);
     }
 
     // A 3-piece button (left cap / stretched middle / right cap) in `r`. The
@@ -8854,6 +13385,21 @@ struct App {
     int scen_dd = -1;              // open race cell N's PlayerCB drop-down
     int scen_human = -1;           // head-less: mark this race id as the Human
                                    // (the drop-down's RacePlayerCBChange path)
+    // The Settings panel's own controls, so a head-less render can pin them:
+    // --scen-playmode 1/2, --scen-turntime 0..20, --scen-turns 0..40,
+    // --scen-checks <4 digits, e.g. 1010> and --scen-mode-dd (open the list).
+    int scen_playmode = 0;
+    int scen_turntime = -1;
+    int scen_turns = -1;
+    std::string scen_checks;
+    bool scen_mode_dd = false;
+    // --scen-click X Y (repeatable): head-less press + release on the Scenario
+    // screen, through the same scen_hit / scen_slider_down / scen_action paths
+    // the window's mouse handlers use.
+    std::vector<std::pair<int, int>> scen_clicks;
+    // --scen-drag X Y X2: press on a Duration slider's thumb at (X,Y), then drag
+    // it to X2 (TAOWHScrollBar.CheckMouseMove's Position mapping).
+    std::vector<std::array<int, 3>> scen_drags;
     int render_hover = -1;     // orb to draw the caption for (head-less check)
     int mouse_x = 0, mouse_y = 0;  // pointer position for head-less renders
     bool mouse_set = false;
@@ -8867,9 +13413,30 @@ struct App {
     int game_click_x = 0, game_click_y = 0;
     bool game_click_set = false;
     std::vector<GameClick> game_clicks;
+    // --game-capture X Y: head-less, run the structure ArmyPlaced ownership pass
+    // on that map hex (the same helper the move code calls on arrival). Lets a
+    // smoke test prove a walked-in capture without scripting a whole path.
+    std::vector<std::pair<int, int>> game_captures;
+    // --game-gold X Y: head-less, deliver the field's 0x1102 (ArmyPlaced) to the
+    // Gems.TGems handler on that map hex for the seated player - the same
+    // `game_gems_army_update` an arriving army runs. Lets a smoke test prove a
+    // gold-pile pickup without scripting a whole walk.
+    std::vector<std::pair<int, int>> game_golds;
+    // --game-turns N: head-less, end the human's turn N times and run the turn
+    // loop until each new day has handed the seat back (used by the city
+    // production smoke test).
+    int game_turns = 0;
+    // --game-after-click X Y: clicks applied *after* --game-turns (the normal
+    // --game-click list runs before it), so a smoke test can select/move an
+    // army that a city produced during those turns.
+    std::vector<GameClick> game_after_clicks;
     // --game-key K: head-less, press one in-game map key ('L' = CenterOnLeader,
     // 'C' = centre on the selection) after the clicks.
     int game_key = 0;
+    // --game-prekey K: the same key press, but *before* --game-click. A test
+    // that needs the map's focus on the leader (L) before clicking a party
+    // portrait uses this; the normal order is clicks then key.
+    int game_prekey = 0;
     // --game-bench N: head-less, time the hover refresh (the pathfinder and the
     // overlay composite) N times and print the per-iteration cost.
     int game_bench = 0;
@@ -8899,6 +13466,11 @@ struct App {
     // city (or --structure-tile) through the same TIWindow Enter path the game
     // uses, then renders the 640x432 Dlg over the world map.
     bool city_screen = false;
+    // --city-change / --city-activity N: open the production picker (mode 1)
+    // instead of the overview, on activity page N (0..5: Produce Merchandise,
+    // Upgrade, Fortify, Migrate, Loot, Raze).
+    bool city_change = false;
+    int city_activity = -1;
     // --city-level / --city-wall: the capture's TCity.CityLevelLbl and
     // EnhancementsMemo values (the scenario used for the reference is not part
     // of the install). -1 / empty = take them from the map.
@@ -9172,6 +13744,51 @@ void scen_action(int hit) {
         s.scen_dd_hover = -1;
         return;
     }
+    // --- the Settings panel's controls ---------------------------------------
+    if (hit == -5200) {                    // a click-away closes PlayModeCB
+        s.scen_mode_dd = false;
+        s.scen_mode_dd_hover = -1;
+        return;
+    }
+    if (hit <= -5100 && hit > -5100 - kSetModeRows) {
+        // A row of PlayModeCB's list: PlayModeCBChange (0x004129e8) resolves
+        // the row's TObject through Items.GetObject and hands it to
+        // hSetPlayMode, which stores it as TSetupSettings+0x24.
+        const int row = -hit - 5100;
+        s.scen_set_play_mode(Scene::set_mode_value(row));
+        std::printf("scenario: turns -> %s\n",
+                    Scene::set_mode_name(s.scen_play_mode));
+        s.scen_mode_dd = false;
+        s.scen_mode_dd_hover = -1;
+        std::fflush(stdout);
+        return;
+    }
+    if (hit == -5000) {                    // the closed PlayModeCB field
+        s.scen_mode_dd = true;
+        s.scen_mode_dd_hover = s.scen_play_mode == 1 ? 0 : 1;
+        return;
+    }
+    if (hit == -5010 || hit == -5011) {
+        // The sliders act on the *press*, not the release: TAOWHScrollBar
+        // .CheckMouseDown steps / arms the drag (see WM_LBUTTONDOWN).
+        return;
+    }
+    if (hit <= -5020 && hit > -5024) {
+        // TAOWCheckBox.CheckMouseUp fires OnChange when the release is still
+        // over the box; the handler stores Checked in TSetupSettings and plays
+        // Sfx\Int\Btn5.wav (on) / Btn6.wav (off) - FUN_00455dfc 1 / 2.
+        const int idx = -hit - 5020;
+        s.scen_check[idx] = !s.scen_check[idx];
+        play_game_sfx(s.scen_check[idx] ? "Sfx\\Int\\Btn5.wav"
+                                        : "Sfx\\Int\\Btn6.wav");
+        static const char* const kSetChkName[4] = {
+            "leaders on map", "customize leaders", "allied victory",
+            "exploration"};
+        std::printf("scenario: %s -> %s\n", kSetChkName[idx],
+                    s.scen_check[idx] ? "on" : "off");
+        std::fflush(stdout);
+        return;
+    }
     if (hit == -2000 || hit == -2001) {  // Select / Cancel close the dialog
         s.scen_maps_open = false;
         if (hit == -2000 && s.scen_map_sel >= 0 &&
@@ -9221,11 +13838,13 @@ void scen_action(int hit) {
         s.scen_maps_open = true;
         s.scen_map_sel = -1;   // FileDialogShow opens the list unselected
         s.scen_map_off = 0;    // ...and scrolled to the top
+        s.scen_mode_dd = false;  // the modal dialog closes the combo's list
         std::printf("scenario: pick map\n");
         break;
     case 1:  // ExitGameClick 0x00411f50 -> back to the game-type screen
         std::printf("scenario: exit\n");
         s.scen_maps_open = false;
+        s.scen_mode_dd = false;
         s.screen = 1;
         s.gt_frame = 0;
         return;
@@ -9237,9 +13856,22 @@ void scen_action(int hit) {
             break;
         }
         sync_game_display();   // lay the game screen out at the client size
-        std::printf("scenario: start -> game (map=%s %s towns=%d players=%d)\n",
+        // TSetupControl.SetupGame (AoWEPACK 0x557e0f88) hands the settings
+        // record to the game: the turn mode, the per-turn time limit in minutes
+        // and the turn limit (TurnsSl.Position * 10), plus the four option
+        // flags. The port keeps them for the game state and logs them here.
+        std::printf("scenario: start -> game (map=%s %s towns=%d players=%d "
+                    "turns=%s turnTime=%s mode=%s leaders=%d customize=%d "
+                    "allied=%d exploration=%d)\n",
                     s.game_map_name.c_str(), s.scen_map_size.c_str(),
-                    s.scen_map_towns, s.scen_map_players);
+                    s.scen_map_towns, s.scen_map_players,
+                    Scene::set_turns_text(s.scen_turns).c_str(),
+                    Scene::set_turn_time_text(s.scen_turn_time).c_str(),
+                    Scene::set_mode_name(s.scen_play_mode),
+                    static_cast<int>(s.scen_check[0]),
+                    static_cast<int>(s.scen_check[1]),
+                    static_cast<int>(s.scen_check[2]),
+                    static_cast<int>(s.scen_check[3]));
         s.scen_maps_open = false;
         return;
     }
@@ -9492,6 +14124,10 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                         (static_cast<long long>(ty) * b.max_off + travel / 2) /
                         travel);
                 }
+            } else if (s.scen_drag_slider >= 0) {
+                // Dragging a Duration slider's thumb (TAOWHScrollBar
+                // .CheckMouseMove): the pointer position becomes Position.
+                s.scen_slider_move(s.mouse_x);
             } else {
                 s.scen_hover = s.scen_hit(s.mouse_x, s.mouse_y);
                 // Track the hovered row of an open race PlayerCB drop-down.
@@ -9500,6 +14136,14 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                      s.scen_hover > -4100 - kScenPTypeCount)
                         ? (-s.scen_hover - 4100)
                         : -1;
+                // ...and of PlayModeCB's, when it is dropped down.
+                s.scen_mode_dd_hover =
+                    (s.scen_mode_dd && s.scen_hover <= -5100 &&
+                     s.scen_hover > -5100 - kSetModeRows)
+                        ? (-s.scen_hover - 5100)
+                        : -1;
+                // The four checkboxes light up under the pointer (NGCBox 49).
+                s.scen_chk_hover = s.scen_chk_at(s.mouse_x, s.mouse_y);
             }
         } else if (s.screen == 3) {
             if (s.game_show_city) {
@@ -9543,6 +14187,16 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             s.scen_map_off += GET_WHEEL_DELTA_WPARAM(wp) > 0 ? -1 : 1;
             if (s.scen_map_off < 0) s.scen_map_off = 0;
             if (s.scen_map_off > b.max_off) s.scen_map_off = b.max_off;
+        } else if (s.screen == 3 && s.game_show_city && s.city_change &&
+                   s.city_prod_sel >= 0) {
+            // The production unit page's UAbilitiesLB (T2SBar): one row a notch,
+            // clamped to its five visible rows.
+            const int total = static_cast<int>(s.city_unit_page.abilities.size());
+            const int max_off =
+                total > kUnitAbilRows ? total - kUnitAbilRows : 0;
+            s.city_unit_abil_top += GET_WHEEL_DELTA_WPARAM(wp) > 0 ? -1 : 1;
+            if (s.city_unit_abil_top < 0) s.city_unit_abil_top = 0;
+            if (s.city_unit_abil_top > max_off) s.city_unit_abil_top = max_off;
         }
         return 0;
     }
@@ -9562,7 +14216,22 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 s.scen_sb_drag = true;
                 s.scen_sb_grab = s.mouse_y - s.scen_sb_thumb_y(b);
             }
+            // The Duration sliders act on the press (TAOWHScrollBar
+            // .CheckMouseDown): a track click steps one, a thumb press arms
+            // the drag that WM_MOUSEMOVE then tracks.
+            if (sc == -5010 || sc == -5011) {
+                s.scen_slider_down(sc == -5010 ? 0 : 1, s.mouse_x);
+            }
+            // A held checkbox keeps its armed face until the release.
+            if (sc <= -5020 && sc > -5024) s.scen_chk_press = -sc - 5020;
         } else if (s.screen == 3) {
+            if (s.game_show_unit) {
+                // TUnitWindow is modal (Priority 300, Masked): arm its control
+                // and swallow every other click.
+                s.unitwin_pressed =
+                    s.unit_window_hit_test(s.mouse_x, s.mouse_y);
+                return 0;
+            }
             if (s.game_show_city) {
                 // TCityScreen is modal: arm its own control and swallow the rest.
                 s.city_pressed = s.city_hit_test(s.mouse_x, s.mouse_y);
@@ -9632,13 +14301,33 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 s.scen_pressed = -1;
                 return 0;
             }
+            if (s.scen_drag_slider >= 0) {  // a slider drag ends here too
+                s.scen_drag_slider = -1;
+                s.scen_hover = -1;
+                s.scen_pressed = -1;
+                s.scen_chk_press = -1;
+                return 0;
+            }
+            // The border of a TAOWScrollBar does not re-fire OnChange when the
+            // thumb is released: only the buttons / checkboxes / combos act on
+            // the release (scen_action), as before.
             const int hit = s.scen_hit(s.mouse_x, s.mouse_y);
             if (hit != -1 && hit == s.scen_hover) scen_action(hit);
             s.scen_hover = -1;
             s.scen_pressed = -1;
+            s.scen_chk_press = -1;
             return 0;
         }
         if (s.screen == 3) {
+            if (s.game_show_unit) {
+                const int hit = s.unit_window_hit_test(s.mouse_x, s.mouse_y);
+                if (hit >= 0 && hit == s.unitwin_pressed) {
+                    s.unit_window_action(hit);
+                }
+                s.unitwin_pressed = -1;
+                s.unitwin_hover = -1;
+                return 0;
+            }
             if (s.game_show_city) {
                 const int hit = s.city_hit_test(s.mouse_x, s.mouse_y);
                 if (hit >= 0 && hit == s.city_pressed) {
@@ -9685,7 +14374,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         Scene& s = g.scene;
         s.mouse_x = GET_X_LPARAM(lp);
         s.mouse_y = GET_Y_LPARAM(lp);
-        if (s.screen == 3 && !s.game_show_city &&
+        if (s.screen == 3 && !s.game_show_unit && !s.game_show_city &&
             s.game_in_map(s.mouse_x, s.mouse_y)) {
             s.game_right_click();
         }
@@ -9701,9 +14390,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             InvalidateRect(hwnd, nullptr, FALSE);  // show / hide it at once
             return 0;
         }
-        // TCityScreen.DlgKeyDown: Escape closes the modal city screen. With the
-        // Structure floater up on a city, Return is the same as its MainBtn
-        // (Enter) and hands over to TCityScreen.
+        // TCityScreen.DlgKeyDown (AoW.exe 0x43e290): Escape hides `Dlg` in
+        // every mode, so it closes the modal city screen even from the
+        // production picker. (The picker's Done button is CityBtn3Click, which
+        // returns to the overview instead.) The arrow keys are `MapView`'s
+        // camera nudge; the port's city view is static.
         if (g.scene.screen == 3 && g.scene.game_show_city) {
             if (wp == VK_ESCAPE) g.scene.close_city_screen();
             return 0;
@@ -9798,15 +14489,35 @@ void print_usage() {
         "  --scen-human R        head-less with --start-map: mark race R (0..11)\n"
         "                        as the Human (the race PlayerCB), so that race's\n"
         "                        cities and armies are the ones played\n"
+        "  --scen-playmode N     PlayModeCB: 1 = Classic, 2 = Simultaneous turns\n"
+        "  --scen-turntime N     TurnTimeSl position: 0 = no timer, else minutes\n"
+        "                        (0..20)\n"
+        "  --scen-turns N        TurnsSl position: 0 = no limit, else N x 10 turns\n"
+        "                        (0..40)\n"
+        "  --scen-checks 4x01    the Misc checkboxes: Leaders on map, Customize\n"
+        "                        leaders, Allied victory, Exploration\n"
+        "  --scen-mode-dd        draw PlayModeCB's drop-down list open\n"
+        "  --scen-click X Y      head-less: press+release at (X,Y) on the Scenario\n"
+        "                        screen (the same paths the mouse handlers use;\n"
+        "                        repeatable)\n"
+        "  --scen-drag X Y X2    head-less: press a Duration slider's thumb at\n"
+        "                        (X,Y) and drag it to X2\n"
         "  --gtype-frame N       Game Type slide counter (0..286)\n"
         "  --game-click X Y      head-less: one map-window update, then a click at\n"
         "                        (X,Y) on the world map or its scanner (repeatable)\n"
         "  --game-right-click X Y  head-less: one map-window update, then a right-\n"
         "                        click at (X,Y) on the world map (clears selection)\n"
+        "  --game-after-click X Y  head-less: the same click, but applied after\n"
+        "                        --game-turns (repeatable)\n"
         "  --game-key K          head-less: press one map key (L = centre on the\n"
         "                        leader, C = centre on the selection)\n"
+        "  --game-prekey K       the same key, but before --game-click\n"
+        "  --game-gold X Y       head-less: run the Gems.TGems ArmyPlaced pickup on\n"
+        "                        hex X,Y for the seated player\n"
         "  --game-bench N        head-less: time the hover refresh N times\n"
         "  --game-anim N         head-less: advance a walk animation N frames\n"
+        "  --game-turns N        head-less: end the human's turn N times and run\n"
+        "                        the loop (city production between days)\n"
         "  --game-clock N        head-less: force the map clock (building anim)\n"
         "  --turn-frame N        head-less: freeze the TurnButton on frame N (0..101)\n"
         "  --next-held           head-less: draw the NextButton held down\n"
@@ -9814,6 +14525,9 @@ void print_usage() {
         "                        city/structure after loading --start-map\n"
         "  --city-screen         head-less: open the first city's TCityScreen (the\n"
         "                        modal 640x432 unit-production panel)\n"
+        "  --city-change         head-less: open its production picker (mode 1)\n"
+        "  --city-activity N     with --city-change: page 0..5 (Produce Merchandise,\n"
+        "                        Upgrade, Fortify, Migrate, Loot, Raze)\n"
         "  --city-level N        override the city's upgrade level (Enhancements)\n"
         "  --city-wall S         override the wall label (\"Stone Wall\" etc.)\n"
         "  --structure-tile X Y  head-less with --structure-panel: open the structure\n"
@@ -9863,6 +14577,16 @@ void apply_game_click(int cx, int cy, bool right = false) {
     s.mouse_x = cx;
     s.mouse_y = cy;
     s.game_update();
+    // TUnitWindow is modal (DFM `Modal = True`, Priority 300), so it takes the
+    // click before the city screen, the party and the map; a click outside its
+    // rectangle is swallowed exactly like a masked modal window's.
+    if (s.game_show_unit) {
+        const int uh = s.unit_window_hit_test(cx, cy);
+        if (uh >= 0) s.unit_window_action(uh);
+        std::printf("game_click=unit %d,%d id=%d\n", cx, cy, uh);
+        std::fflush(stdout);
+        return;
+    }
     if (s.game_show_city) {
         if (!right) {
             const int ch = s.city_hit_test(cx, cy);
@@ -9906,9 +14630,9 @@ void apply_game_click(int cx, int cy, bool right = false) {
             std::printf("game_click=turn %d,%d checked=%d day=%d\n", cx, cy,
                         s.tb_turn_checked ? 1 : 0, s.game_day);
             std::fflush(stdout);
-            // The click starts the turn-change animation; the window's 30 fps
-            // ticks would play it out (and the AI seats' turns) before the next
-            // click, so the scripted driver does the same.
+            // The click only sets Checked (the glowing still). The window's 30
+            // fps ticks then play the AI seats' turns and the single new-day
+            // rotation, so the scripted driver runs until the seat comes back.
             s.mouse_x = -1;
             s.mouse_y = -1;
             for (int i = 0; i < 4000; ++i) {
@@ -9954,6 +14678,33 @@ void apply_game_click(int cx, int cy, bool right = false) {
         s.game_map_click();
         std::printf("game_click=map %d,%d\n", cx, cy);
     }
+    std::fflush(stdout);
+}
+
+// Runs the structure ownership pass on one map hex without a click path: the
+// exact `game_structure_army_update` the move code calls when a party arrives
+// (`ArmyPlaced -> UpdatePlayer`). Prints `game_capture_hook=<x>,<y> ok=<0|1>`.
+void apply_game_capture(int x, int y) {
+    Scene& s = g.scene;
+    s.mouse_x = -1;
+    s.mouse_y = -1;
+    while (s.mv_anim) s.game_update();
+    const bool ok = s.game_structure_army_update(x, y, true);
+    std::printf("game_capture_hook=%d,%d ok=%d\n", x, y, ok ? 1 : 0);
+    std::fflush(stdout);
+}
+
+// Runs the gold-pile pickup on one map hex without a click path: the exact
+// `game_gems_army_update` the move code calls when a party arrives (the field's
+// 0x1102 message -> `Gems.TGems.ArmyEntered`). Prints
+// `game_gold_hook=<x>,<y> ok=<0|1>`.
+void apply_game_gold(int x, int y) {
+    Scene& s = g.scene;
+    s.mouse_x = -1;
+    s.mouse_y = -1;
+    while (s.mv_anim) s.game_update();
+    const bool ok = s.game_gems_army_update(x, y);
+    std::printf("game_gold_hook=%d,%d ok=%d\n", x, y, ok ? 1 : 0);
     std::fflush(stdout);
 }
 
@@ -10071,6 +14822,12 @@ int run_headless() {
                         "Upgrade Level: " +
                         std::to_string(g.scene.city_upgrade_level) + "\r" +
                         g.scene.city_wall;
+                    if (g.city_change) {
+                        g.scene.city_change_production();
+                        if (g.city_activity >= 0) {
+                            g.scene.city_activity_select(g.city_activity);
+                        }
+                    }
                 }
                 // race=[...] is CityRaceLbl's "Race: <name>" text, i.e. the
                 // shipped `AoWE.RaceNamesRStr[race]` string for the city's own
@@ -10111,6 +14868,42 @@ int run_headless() {
         if (g.scen_dd >= 0 && g.scen_dd < kScenRaceCount) {
             g.scene.scen_dd_gi = g.scen_dd;
         }
+        // The Settings panel's own controls, for a head-less fidelity render:
+        // --scen-playmode / --scen-turntime / --scen-turns / --scen-checks
+        // drive exactly the state the mouse handlers write.
+        if (g.scen_playmode) g.scene.scen_set_play_mode(g.scen_playmode);
+        if (g.scen_turntime >= 0) g.scene.scen_slider_set(0, g.scen_turntime);
+        if (g.scen_turns >= 0) g.scene.scen_slider_set(1, g.scen_turns);
+        for (std::size_t i = 0; i < 4 && i < g.scen_checks.size(); ++i) {
+            g.scene.scen_check[i] = g.scen_checks[i] == '1';
+        }
+        g.scene.scen_mode_dd = g.scen_mode_dd;
+        // --scen-click X Y: press + release at that point. The press path is
+        // the sliders' (TAOWHScrollBar.CheckMouseDown) and the release path is
+        // scen_action's (buttons, combos, checkboxes).
+        for (const auto& c : g.scen_clicks) {
+            g.scene.mouse_x = c.first;
+            g.scene.mouse_y = c.second;
+            const int hit = g.scene.scen_hit(c.first, c.second);
+            g.scene.scen_hover = hit;
+            if (hit == -5010 || hit == -5011) {
+                g.scene.scen_slider_down(hit == -5010 ? 0 : 1, c.first);
+            } else if (hit != -1) {
+                scen_action(hit);
+            }
+            g.scene.scen_drag_slider = -1;
+        }
+        // --scen-drag X Y X2: press on a slider's thumb, then drag it to X2.
+        for (const auto& d : g.scen_drags) {
+            g.scene.mouse_x = d[0];
+            g.scene.mouse_y = d[1];
+            const int hit = g.scene.scen_hit(d[0], d[1]);
+            if (hit == -5010 || hit == -5011) {
+                g.scene.scen_slider_down(hit == -5010 ? 0 : 1, d[0]);
+                g.scene.scen_slider_move(d[2]);
+            }
+            g.scene.scen_drag_slider = -1;
+        }
     } else if (g.screen_game) {
         g.scene.screen = 3;
         std::string err;
@@ -10125,6 +14918,18 @@ int run_headless() {
     if (g.mouse_set) {
         g.scene.mouse_x = g.mouse_x;
         g.scene.mouse_y = g.mouse_y;
+        // A parked pointer behaves like a real WM_MOUSEMOVE: the settings
+        // controls track their hover state (checkbox Lit face, combo row).
+        if (g.scene.screen == 2) {
+            g.scene.scen_hover = g.scene.scen_hit(g.scene.mouse_x,
+                                                  g.scene.mouse_y);
+            g.scene.scen_chk_hover =
+                g.scene.scen_chk_at(g.scene.mouse_x, g.scene.mouse_y);
+            if (g.scene.scen_mode_dd && g.scene.scen_hover <= -5100 &&
+                g.scene.scen_hover > -5100 - kSetModeRows) {
+                g.scene.scen_mode_dd_hover = -g.scene.scen_hover - 5100;
+            }
+        }
     } else if (g.render_hover >= 0 && !g.screen_gtype && !g.screen_scenario) {
         // Park the pointer over the hovered orb, as in the game's own
         // "orb selected" look, and let the state match a real hover.
@@ -10137,6 +14942,7 @@ int run_headless() {
         // One update tick of the map window (AoW.exe FUN_00452e50): resolve the
         // hex under the parked pointer and apply the edge scroll.
         g.scene.game_update();
+        if (g.game_prekey != 0) g.scene.game_key(g.game_prekey);
         if (!g.game_clicks.empty()) {
             // --game-click / --game-right-click may be repeated: each click is
             // applied in order, so the smoke test can drive a whole interaction
@@ -10147,6 +14953,12 @@ int run_headless() {
             }
         } else if (g.game_click_set) {
             apply_game_click(g.game_click_x, g.game_click_y);
+        }
+        for (const auto& c : g.game_captures) {
+            apply_game_capture(c.first, c.second);
+        }
+        for (const auto& c : g.game_golds) {
+            apply_game_gold(c.first, c.second);
         }
         // --game-key runs before the hover, so a keystroke that moves the camera
         // is followed by the pointer being resolved against the new view - exactly
@@ -10166,6 +14978,41 @@ int run_headless() {
         // --next-held: draw the NextButton's held-down picture (+0x110 = -1).
         if (g.next_held) g.scene.tb_next_down = true;
         for (int i = 0; i < g.game_anim; ++i) g.scene.game_update();
+        // --game-turns N: play N whole days. Each pass waits for the human's
+        // turn, clicks the TurnButton (Checked glow), then runs the AI seats and
+        // the one new-day rotation until the next day hands the seat back. This
+        // is what exercises a city's production between turns head-lessly.
+        if (g.game_turns > 0) {
+            Scene& s = g.scene;
+            for (int t = 0; t < g.game_turns; ++t) {
+                for (int i = 0;
+                     i < 20000 &&
+                     (s.mv_gs.current() != s.mv_human || s.tb_turn_animating);
+                     ++i) {
+                    s.game_update();
+                }
+                if (s.mv_gs.current() != s.mv_human) break;
+                s.game_turn_button_click();
+                const int day0 = s.game_day;
+                for (int i = 0; i < 20000; ++i) {
+                    s.game_update();
+                    if (s.game_day > day0 && s.mv_gs.current() == s.mv_human &&
+                        !s.tb_turn_animating) {
+                        break;
+                    }
+                }
+            }
+        }
+        // Clicks that must land after the days above ran (select / move an army
+        // a city produced during them). Finish any walk they start, then settle
+        // the hover so the render log reports the final army position.
+        if (!g.game_after_clicks.empty()) {
+            for (const GameClick& c : g.game_after_clicks) {
+                apply_game_click(c.x, c.y, c.right);
+            }
+            while (g.scene.mv_anim) g.scene.game_update();
+            g.scene.game_update();
+        }
         // --turn-frame N: freeze the TurnButton on one library frame (the class
         // draws AnimStart + Frame; frames 0..10 are the glow block, AnimStart 0).
         if (g.turn_frame_override >= 0) {
@@ -10261,6 +15108,19 @@ int run_headless() {
                     kScenCellH, g.scene.scen_btn[0][0].w,
                     g.scene.scen_btn[0][0].h,
                     g.scene.glyphs10[static_cast<unsigned char>('A')].ok);
+        // The Settings panel's live state (docs/08_SCENARIO_SCREEN.md sec. 10):
+        // the turn mode, the two Duration sliders and the four checkboxes.
+        std::printf("scen_set mode=%d turntime=%d turns=%d checks=%d%d%d%d "
+                    "mode_dd=%d chk=%u lit=%u\n",
+                    g.scene.scen_play_mode, g.scene.scen_turn_time,
+                    g.scene.scen_turns,
+                    static_cast<int>(g.scene.scen_check[0]),
+                    static_cast<int>(g.scene.scen_check[1]),
+                    static_cast<int>(g.scene.scen_check[2]),
+                    static_cast<int>(g.scene.scen_check[3]),
+                    static_cast<int>(g.scene.scen_mode_dd),
+                    static_cast<unsigned>(g.scene.scen_ngcbox[1].w),
+                    static_cast<unsigned>(g.scene.scen_ngcbox[2].w));
         // The exact art the DFMs name (docs/08_SCENARIO_SCREEN.md sec. 6): the
         // STGrFr panel frame + ShadowOv body, the ScenRBut bottom buttons, the
         // FrGoldD/FrThinD list frames with their Text2Lb17/PopUpSet textures, the DialogFr
@@ -10435,6 +15295,20 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
             g.game_clicks.push_back(
                 GameClick{g.game_click_x, g.game_click_y, false});
         }
+        else if (a == "--game-capture") {
+            next();
+            const int cx = std::atoi(v.c_str());
+            int cy = 0;
+            if (i + 1 < argc) cy = std::atoi(acp_from_w(argv[++i]).c_str());
+            g.game_captures.emplace_back(cx, cy);
+        }
+        else if (a == "--game-gold") {
+            next();
+            const int gx = std::atoi(v.c_str());
+            int gy = 0;
+            if (i + 1 < argc) gy = std::atoi(acp_from_w(argv[++i]).c_str());
+            g.game_golds.emplace_back(gx, gy);
+        }
         else if (a == "--game-right-click") {
             next();
             const int rx = std::atoi(v.c_str());
@@ -10442,12 +15316,28 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
             if (i + 1 < argc) ry = std::atoi(acp_from_w(argv[++i]).c_str());
             g.game_clicks.push_back(GameClick{rx, ry, true});
         }
+        else if (a == "--game-after-click" || a == "--game-after-right-click") {
+            next();
+            const int ax = std::atoi(v.c_str());
+            int ay = 0;
+            if (i + 1 < argc) ay = std::atoi(acp_from_w(argv[++i]).c_str());
+            g.game_after_clicks.push_back(
+                GameClick{ax, ay, a == "--game-after-right-click"});
+        }
         else if (a == "--game-key") {
             next();
             if (!v.empty()) g.game_key = static_cast<unsigned char>(v[0]);
         }
+        else if (a == "--game-prekey") {
+            next();
+            if (!v.empty()) g.game_prekey = static_cast<unsigned char>(v[0]);
+        }
         else if (a == "--game-bench") { next(); g.game_bench = std::atoi(v.c_str()); }
         else if (a == "--game-anim") { next(); g.game_anim = std::atoi(v.c_str()); }
+        else if (a == "--game-turns") {
+            next();
+            g.game_turns = std::atoi(v.c_str());
+        }
         else if (a == "--game-clock") {
             next();
             g.game_clock_override = std::atoi(v.c_str());
@@ -10463,6 +15353,15 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
         else if (a == "--city-screen") {
             g.city_screen = true;
             g.rgb555 = true;   // the reference captures are RGB555 screenshots
+        }
+        else if (a == "--city-change") {
+            g.city_change = true;
+            g.city_screen = true;
+            g.rgb555 = true;
+        }
+        else if (a == "--city-activity") {
+            next();
+            g.city_activity = std::atoi(v.c_str());
         }
         else if (a == "--city-level") { next(); g.city_level = std::atoi(v.c_str()); }
         else if (a == "--city-wall") { next(); g.city_wall = v; }
@@ -10537,6 +15436,35 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
         else if (a == "--scen-pick") { next(); g.scen_pick = v; }
         else if (a == "--scen-dd") { next(); g.scen_dd = std::atoi(v.c_str()); }
         else if (a == "--scen-human") { next(); g.scen_human = std::atoi(v.c_str()); }
+        else if (a == "--scen-playmode") {
+            next();
+            g.scen_playmode = std::atoi(v.c_str());
+        }
+        else if (a == "--scen-turntime") {
+            next();
+            g.scen_turntime = std::atoi(v.c_str());
+        }
+        else if (a == "--scen-turns") {
+            next();
+            g.scen_turns = std::atoi(v.c_str());
+        }
+        else if (a == "--scen-checks") { next(); g.scen_checks = v; }
+        else if (a == "--scen-mode-dd") { g.scen_mode_dd = true; }
+        else if (a == "--scen-click") {
+            next();
+            const int cx = std::atoi(v.c_str());
+            const int cy = (i + 1 < argc)
+                               ? std::atoi(acp_from_w(argv[++i]).c_str())
+                               : 0;
+            g.scen_clicks.emplace_back(cx, cy);
+        }
+        else if (a == "--scen-drag") {
+            next();
+            std::array<int, 3> d{std::atoi(v.c_str()), 0, 0};
+            if (i + 1 < argc) d[1] = std::atoi(acp_from_w(argv[++i]).c_str());
+            if (i + 1 < argc) d[2] = std::atoi(acp_from_w(argv[++i]).c_str());
+            g.scen_drags.push_back(d);
+        }
         else if (a == "-h" || a == "--help") { print_usage(); return 0; }
     }
     if (argv) LocalFree(argv);
@@ -10684,4 +15612,3 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
     if (g.audio_thread.joinable()) g.audio_thread.join();
     return 0;
 }
-

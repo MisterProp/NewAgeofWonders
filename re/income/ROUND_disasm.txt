@@ -1,0 +1,21 @@
+﻿..\AoWEPACK.dpl  VA 0x55701048 (CODE)  80 bytes
+55701048  ff 25 f8 b6 8f 55        jmp dword ptr [0x558fb6f8]
+5570104e  8b c0                    mov eax, eax
+55701050  ff 25 f4 b6 8f 55        jmp dword ptr [0x558fb6f4]
+55701056  8b c0                    mov eax, eax
+55701058  ff 25 f0 b6 8f 55        jmp dword ptr [0x558fb6f0]
+5570105e  8b c0                    mov eax, eax
+55701060  ff 25 ec b6 8f 55        jmp dword ptr [0x558fb6ec]
+55701066  8b c0                    mov eax, eax
+55701068  ff 25 e8 b6 8f 55        jmp dword ptr [0x558fb6e8]
+5570106e  8b c0                    mov eax, eax
+55701070  ff 25 e4 b6 8f 55        jmp dword ptr [0x558fb6e4]
+55701076  8b c0                    mov eax, eax
+55701078  ff 25 e0 b6 8f 55        jmp dword ptr [0x558fb6e0]
+5570107e  8b c0                    mov eax, eax
+55701080  ff 25 dc b6 8f 55        jmp dword ptr [0x558fb6dc]
+55701086  8b c0                    mov eax, eax
+55701088  ff 25 d8 b6 8f 55        jmp dword ptr [0x558fb6d8]
+5570108e  8b c0                    mov eax, eax
+55701090  ff 25 d4 b6 8f 55        jmp dword ptr [0x558fb6d4]
+55701096  8b c0                    mov eax, eax

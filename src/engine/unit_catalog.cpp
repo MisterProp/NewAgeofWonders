@@ -2,6 +2,7 @@
 #include "aow/unit_catalog.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -61,6 +62,127 @@ LeaderList parse_ahl(const std::string& file, std::vector<std::uint8_t> raw) {
         }
     }
     return l;
+}
+
+// Mirrors `aow::decode_ability_list` (movement.cpp) without pulling the whole
+// movement module into the data-only binaries: both decode a serialized
+// `TAbilityOwner`/`TCustomAbilityList` EObject `[table][data]`, whose tag 2 is
+// the bit count (rwInteger, u32) and tag 3 the LSB-first bitmap. Returns the
+// packed mask.
+//
+// `AoWE.TAbilityOwner.ReadWrite@5574f318` adds the per-ability data:
+//   tag 0x31   TIntegerList of ability ids that carry a TAbilityData object
+//   tag id+0x32 a nested EObject (class id + `[table][data]`) per such id
+// The multi-level ability data classes (`TMultiLevelAbilityData@55765124`,
+// `TDispelMagicAbilityData@5576cd34`, ...) write their level at tag 10. The
+// unit page's `ListAbilities` uses `TAbility.GetLevel(owner)` -> that byte, so
+// e.g. "Turn Undead" becomes "Turn Undead I".
+void read_ability_mask(const std::vector<std::uint8_t>& payload,
+                       std::uint32_t& count,
+                       std::vector<std::uint8_t>& mask,
+                       std::vector<std::uint8_t>& levels) {
+    count = 0;
+    mask.clear();
+    levels.assign(256, 0);
+    if (payload.empty()) return;
+    std::size_t p = 0;
+    const std::uint8_t n = payload[p++];
+    std::uint32_t wide = 0;
+    std::uint32_t compact = n;
+    if ((n & 0x80) != 0) {
+        compact = n & 0x7f;
+        if (p + 4 > payload.size()) return;
+        wide = read_u32(payload.data() + p);
+        p += 4;
+    }
+    if (p + static_cast<std::size_t>(compact) * 2 +
+            static_cast<std::size_t>(wide) * 8 >
+        payload.size()) {
+        return;
+    }
+    struct Entry {
+        std::uint32_t tag;
+        std::uint32_t off;
+    };
+    std::vector<Entry> entries;
+    entries.reserve(compact + wide);
+    for (std::uint32_t i = 0; i < compact; ++i) {
+        entries.push_back(Entry{payload[p], payload[p + 1]});
+        p += 2;
+    }
+    for (std::uint32_t i = 0; i < wide; ++i) {
+        entries.push_back(Entry{read_u32(payload.data() + p),
+                                read_u32(payload.data() + p + 4)});
+        p += 8;
+    }
+    const auto find_off = [&entries](std::uint32_t tag) -> std::uint32_t {
+        for (const Entry& e : entries) {
+            if (e.tag == tag) return e.off;
+        }
+        return 0xFFFFFFFF;
+    };
+    const std::uint32_t off2 = find_off(2);
+    const std::uint32_t off3 = find_off(3);
+    const std::size_t base = p;
+    if (off2 != 0xFFFFFFFF && base + off2 + 4 <= payload.size()) {
+        count = read_u32(payload.data() + base + off2);
+    }
+    if (off3 != 0xFFFFFFFF) {
+        const std::size_t bytes = (static_cast<std::size_t>(count) + 7) / 8;
+        const std::size_t q = base + off3;
+        if (bytes > 0 && q + bytes <= payload.size()) {
+            mask.assign(payload.begin() + static_cast<std::ptrdiff_t>(q),
+                        payload.begin() + static_cast<std::ptrdiff_t>(q + bytes));
+        }
+    }
+
+    // Per-ability TAbilityData objects (tag 0x31 id list + tag id+0x32 objects).
+    const std::uint32_t off31 = find_off(0x31);
+    if (off31 == 0xFFFFFFFF || base + off31 + 8 > payload.size()) return;
+    const std::size_t q31 = base + off31;
+    const std::uint32_t ids = read_u32(payload.data() + q31 + 4);
+    for (std::uint32_t i = 0; i < ids && i < 256; ++i) {
+        const std::size_t idp = q31 + 8 + static_cast<std::size_t>(i) * 4;
+        if (idp + 4 > payload.size()) break;
+        const std::uint32_t id = read_u32(payload.data() + idp);
+        if (id >= levels.size()) continue;
+        const std::uint32_t noff = find_off(id + 0x32);
+        if (noff == 0xFFFFFFFF) continue;
+        const std::size_t np = base + noff;
+        if (np + 5 > payload.size()) continue;
+        // rwCreateEObject: u32 class id, then the usual property table.
+        std::size_t q = np + 4;
+        const std::uint8_t nb = payload[q++];
+        std::uint32_t nsmall = nb;
+        std::uint32_t nwide = 0;
+        if ((nb & 0x80) != 0) {
+            nsmall = nb & 0x7f;
+            if (q + 4 > payload.size()) continue;
+            nwide = read_u32(payload.data() + q);
+            q += 4;
+        }
+        if (q + static_cast<std::size_t>(nsmall) * 2 +
+                static_cast<std::size_t>(nwide) * 8 >
+            payload.size()) {
+            continue;
+        }
+        std::uint32_t level_off = 0xFFFFFFFF;
+        for (std::uint32_t k = 0; k < nsmall; ++k) {
+            const std::uint32_t tag = payload[q];
+            const std::uint32_t off = payload[q + 1];
+            q += 2;
+            if (tag == 10) level_off = off;
+        }
+        for (std::uint32_t k = 0; k < nwide; ++k) {
+            const std::uint32_t tag = read_u32(payload.data() + q);
+            const std::uint32_t off = read_u32(payload.data() + q + 4);
+            q += 8;
+            if (tag == 10) level_off = off;
+        }
+        if (level_off != 0xFFFFFFFF && q + level_off < payload.size()) {
+            levels[id] = payload[q + level_off];
+        }
+    }
 }
 
 }  // namespace
@@ -155,6 +277,11 @@ const UnitGraphics* UnitCatalog::find_hero_gfx(std::uint32_t hero_index) const {
     return find_gfx(it->second);
 }
 
+const HeroStats* UnitCatalog::find_hero_stats(std::uint32_t hero_index) const {
+    const auto it = hero_stats.find(hero_index);
+    return it == hero_stats.end() ? nullptr : &it->second;
+}
+
 std::vector<const UnitEntry*> UnitCatalog::units_of_race(
     std::uint8_t race_id) const {
     std::vector<const UnitEntry*> out;
@@ -220,6 +347,16 @@ bool load_unit_catalog(const std::string& root, UnitCatalog& out,
                 // TUnit+0x79 move points from it at turn start
                 // (TAbstractUnit.NewTurn@0x55780d4c). See docs/15_MOVEMENT.md.
                 out.hero_moves.emplace(h.tag, h.moves_skill);
+                HeroStats hs;
+                hs.attack = h.attack_skill;
+                hs.defense = h.defense_skill;
+                hs.damage = h.damage_skill;
+                hs.hits = h.hits_skill;
+                hs.moves = h.moves_skill;
+                hs.resistance = h.resistance_skill;
+                hs.hero_class = h.hero_class;
+                hs.name = h.name;
+                out.hero_stats.emplace(h.tag, std::move(hs));
             }
         }
     }
@@ -280,6 +417,11 @@ bool load_unit_catalog(const std::string& root, UnitCatalog& out,
         if (u.gfx == nullptr) ++out.gfx_missing;
         u.race_name = race_label(s.race_id);
         if (s.race_id < race_libs.size()) u.race_lib = race_libs[s.race_id];
+        // `TUnitResource` tag 25 is its TAbilityOwner list. Decode it here so a
+        // unit created at runtime (city production) gets exactly the move
+        // abilities a placed unit of the same type carries.
+        read_ability_mask(s.ability_ref, u.ability_count, u.ability_mask,
+                          u.ability_levels);
         out.units.push_back(std::move(u));
     }
     return true;

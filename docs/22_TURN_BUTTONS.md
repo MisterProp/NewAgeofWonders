@@ -78,8 +78,8 @@ The DFM's published properties (their names sit in the class's property table at
 | property | offset | meaning |
 |----------|--------|---------|
 | `ImageLib` | `+0x114` | the 102-frame `Int\TBTurnBt.ILB` |
-| `CurPlayer` | `+0x118` | the block to show - a **race id** (0..11), 12 = none |
-| `LastPlayer` | `+0x11c` | the block the last animation ended on |
+| `CurPlayer` | `+0x118` | the block to show - the **seated** player's race id (0..11), 12 = none; written only by the map-open setup |
+| `LastPlayer` | `+0x11c` | the block the last animation ended on; `-1` forces the new-day rotation |
 | `Animating` | `+0x120` | the change animation is playing |
 | `AnimStart` | `+0x128` | 11 at rest, 0 while the glow block plays |
 | `Frame` | `+0x140` | the animation's own frame |
@@ -102,19 +102,51 @@ frames 11+7*r..17+7*r  one block per race r = 0..12 (12 = no seat)
 ```
 mode 0  idle:  if LastPlayer != CurPlayer: Frame = 7*LastPlayer; AnimStart = 11;
                                              mode = 1; Animating = 1
-mode 1  ++Frame; if Frame > 7*CurPlayer + 5: Frame = 0; mode = 2; AnimStart = 0
-mode 2  ++Frame; if Frame > 10:              mode = 3; Frame = 7*CurPlayer + 5;
-                                             AnimStart = 11
-mode 3  --Frame; if Frame <= 7*CurPlayer:    Frame = 7*CurPlayer; mode = 0;
-                                             AnimStart = 11; LastPlayer = CurPlayer;
-                                             Animating = 0; OnAnimDone()
+mode 1  ++Frame; if Frame > 7*LastPlayer + 5: Frame = 0; mode = 2; AnimStart = 0
+mode 2  ++Frame; if Frame > 10:               mode = 3; Frame = 7*CurPlayer + 5;
+                                              AnimStart = 11
+mode 3  --Frame; if Frame <= 7*CurPlayer:     Frame = 7*CurPlayer; mode = 0;
+                                              AnimStart = 11; LastPlayer = CurPlayer;
+                                              Animating = 0; OnAnimDone()
 ```
 
 One step per call, i.e. one step per **game frame** (the window's `Update`).
-For two adjacent races that is `6 + 11 + 6 = 23` frames (~0.8 s at the game's
-30 fps); walking several blocks up (or down) is longer, and a change *down* to a
-lower block skips the walk-up on its first step (`Frame` immediately exceeds
-`7*CurPlayer + 5`) and lands through the glow block.
+Note that mode 1 compares against **`LastPlayer`** (`+0x11c`), not `CurPlayer`:
+`0x59704d2c` reads `[param_1+0x11c]*7+5 < [param_1+0x140]`. The first leg is
+therefore always the *old* block's six steps, whatever block the new seat uses.
+For any pair of races that is `6 + 11 + 6 = 23` displayed frames (~0.77 s at the
+game's 30 fps): the first leg always walks the old block from its first frame
+and the last leg always lands the new block from its `+5` frame.
+
+### The new-day trigger
+
+`CurPlayer` is written in exactly one place in the original game: the map-open
+setup at `AoW.exe 0x00454d2c` loads the **seated** player's race
+(`TPlayer+0xa5`) into both `CurPlayer` and `LastPlayer` and snaps `Frame`.
+In a single-player game that seat never changes, so the button would never move
+again - except that the day-label handler `FUN_0044ece8` (the routine that
+formats `"Day X"`) does this when the day rolls over:
+
+```c
+if ((map->flags3c & 4) != 0)                 // single-player rule
+    turnButton->LastPlayer /*+0x11c*/ = -1;
+```
+
+Because `Update` mode 0 only compares `LastPlayer` with `CurPlayer`, that
+invalidation starts a change even though the seated race is unchanged:
+`Frame = 7*(-1) = -7`, drawn as library frame `11-7 = 4`. The walk is the glow
+tail (`4..9`), the glow block (`0..10`) and the landing on the seat's own block
+(`5..0`) - exactly one 23-frame rotation. `TurnButtonAnimDone` clears `Checked`
+when it ends, so the button returns to the seat's normal first frame.
+
+The new-day sound is `TTurnPlayerControl.NewTurn` (`0x55756714`) calling
+`Sound.PlaySample("SFX\\EVENTS\\NEWTURN.WAV")` for the new player when that
+player is human-controlled (`TPlayer+0xa7 == 0`). The port's turn order can put
+the independents between the new day and the human's hand-over, so playing it
+literally at `NewTurn` would delay it past the 23-frame rotation. It is
+therefore played at the same instant as the `LastPlayer = -1` rotation trigger;
+the later hand-over to the human's seat does not replay it. No sound is played
+for an AI or independent seat, and the turn button itself has no click sound.
 
 ### Draw (0x59704e44)
 
@@ -206,13 +238,23 @@ The port's `aow::GameState` carries the flag as `Player::end_turn`, the latch as
 * `tb_turn_frames` - all 102 `Int\TBTurnBt.ILB` frames, decoded at load.
 * `tb_turn_cur/last/mode/start/animating/checked/frame` - the class's fields;
   `tb_turn_update()` is the state machine above, run once from `game_update()`
-  (the 30 fps frame clock = the window's `Update` cadence).
+  (the 30 fps frame clock = the window's `Update` cadence). `CurPlayer` is the
+  **seated** seat's race and is only written by `tb_turn_set_player()`, the
+  map-open snap; `frame` is intentionally allowed to go negative while mode 1
+  walks `LastPlayer == -1`.
 * `tb_turn_draw_frame()` - `AnimStart + Frame`, or
-  `AnimStart + 7*CurPlayer + 6` while Checked and idle.
+  `AnimStart + 7*CurPlayer + 6` while Checked and idle, with a bounds check so
+  the negative mode-1 frames (`4..9` once `AnimStart` is added) resolve.
 * `game_turn_button_click()` - `CheckMouseDown` + `TurnButtonChange`:
   `GameState::end_turn(mv_human)` / `cancel_end_turn(mv_human)`, with the result
   filed back into `tb_turn_checked`; it is ignored while the change animation
-  plays (`+0x120`).
+  plays (`+0x120`). It only sets the glowing still - it does not move
+  `CurPlayer`/`Frame`.
+* `game_turn_changed()` - updates the day/read-outs. When the round wrapped
+  (`day` advanced) it writes `tb_turn_last = -1`, the analogue of the day
+  handler `0x0044ece8`, and starts `SFX\EVENTS\NEWTURN.WAV` at that same
+  instant (rotation start); the later hand-over to the human's seat does not
+  replay the sound. The next `tb_turn_update()` plays the one 23-frame rotation.
 * `game_next_button_click()` - `Sfx\Int\Btn1.wav` + `game_select_army(+1)`
   (`SelectNextArmy`): the seat's armies in map order, continuing from
   `TPlayer+0xb4` (`tb_next_index`), skipping any army with fewer than 2 move
@@ -220,8 +262,10 @@ The port's `aow::GameState` carries the flag as `Player::end_turn`, the latch as
   the map's selection is cleared.
 * `game_turn_tick()` - the seats the port does not simulate (the independents
   and the CPU wizards) play their empty turn and end it through the same
-  `GameState::end_turn`, paced by the TurnButton's own change animation, so each
-  seat's colour is seen before the next turn begins.
+  `GameState::end_turn`. The original spends a real turn on each seat; the port
+  holds each for `kGameAiTurnHoldFrames` (23, the button's own change span)
+  while the button keeps its Checked glow, then the round wraps and the single
+  new-day rotation plays.
 * `mv_reset_army_turn()` and `MapHs::army_mp_left` / `army_flags` - the move
   points an army has left this turn (`TAbstractUnit.NewTurn` refills them when
   its owner's turn starts) and the Guard bit the next-army loop tests.
@@ -245,11 +289,14 @@ Int\TBTurnBt.ILB 46` vs the render's `(596,439 41x38)`, and `Int\TBWin.ILB 3`
 vs `(568,439 26x38)`): 0 differing pixels. The scripted flow proves the loop:
 
 ```
-game_click=turn 616,458 checked=0 day=1
+game_click=turn 616,458 checked=1 day=1             (the Checked glow)
 game_endturn=player=1 ok=1 from=1 to=2 day=1        (Halflings -> Goblins)
-game_turn=player=2 name=Borok day=1
+game_turn=player=2 name=Borok day=1                 (button still Halflings 46)
+game_newturn_sound=day=2 at=turnanim-start          (NEWTURN.WAV starts it)
 game_turn=player=0 name=Independents day=2          (the order wrapped: day 2)
-game_turn=player=1 name=Trodsen day=2
+game_turnanim=start from=-1 to=5                    (day handler: LastPlayer = -1)
+game_turnanim=done frame=35                         (23 frames, Halflings block)
+game_turn=player=1 name=Trodsen day=2               (button still Halflings 46)
 game_msg=your turn - day 2
 game_turnnow=player=1 day=2 frame=46
 ```
@@ -267,14 +314,12 @@ with a guarded party producing `game_msg=no army to select` and
 
 ## 6. Known divergences / TODO(RE)
 
-* `CurPlayer` is the *race of the player on turn* in the port. The form's own
-  seated-player update (`AoW.exe 0x004551b1`) reads the **seated** player's race
-  and writes both `CurPlayer` and `LastPlayer` (a snap, no animation); in a
-  single-player game that seat never changes, so the port follows the player on
-  turn instead - which is what the button's colour is *for*, and what makes the
-  turn-change swirl visible between the AI seats.
-* The AI seats' turns are empty (the port has no strategic AI); they are ended
-  one per turn-change animation instead of after their real actions.
+* `CurPlayer` now follows the **seated** player exactly as `0x00454d2c` does,
+  and the only in-game rotation is the `LastPlayer = -1` new-day change
+  (`0x0044ece8`). The earlier port followed the player on turn and animated
+  between every AI seat; that was the wrong model and has been removed.
+* The AI seats' turns are empty (the port has no strategic AI), so they are
+  held for one button change span each instead of after their real actions.
 * `TPlayer.GetBusy` and the event-log gate are modelled as fields but nothing
   sets them yet (no combat/modal transitions in the port).
 

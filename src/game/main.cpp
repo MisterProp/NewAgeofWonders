@@ -812,31 +812,39 @@ int cmd_unitseq(const char* path, const char* which) {
 
 // Loads a scenario map's game state (the player roster + turn loop) and prints
 // it. With --turns N it also runs N days of the recovered turn loop so the
-// income/upkeep accounting is visible. See aow/game_state.hpp.
-int cmd_gamestate(const char* path, int turns) {
+// gold/mana income/upkeep accounting is visible. See aow/game_state.hpp.
+int cmd_gamestate(const char* path, const std::string& root, int turns) {
     aow::Map map;
     std::string err;
     if (!aow::load_map(path, map, err)) {
         std::fprintf(stderr, "error: %s\n", err.c_str());
         return 1;
     }
+    std::vector<aow::MapResource> resources;
+    aow::UnitCatalog catalog;
+    if (!root.empty()) {
+        std::string rerr;
+        aow::load_map_resources(root + "\\Release\\Release.hss", resources, rerr);
+        aow::load_unit_catalog(root, catalog, rerr);
+    }
     aow::GameState gs;
-    if (!aow::load_game_state(map, gs, err)) {
+    if (!aow::load_game_state(map, resources, &catalog, gs, err)) {
         std::fprintf(stderr, "error: %s\n", err.c_str());
         return 1;
     }
     std::printf("%s\n", path);
     std::printf("  day=%d  turn_limit=%d  turn_order_mode=%d  players=%d\n",
                 gs.day, gs.turn_limit, gs.turn_order_mode, gs.player_count());
-    std::printf("  %-3s %-14s %-5s %-7s %-7s %-7s %-6s %-6s %-6s %-6s\n",
-                "id", "name", "race", "gold", "income", "upkeep", "gems",
-                "mana", "armies", "units");
+    std::printf("  %-3s %-14s %-5s %-7s %-7s %-7s %-7s %-6s %-6s %-6s %-6s\n",
+                "id", "name", "race", "start", "gold", "income", "upkeep",
+                "mana", "mana+", "armies", "units");
     for (const aow::Player& p : gs.players) {
-        std::printf("  %-3d %-14s %-5d %-7d %-7d %-7d %-6d %-6d %-6d %-6d%s\n",
+        std::printf("  %-3d %-14s %-5d %-7d %-7d %-7d %-7d %-6d %-6d %-6d "
+                    "%-6d%s\n",
                     static_cast<int>(p.index), p.display_name().c_str(),
-                    static_cast<int>(p.race), p.gold, p.income, p.upkeep(),
-                    p.gems, p.magic.mana, p.armies, p.units,
-                    p.active() ? "" : "  (out)");
+                    static_cast<int>(p.race), p.start_gold, p.gold, p.income,
+                    p.upkeep(), p.magic.mana, p.magic.mana_income, p.armies,
+                    p.units, p.active() ? "" : "  (out)");
     }
 
     if (turns > 0) {
@@ -853,6 +861,10 @@ int cmd_gamestate(const char* path, int turns) {
             std::printf("  after day %d:", gs.day - 1);
             for (const aow::Player& p : gs.players) {
                 std::printf("  %s=%d", p.display_name().c_str(), p.gold);
+            }
+            std::printf("\n  after day %d mana:", gs.day - 1);
+            for (const aow::Player& p : gs.players) {
+                std::printf("  %s=%d", p.display_name().c_str(), p.magic.mana);
             }
             std::printf("\n");
         }
@@ -1135,11 +1147,13 @@ int main(int argc, char** argv) {
     if (cmd == "gamestate") {
         if (argc < 3) return usage();
         int turns = 0;
+        std::string root = "..";
         for (int i = 3; i < argc; ++i) {
             const std::string a = argv[i];
             if (a == "--turns" && i + 1 < argc) turns = std::atoi(argv[++i]);
+            else if (a == "--root" && i + 1 < argc) root = argv[++i];
         }
-        return cmd_gamestate(argv[2], turns);
+        return cmd_gamestate(argv[2], root, turns);
     }
     if (cmd == "move") {
         if (argc < 3) return usage();

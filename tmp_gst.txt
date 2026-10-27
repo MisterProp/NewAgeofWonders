@@ -1,0 +1,5 @@
+﻿25: int g_pass = 0;
+29: ++g_pass;
+78: int main(int argc, char** argv) {
+894: std::printf("game_state tests: %d passed, %d failed\n", g_pass, g_fail);
+895: return g_fail == 0 ? 0 : 1;

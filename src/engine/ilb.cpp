@@ -84,6 +84,15 @@ bool IlbFile::load_memory(const std::uint8_t* data, std::size_t size,
         }
     }
 
+    // Loading another library into the same object must not append to the
+    // previous directory: entry i carries the blob_offset of the file it came
+    // from, and decode_rgb() reads it out of the *current* data_. A stale entry
+    // therefore decodes a completely different (offset) region of the new
+    // library - exactly how switching from a FACES\UNITS.ILB unit to a
+    // FACES\R_FACES.ILB race face produced a sheared portrait that showed
+    // slivers of the neighbouring pictures.
+    entries_.clear();
+    data_.clear();
     header_ = IlbHeader{};
     header_.flags = read_u32(&d[0x04]);
     header_.version = read_f32(&d[0x08]);

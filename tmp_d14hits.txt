@@ -1,0 +1,22 @@
+﻿1: # 14 - The game state: the player roster and the turn/day loop
+5: troops, and the turn/day loop - and its C++ reconstruction in
+26: | `AoWE.TPlayerControl` | - | `NewDay` `0x55754da4`, `NewTurn` `0x557553c4`, `EndTurn` `0x5575530c`, `Setup` `0x55754b94`, `StartNewMap` `0x5575573c` |
+52: literally stores `0` when the tag is absent; `rwData` `+0x1c` leaves the field
+188: ## The turn/day loop
+190: The map keeps the global **day counter** and the **turn order**:
+192: * day counter at `TAoWHSMap +0x174` (`NewDay` increments it; `NewTurn` skips the
+198: independents) followed by a random permutation of **1..N-1** (drawn one at a
+199: time). `NewDay` (`0x55754da4`) increments the day, resets the position, and
+200: regenerates the order only when the mode is 2; when the day reaches the turn
+206: if (day != 1) {
+215: `TAoWHSMap.StartNewMap` (`0x55777d68`) seeds the live treasury before the first
+217: +500 for CPU Emperor (type 7). (It also seeds mana from the magic control's
+242: `day != 1` gold branch, so mana income is credited on day 1 too. The port
+262: calls `TAoWHSMap.NewDay` when the order wraps - so a day only advances when
+280: * `GameState::begin_day` / `new_day` / `begin_player_turn` / `advance_turn` and
+285: > The shuffle uses a small deterministic xorshift32 seeded by the caller; the
+286: > original draws from the map's own RNG (`TAoWHSMap.Random`), whose seed the
+329: day=1  turn_limit=0  turn_order_mode=0  players=2
+341: turn-order construction, the day/round arithmetic, the income/upkeep
+357: * The map's own day value / RNG seed (the port starts at day 1 with a caller
+358: seed).

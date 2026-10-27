@@ -1,0 +1,11 @@
+analyzeHeadless.bat : WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+In C:\GOG Games\Age of Wonders\port\tmp_import_aow.ps1:8 car:1
++ & "$g\support\analyzeHeadless.bat" $proj aowfull -import 'C:\GOG Game ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (WARNING: A term...has been called:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+WARNING: sun.misc.Unsafe::staticFieldOffset has been called by org.apache.felix.framework.util.SecureAction (file:/C:/U
+sers/Utente/Desktop/Programmini/ghidra_12.1.2_PUBLIC/Ghidra/Features/Base/lib/org.apache.felix.framework-7.0.5.jar)
+WARNING: Please consider reporting this to the maintainers of class org.apache.felix.framework.util.SecureAction
+WARNING: sun.misc.Unsafe::staticFieldOffset will be removed in a future release

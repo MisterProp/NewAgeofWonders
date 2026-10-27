@@ -1,0 +1,3 @@
+﻿509: auto make_city = [&](aow::Map& m, aow::MapHs& city) {
+583: make_city(m, city);
+615: make_city(m, city);
